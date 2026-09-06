@@ -505,7 +505,15 @@ function TrainerView({
    * Motivname braucht.
    */
   const puzzleHead = (inFocus: boolean) => (
-    <div className={`flex items-center justify-between gap-2 ${inFocus ? "" : "mb-3"}`}>
+    // `min-h`: Das verdeckte Motiv ist ein Knopf mit Rand und Innenabstand, das
+    // aufgedeckte ein Wort · der Knopf ist knapp vier Pixel höher. Aufgedeckt
+    // wird beim Lösen, und im Fokus rechnet das Brett mit der Höhe dieser
+    // Zeile: Ohne die Untergrenze wuchs es im selben Augenblick um diese vier
+    // Pixel, in dem die Aufgabe gelöst ist. Der Wert ist die Höhe des Knopfes,
+    // also die größere der beiden.
+    <div
+      className={`flex min-h-[24px] items-center justify-between gap-2 ${inFocus ? "" : "mb-3"}`}
+    >
       <div className="flex min-w-0 items-center gap-2 text-[13.5px]">
         <Target size={15} className="shrink-0 text-accent" />
         {puzzle?.source !== "own" && mainTheme && themeHidden ? (
@@ -561,11 +569,18 @@ function TrainerView({
   /**
    * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
    *
-   * Die Tastenreihe ist ein eigenes, umbruchfähiges Element mit `max-w-full`.
-   * Ohne das trat sie als Ganzes über den Rahmen hinaus, sobald sie neben der
-   * Beschriftung nicht mehr passte · zu sehen war das am Teilen-Knopf, der
-   * rechts aus dem Kasten stand. Jetzt rückt sie zuerst unter die
-   * Beschriftung und bricht erst danach in sich selbst um.
+   * Die Tastenreihe ist ein eigenes Element und bleibt in sich *eine* Reihe.
+   * Umbrechen darf nur die Zeile darüber: Passt die Reihe neben der
+   * Beschriftung nicht mehr, rückt sie als Ganzes darunter · so wie auf dem
+   * Telefon. Vorher brach sie zusätzlich in sich selbst um, und der letzte
+   * Knopf stand allein in einer dritten Zeile unter den anderen fünf.
+   *
+   * Damit das aufgeht, ist die Reihe schmal gehalten: knapper Abstand, ein
+   * Zähler mit nur so viel Reserve, dass die Ziffern nicht wackeln, und kein
+   * Sondermaß mehr vor dem Teilen-Knopf. Unter 360 px rücken die Knöpfe
+   * zusätzlich enger zusammen und geben Innenabstand her · sonst stünde die
+   * Reihe auf einem schmalen Telefon (oder bei großer Anzeigegröße, die
+   * dasselbe bewirkt) wieder über dem Rahmen.
    */
   const puzzleHistory = (inFocus: boolean) => (
     <div
@@ -574,14 +589,14 @@ function TrainerView({
       }`}
     >
       <span className="min-w-0 truncate text-[12.5px] text-ink2">{t("pz.positionHistory")}</span>
-      <div className="ms-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1">
+      <div className="ms-auto flex min-w-0 grow flex-nowrap items-center justify-end gap-1 max-[359px]:gap-0.5 max-[359px]:[&>button]:px-1.5">
         <Button onClick={() => goToPly(0)} title={t("pz.firstPosition")} compact>
           <ChevronFirst size={14} />
         </Button>
         <Button onClick={() => goToPly(viewPly - 1)} title={t("pz.previousPosition")} compact>
           <ChevronLeft size={14} />
         </Button>
-        <span className="min-w-[54px] text-center text-[11.5px] tabular-nums text-ink3">
+        <span className="min-w-[42px] shrink-0 text-center text-[11.5px] tabular-nums text-ink3">
           {viewPly} / {lastPly}
         </span>
         <Button onClick={() => goToPly(viewPly + 1)} title={t("pz.nextPosition")} compact>
@@ -590,13 +605,7 @@ function TrainerView({
         <Button onClick={() => goToPly(lastPly)} title={t("pz.currentPosition")} compact>
           <ChevronLast size={14} />
         </Button>
-        <Button
-          onClick={openShare}
-          className="ms-1"
-          title={t("sh.title")}
-          disabled={!puzzle}
-          compact
-        >
+        <Button onClick={openShare} title={t("sh.title")} disabled={!puzzle} compact>
           <Share2 size={14} />
         </Button>
         {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
@@ -690,7 +699,23 @@ function TrainerView({
     </div>
   );
 
-  const puzzleActions = (
+  /**
+   * Die Zeile unter dem Brett · Meldung, Knöpfe und der Tipp darunter.
+   *
+   * Im Fokus steht der Tipp von Anfang an im Raum: Er ist dort nicht ein
+   * Kasten, der auftaucht, sondern ein Stück reservierte Höhe, das erst leer
+   * ist und sich später füllt. Der Grund ist das Brett. Seine Größe rechnet
+   * der Fokus aus dem Platz, den die Reihen darunter übrig lassen (siehe
+   * `useChrome` in components/FocusBoard.tsx) · erschien der Tipp erst beim
+   * Antippen, wurde das Brett in genau dem Augenblick neu skaliert, in dem man
+   * auf die Aufgabe schaut. Reserviert steht die Höhe schon beim Aufschlagen,
+   * und das Brett bleibt für die ganze Aufgabe, wie es ist.
+   *
+   * Auf der gewöhnlichen Seite bleibt es beim Auftauchen: Dort darf gescrollt
+   * werden, das Brett hängt nicht an der Zeile, und ein dauerhaft leerer
+   * Kasten unter dem Brett wäre nur ein Loch.
+   */
+  const puzzleActions = (inFocus: boolean) => (
     <>
       {/* Ein Rasterfeld statt einer Reihe · siehe `actionRow`. Die Meldung
           unter dem Brett war das Letzte, was das Fokus-Brett noch springen
@@ -738,8 +763,16 @@ function TrainerView({
           )
         )}
       </div>
-      {showHint && status === "playing" && (
-        <div className="rounded-lg border border-line bg-panel px-4 py-2.5 text-[12.5px] text-ink2">
+      {(inFocus || (showHint && status === "playing")) && (
+        <div
+          // Im Fokus steht der Kasten immer da und ist nur unsichtbar, solange
+          // niemand den Tipp geholt hat · `visibility: hidden` hält den Platz
+          // und nimmt den Text zugleich aus dem Vorlesen heraus.
+          aria-hidden={showHint && status === "playing" ? undefined : true}
+          className={`rounded-lg border border-line bg-panel px-4 py-2.5 text-[12.5px] text-ink2 ${
+            showHint && status === "playing" ? "" : "invisible"
+          }`}
+        >
           {t("pz.hintText", {
             theme: mainTheme ? t("pz.hintTheme", { m: themeLabel(mainTheme, locale) }) : "",
           })}
@@ -888,7 +921,7 @@ function TrainerView({
 
           {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
 
-          {puzzleActions}
+          {puzzleActions(false)}
         </div>
 
         <div className="flex max-w-[528px] flex-col gap-4">
@@ -1012,7 +1045,7 @@ function TrainerView({
         below={
           <>
             {puzzleHistory(true)}
-            {puzzleActions}
+            {puzzleActions(true)}
           </>
         }
       >

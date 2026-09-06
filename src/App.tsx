@@ -134,8 +134,8 @@ const nav: { id: PageId; labelKey: Key; icon: typeof LayoutDashboard }[] = [
   { id: "games", labelKey: "nav.games", icon: Database },
   { id: "analysis", labelKey: "nav.analysis", icon: Activity },
   { id: "repertoire", labelKey: "nav.repertoire", icon: BookOpen },
-  { id: "endgame", labelKey: "nav.endgame", icon: Crown },
   { id: "puzzles", labelKey: "nav.puzzles", icon: PuzzleIcon },
+  { id: "endgame", labelKey: "nav.endgame", icon: Crown },
   { id: "study", labelKey: "nav.study", icon: GraduationCap },
   { id: "insights", labelKey: "nav.insights", icon: BarChart3 },
 ];

@@ -44,6 +44,7 @@ import {
   Verzeichniszeile,
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
+import { SectionTail } from "../settings/SettingsLayout";
 
 export interface SettingsAbschnitt {
   id: string;
@@ -60,6 +61,8 @@ export interface SettingsBlattProps {
   /** Überschrift einer Gruppe · derselbe Text wie in der Seite von heute. */
   gruppenTitel: (gruppe: string) => string;
   aktiv: string | null;
+  /** Freiraum hinter dem letzten Abschnitt · siehe sectionTailHeight. */
+  schluss?: number;
   /** Anker-Id eines Abschnitts · dieselbe wie in der gewöhnlichen Fassung. */
   ankerId: (id: string) => string;
   onSpringen: (id: string) => void;
@@ -168,6 +171,7 @@ export default function SettingsBlatt({
   abschnitte,
   gruppenTitel,
   aktiv,
+  schluss = 0,
   ankerId,
   onSpringen,
   onSichtbar,
@@ -219,6 +223,7 @@ export default function SettingsBlatt({
           />
         </Fragment>
       ))}
+      <SectionTail height={schluss} />
     </div>
   );
 

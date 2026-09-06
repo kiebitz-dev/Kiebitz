@@ -334,23 +334,34 @@ export default function AppearanceSection({
       <h4 className="mt-5 text-[13px] font-medium text-ink">{t("set.themeAuto")}</h4>
       <p className="mt-1 text-[12px] leading-relaxed text-ink3">{t("set.themeAutoNote")}</p>
       <div className="mt-2.5 flex flex-wrap gap-2">
-        {(["off", "system", "time"] as const).map((mode) => (
-          <Chip
-            key={mode}
-            active={appearance.auto === mode}
-            onClick={() =>
-              locked ? openPlusDialog(THEME_FEATURE) : onChange({ ...appearance, auto: mode })
-            }
-          >
-            {t(
-              mode === "off"
-                ? "set.themeAutoOff"
-                : mode === "system"
-                  ? "set.themeAutoSystem"
-                  : "set.themeAutoTime"
-            )}
-          </Chip>
-        ))}
+        {(["off", "system", "time"] as const).map((mode) => {
+          // „Aus" ist die Vorgabe und bleibt frei · der Wechsel selbst gehört
+          // zu Plus und trägt deshalb denselben Stern und dasselbe Blass wie
+          // die Bretter und Figuren darüber.
+          const plus = mode !== "off";
+          const blocked = plus && locked;
+          return (
+            <Chip
+              key={mode}
+              active={appearance.auto === mode}
+              className={blocked ? "opacity-70" : ""}
+              onClick={() =>
+                blocked ? openPlusDialog(THEME_FEATURE) : onChange({ ...appearance, auto: mode })
+              }
+            >
+              <span className="flex items-center gap-1.5">
+                {t(
+                  mode === "off"
+                    ? "set.themeAutoOff"
+                    : mode === "system"
+                      ? "set.themeAutoSystem"
+                      : "set.themeAutoTime"
+                )}
+                {plus && <Sparkles size={12} className="text-accent" />}
+              </span>
+            </Chip>
+          );
+        })}
       </div>
 
       {appearance.auto !== "off" && (

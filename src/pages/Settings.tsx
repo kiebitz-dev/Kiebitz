@@ -134,12 +134,15 @@ import { publishWidgetSnapshot } from "../lib/widgets";
 import {
   Field,
   NumberField,
+  SPY_LINE,
   SectionNav,
+  SectionTail,
   SettingsSection,
   WEEKDAY_KEYS,
   anchorId,
   inGroupOrder,
   inputCls,
+  sectionTailHeight,
   type GroupId,
   type Section,
   type SectionId,
@@ -907,21 +910,24 @@ export default function SettingsPage({
   // Scroll-Ereignisse steigen nicht auf, in der Capture-Phase am Dokument
   // erreichen sie uns trotzdem · egal welcher Container gerade scrollt.
   const [activeSection, setActiveSection] = useState<SectionId | null>(null);
+  // Höhe des Freiraums hinter dem letzten Bereich · siehe sectionTailHeight.
+  const [tail, setTail] = useState(0);
   useEffect(() => {
     if (compact || loading) return;
     let frame = 0;
+    const nodes = () =>
+      Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
     const update = () => {
       frame = 0;
-      const nodes = Array.from(
-        document.querySelectorAll<HTMLElement>("[data-settings-section]")
-      );
+      const list = nodes();
       let current: SectionId | null = null;
-      for (const node of nodes) {
+      for (const node of list) {
         const id = node.dataset.settingsSection as SectionId | undefined;
         if (!id) continue;
-        if (current === null || node.getBoundingClientRect().top <= 88) current = id;
+        if (current === null || node.getBoundingClientRect().top <= SPY_LINE) current = id;
       }
       setActiveSection(current);
+      setTail(sectionTailHeight(list[list.length - 1]));
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -929,8 +935,14 @@ export default function SettingsPage({
     update();
     document.addEventListener("scroll", schedule, true);
     window.addEventListener("resize", schedule);
+    // Die Bereiche holen ihre Daten nach und wachsen dabei · der letzte
+    // bestimmt den Freiraum, ohne dass dabei gescrollt oder skaliert wird.
+    const observer =
+      typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (observer) nodes().forEach((node) => observer.observe(node));
     return () => {
       if (frame) cancelAnimationFrame(frame);
+      observer?.disconnect();
       document.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
     };
@@ -2637,6 +2649,7 @@ export default function SettingsPage({
         }))}
         gruppenTitel={(gruppe) => groupLabel(gruppe as GroupId)}
         aktiv={activeSection}
+        schluss={tail}
         ankerId={(id) => anchorId(id as SectionId)}
         onSpringen={(id) => jumpTo(id as SectionId)}
         onSichtbar={revealAny}
@@ -2713,7 +2726,10 @@ export default function SettingsPage({
             label={t("set.sections")}
             onJump={jumpTo}
           />
-          {sectionList}
+          <div className="min-w-0">
+            {sectionList}
+            <SectionTail height={tail} />
+          </div>
         </div>
       )}
 

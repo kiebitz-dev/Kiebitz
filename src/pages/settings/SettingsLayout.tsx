@@ -11,9 +11,15 @@ export function Field({
   className?: string;
 }) {
   return (
+    // Steht das Feld in einem Raster, ist seine Zelle so hoch wie die höchste
+    // der Reihe · eine Beschriftung, die auf zwei Zeilen umbricht (etwa
+    // „Analyse-Engines (0 = automatisch)"), schob dann ihre Eingabe gegenüber
+    // den Nachbarn nach unten. Die Beschriftung bleibt oben, die Eingabe
+    // rutscht ans untere Ende der Zelle: So stehen die Eingaben einer Reihe
+    // auf einer Linie, ganz gleich wie lang die Wörter darüber sind.
     <label className={`flex flex-col gap-1.5 ${className}`}>
       <span className="text-[12px] text-ink3">{label}</span>
-      {children}
+      <span className="mt-auto flex flex-col gap-1.5">{children}</span>
     </label>
   );
 }
@@ -129,6 +135,54 @@ export function inGroupOrder(sections: Section[]): Section[] {
 
 /** DOM-Id der Sprungmarke eines Bereichs. */
 export const anchorId = (id: SectionId) => `set-${id}`;
+
+/**
+ * Die Höhe unter der Fensterkante, an der die Sprungleiste umschaltet · der
+ * Bereich, dessen Kopf zuletzt über dieser Linie durchgelaufen ist, gilt als
+ * der laufende.
+ */
+export const SPY_LINE = 88;
+
+/** Der scrollende Vorfahr eines Knotens · in der Shell das `<main>`. */
+function scrollParent(node: HTMLElement): HTMLElement {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    const overflow = getComputedStyle(el).overflowY;
+    if ((overflow === "auto" || overflow === "scroll") && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+  }
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : document.documentElement;
+}
+
+/**
+ * Wie viel Freiraum hinter dem letzten Bereich stehen muss.
+ *
+ * Die Liste hört bisher dort auf, wo das Fenster aufhört · die letzten
+ * Bereiche kommen dadurch nie bis an die Linie der Sprungleiste heran. Das
+ * hatte zwei sichtbare Folgen: Ganz unten blieb der drittletzte Eintrag
+ * („Referenzdatenbank") hervorgehoben, und ein Klick auf die beiden darunter
+ * tat gar nichts, weil schon nichts mehr zu scrollen war.
+ *
+ * Der Freiraum ist genau so hoch, dass auch der letzte Bereich noch nach oben
+ * wandern kann · keinen Bildpunkt höher. Er steht nur in der breiten Fassung,
+ * denn nur dort gibt es die Sprungleiste, zu der er gehört.
+ */
+export function sectionTailHeight(last: HTMLElement | undefined): number {
+  if (!last) return 0;
+  const box = scrollParent(last);
+  const rect = box.getBoundingClientRect();
+  // Ein Stück über der Linie, damit der Bereich nach dem Sprung sicher als
+  // laufender gilt und nicht genau auf der Kante liegen bleibt.
+  const target = SPY_LINE - 16;
+  return Math.max(0, Math.round(rect.top + box.clientHeight - target - last.offsetHeight));
+}
+
+/** Der Freiraum selbst · leer, und nur da, wo die Sprungleiste steht. */
+export function SectionTail({ height }: { height: number }) {
+  return <div aria-hidden className="hidden min-[1160px]:block" style={{ height }} />;
+}
 
 /**
  * Ein Einstellungsbereich.

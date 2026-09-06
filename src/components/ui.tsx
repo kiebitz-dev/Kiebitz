@@ -96,10 +96,13 @@ export function Chip({
   children,
   active = false,
   onClick,
+  className = "",
 }: {
   children: ReactNode;
   active?: boolean;
   onClick?: () => void;
+  /** Zusatz für den Einzelfall · etwa das Blass eines gesperrten Chips. */
+  className?: string;
 }) {
   return (
     <button
@@ -108,7 +111,7 @@ export function Chip({
         active
           ? "border-accent-dim bg-accent-soft text-accent"
           : "border-line bg-panel2 text-ink2 hover:border-line2 hover:text-ink"
-      }`}
+      } ${className}`}
     >
       {children}
     </button>
