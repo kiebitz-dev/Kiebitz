@@ -73,6 +73,8 @@ function show(props: Partial<Parameters<typeof GamesBlatt>[0]> = {}) {
     onWeiter: vi.fn(),
     onWaehlen: vi.fn(),
     onAnalyse: vi.fn(),
+    onProBlatt: vi.fn(),
+    onBlattWaehlen: vi.fn(),
   };
   render(
     <GamesBlatt
@@ -91,6 +93,9 @@ function show(props: Partial<Parameters<typeof GamesBlatt>[0]> = {}) {
       bis={1}
       blatt={1}
       blaetter={1}
+      proBlatt={10}
+      minProBlatt={10}
+      maxProBlatt={100}
       {...handlers}
       {...props}
     />
@@ -191,5 +196,41 @@ describe("Partienverzeichnis im Blatt", () => {
     const griff = screen.getByRole("button", { name: "games.filters" });
     // „chess.com" ist gesetzt, „alle" nicht · also genau einer.
     expect(griff.textContent).toBe("1");
+  });
+
+  // Bei hundertfünfzig Blättern ist der Weg an den Anfang kein Weg aus
+  // hundertneunundvierzig Schritten · er ist ein Griff.
+  it("reaches the first and the last sheet in one step", () => {
+    const onBlattWaehlen = vi.fn();
+    show({ blatt: 4, blaetter: 153, onBlattWaehlen });
+
+    fireEvent.click(screen.getByRole("button", { name: "blatt.firstSheet" }));
+    expect(onBlattWaehlen).toHaveBeenCalledWith(1);
+    fireEvent.click(screen.getByRole("button", { name: "blatt.lastSheet" }));
+    expect(onBlattWaehlen).toHaveBeenCalledWith(153);
+  });
+
+  it("turns the sheet number into a field that jumps", () => {
+    const onBlattWaehlen = vi.fn();
+    show({ blatt: 4, blaetter: 153, onBlattWaehlen });
+
+    fireEvent.click(screen.getByRole("button", { name: "blatt.sheetOf" }));
+    const feld = screen.getByLabelText("blatt.goToSheet") as HTMLInputElement;
+    expect(feld.value).toBe("4");
+    fireEvent.change(feld, { target: { value: "42" } });
+    fireEvent.keyDown(feld, { key: "Enter" });
+    expect(onBlattWaehlen).toHaveBeenCalledWith(42);
+  });
+
+  it("takes a freely typed number of games per sheet", () => {
+    const onProBlatt = vi.fn();
+    show({ onProBlatt });
+
+    fireEvent.click(screen.getByRole("button", { name: "blatt.setPerSheet" }));
+    const feld = screen.getByLabelText("blatt.setPerSheet") as HTMLInputElement;
+    expect(feld.value).toBe("10");
+    fireEvent.change(feld, { target: { value: "37" } });
+    fireEvent.keyDown(feld, { key: "Enter" });
+    expect(onProBlatt).toHaveBeenCalledWith(37);
   });
 });

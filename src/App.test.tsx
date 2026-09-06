@@ -33,7 +33,17 @@ vi.mock("./lib/updater", () => ({
   onUpdateAvailable: () => Promise.resolve(() => {}),
   onUpdateState: () => Promise.resolve(() => {}),
 }));
-vi.mock("./pages/Dashboard", () => ({ default: () => <div>Dashboard</div> }));
+// Vom Start führt ein Absprung in die Analyse *einer* Partie · daran hängt der
+// Test, der prüft, dass ein zweiter Tipp auf den Reiter wieder das freie Brett
+// zeigt.
+vi.mock("./pages/Dashboard", () => ({
+  default: ({ openAnalysis }: { openAnalysis: (id: number) => void }) => (
+    <div>
+      <div>Dashboard</div>
+      <button onClick={() => openAnalysis(42)}>Partie analysieren</button>
+    </div>
+  ),
+}));
 // Die Partien-Seite legt ihr Detail mobil als Blatt über den Inhalt · der
 // Mock tut dasselbe mit demselben Bauteil, damit die Leiste unten prüfbar
 // bleibt: Ein zweiter Tipp auf den eigenen Tab soll das Blatt schliessen.
@@ -57,7 +67,23 @@ vi.mock("./pages/Games", async () => {
     },
   };
 });
-vi.mock("./pages/Analysis", () => ({ default: () => <div>Analysis</div> }));
+// Die Analyse hat beides, was ein Zurücksetzen betrifft: einen Parameter von
+// außen (die vorgewählte Partie) und einen Zustand, den sie selbst führt.
+vi.mock("./pages/Analysis", async () => {
+  const { useState } = await import("react");
+  return {
+    default: ({ targetGameId }: { targetGameId: number | null }) => {
+      const [note, setNote] = useState("");
+      return (
+        <div>
+          <div>Analysis</div>
+          <div>Partie: {targetGameId ?? "frei"}</div>
+          <input aria-label="Notiz" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+      );
+    },
+  };
+});
 vi.mock("./pages/Repertoire", () => ({ default: () => <div>Repertoire</div> }));
 vi.mock("./pages/Endgame", () => ({ default: () => <div>Endgame</div> }));
 vi.mock("./pages/Puzzles", () => ({ default: () => <div>Puzzles</div> }));
@@ -82,7 +108,32 @@ vi.mock("./pages/InsightsV2", () => ({
     </div>
   ),
 }));
-vi.mock("./pages/Settings", () => ({ default: () => <div>Settings</div> }));
+// Die Einstellungen halten ihren Entwurf bis zum Speichern · der Mock meldet
+// das über dieselbe Anmeldung wie die Seite selbst.
+vi.mock("./pages/Settings", async () => {
+  const { useEffect, useRef, useState } = await import("react");
+  const { holdPage } = await import("./lib/pageReset");
+  // Wie oft die Seite eingehängt wurde · daran ist ein Neustart zu erkennen,
+  // auch wenn danach dasselbe dasteht wie vorher.
+  let eingehaengt = 0;
+  return {
+    default: () => {
+      const [wert, setWert] = useState("");
+      const ref = useRef(wert);
+      ref.current = wert;
+      const nr = useRef(0);
+      if (nr.current === 0) nr.current = ++eingehaengt;
+      useEffect(() => holdPage(() => ref.current !== ""), []);
+      return (
+        <div>
+          <div>Settings</div>
+          <div>Eingehängt: {nr.current}</div>
+          <input aria-label="Feld" value={wert} onChange={(e) => setWert(e.target.value)} />
+        </div>
+      );
+    },
+  };
+});
 
 const realMatchMedia = window.matchMedia;
 
@@ -205,6 +256,62 @@ describe("mobile navigation", () => {
     // Der eigene History-Eintrag des Blattes ist mit ihm gegangen · die Tiefe
     // steht wieder auf der Seite, und Zurück führt von hier zum Start.
     await waitFor(() => expect(window.history.state).toEqual({ kd: 2 }));
+  });
+
+  /**
+   * Ein Tipp auf den offenen Reiter ist kein Weg irgendwohin · er ist die Bitte,
+   * hier von vorn anzufangen. Vorher scrollte er nur nach oben, und die
+   * besondere Analyse einer Partie stand weiter da.
+   */
+  it("starts the open tab over when its own tab is tapped again", async () => {
+    render(<LocaleProvider><App /></LocaleProvider>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Partie analysieren" }));
+    await waitFor(() => expect(pageTitle()).toBe("Analysis"));
+    expect(screen.getByText("Partie: 42")).toBeTruthy();
+
+    // Was die Seite selbst führt, zählt genauso wie ihr Parameter.
+    const notiz = screen.getByLabelText("Notiz") as HTMLInputElement;
+    fireEvent.change(notiz, { target: { value: "Halb getippt" } });
+    expect((screen.getByLabelText("Notiz") as HTMLInputElement).value).toBe("Halb getippt");
+
+    fireEvent.click(bottomBar().getByRole("button", { name: "Analyse" }));
+
+    await waitFor(() => expect(screen.getByText("Partie: frei")).toBeTruthy());
+    expect((screen.getByLabelText("Notiz") as HTMLInputElement).value).toBe("");
+    // Und der Stapel steht wieder auf dem Hauptziel · Zurück führt zum Start.
+    await waitFor(() => expect(window.history.state).toEqual({ kd: 2 }));
+  });
+
+  /**
+   * Eine Seite, die ungesicherte Arbeit hält, wird nicht zurückgesetzt · dort
+   * bleibt der Tipp der Griff an den Kopf der Seite.
+   */
+  it("spares a page that is holding unsaved work", async () => {
+    const { container } = render(<LocaleProvider><App /></LocaleProvider>);
+    const bar = within(container.querySelector("header") as HTMLElement);
+
+    fireEvent.click(bar.getByRole("button", { name: "Einstellungen" }));
+    await waitFor(() => expect(pageTitle()).toBe("Settings"));
+
+    const feld = screen.getByLabelText("Feld") as HTMLInputElement;
+    fireEvent.change(feld, { target: { value: "Halb getippt" } });
+
+    const eingehaengt = screen.getByText(/^Eingehängt: /).textContent;
+
+    fireEvent.click(bar.getByRole("button", { name: "Einstellungen" }));
+    await waitFor(() => expect(pageTitle()).toBe("Settings"));
+    // Der Entwurf steht noch, und die Seite ist dieselbe geblieben.
+    expect((screen.getByLabelText("Feld") as HTMLInputElement).value).toBe("Halb getippt");
+    expect(screen.getByText(/^Eingehängt: /).textContent).toBe(eingehaengt);
+
+    // Gespeichert (hier: geleert) hält die Seite nichts mehr fest · dann hängt
+    // derselbe Tipp sie wieder neu ein.
+    fireEvent.change(screen.getByLabelText("Feld"), { target: { value: "" } });
+    fireEvent.click(bar.getByRole("button", { name: "Einstellungen" }));
+    await waitFor(() =>
+      expect(screen.getByText(/^Eingehängt: /).textContent).not.toBe(eingehaengt)
+    );
   });
 
   it("opens a training area as a detail level under Training", async () => {

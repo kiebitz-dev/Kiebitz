@@ -181,7 +181,10 @@ describe("Games page", () => {
     expect(warning.closest("div")?.className).toContain("text-gold");
   });
 
-  it("drops the range line on mobile", async () => {
+  // Die Spanne stand auf dem Handy früher nicht: Rechts daneben zählte schon
+  // "Seite 1 / n". Sie trägt jetzt aber die Seitengröße — und die einzige
+  // Stelle, an der sich etwas einstellen lässt, darf nicht am Format hängen.
+  it("keeps the range line on mobile because it carries the page size", async () => {
     render(
       <LocaleProvider>
         <ShellProvider mobile>
@@ -190,8 +193,29 @@ describe("Games page", () => {
       </LocaleProvider>
     );
     await screen.findByTestId("games-list");
-    // Rechts daneben steht auf dem Handy ohnehin schon "Seite 1 / n".
-    expect(screen.queryByText(/^\d+–\d+ von /)).toBeNull();
+    expect(screen.getByText(/^\d+–\d+ von /)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Partien je Seite festlegen" })).toBeTruthy();
+  });
+
+  it("turns the page size into a field that takes any number in range", async () => {
+    render(<LocaleProvider><Games openAnalysis={vi.fn()} /></LocaleProvider>);
+    await screen.findByRole("button", { name: "Testgegner" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Partien je Seite festlegen" }));
+    const feld = screen.getByLabelText("Partien je Seite festlegen") as HTMLInputElement;
+    expect(feld.value).toBe("10");
+
+    // Eine Zahl zwischen den festen Stufen von früher · sie muss durchgehen.
+    fireEvent.change(feld, { target: { value: "37" } });
+    fireEvent.keyDown(feld, { key: "Enter" });
+    expect(await screen.findByText("37 je Seite")).toBeTruthy();
+
+    // Und was darüber hinausgeht, wird geholt statt verworfen.
+    fireEvent.click(screen.getByRole("button", { name: "Partien je Seite festlegen" }));
+    const zweites = screen.getByLabelText("Partien je Seite festlegen");
+    fireEvent.change(zweites, { target: { value: "500" } });
+    fireEvent.keyDown(zweites, { key: "Enter" });
+    expect(await screen.findByText("100 je Seite")).toBeTruthy();
   });
 
   // Die dritte Quelle ist kein Eigenname wie chess.com und lichess · sie stand

@@ -33,7 +33,7 @@
  * Marken am Zeilenende die Tag-Spalte, und ein Register bleibt nur lesbar,
  * solange in seinen Zeilen nichts steht, was zur nächsten nicht passt.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Download, SlidersHorizontal } from "lucide-react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { MarkenSchluessel, PartieZeile } from "../../components/blatt/PartieZeile";
@@ -129,6 +129,13 @@ export interface GamesBlattProps {
   bis: number;
   blatt: number;
   blaetter: number;
+  /** Wie viele Partien auf ein Blatt gehen · steht mit in der Fußzeile. */
+  proBlatt: number;
+  minProBlatt: number;
+  maxProBlatt: number;
+  onProBlatt: (n: number) => void;
+  /** Sprung auf ein bestimmtes Blatt · die Zahl in der Fußzeile ist der Griff. */
+  onBlattWaehlen: (n: number) => void;
   onZurueck: () => void;
   onWeiter: () => void;
   onWaehlen: (game: UiGame) => void;
@@ -170,6 +177,11 @@ export default function GamesBlatt({
   bis,
   blatt,
   blaetter,
+  proBlatt,
+  minProBlatt,
+  maxProBlatt,
+  onProBlatt,
+  onBlattWaehlen,
   onZurueck,
   onWeiter,
   onWaehlen,
@@ -181,6 +193,29 @@ export default function GamesBlatt({
   onFilter,
 }: GamesBlattProps) {
   const { t } = useI18n();
+
+  /**
+   * Die beiden Zahlen der Fußzeile, solange in sie geschrieben wird.
+   *
+   * `null` heißt: Es steht die Zahl da, nicht das Feld. Der Zustand bleibt
+   * hier und geht nicht an die Seite: Was jemand halb getippt hat, ist keine
+   * Einstellung, sondern ein Zwischenstand — und ein „7" auf dem Weg zu „70"
+   * dürfte die Liste nicht schon neu laden.
+   */
+  const [sprung, setSprung] = useState<string | null>(null);
+  const [groesse, setGroesse] = useState<string | null>(null);
+
+  const uebernehmeSprung = () => {
+    const n = parseInt(sprung ?? "", 10);
+    if (!Number.isNaN(n)) onBlattWaehlen(n);
+    setSprung(null);
+  };
+
+  const uebernehmeGroesse = () => {
+    const n = parseInt(groesse ?? "", 10);
+    if (!Number.isNaN(n)) onProBlatt(n);
+    setGroesse(null);
+  };
 
   /** Ein einzelnes Filterfeld · ausgefülltes Formular statt Pillenreihe. */
   const feldSatz = (feld: Filterfeld) => {
@@ -358,12 +393,69 @@ export default function GamesBlatt({
     </div>
   );
 
+  /**
+   * Die Fußzeile des Blattes · links, was auf diesem Blatt steht, rechts, wie
+   * man weiterblättert.
+   *
+   * Beide Zahlen darin sind Griffe und keine bloße Auskunft: die Zahl je Blatt
+   * ändert den Umfang, die Blattzahl springt. Das ist derselbe Weg wie in der
+   * gewöhnlichen Fassung, nur im Satz des Blattes — angetippt wird die Zahl
+   * selbst zum Feld, in dem sie steht, statt neben sich ein zweites zu öffnen.
+   *
+   * Außen die Sprünge an den Anfang und ans Ende. Wer bei einer Sammlung mit
+   * hundertfünfzig Blättern zurück auf das erste will, soll nicht
+   * hundertneunundvierzigmal „Zurück" drücken und auch nicht erst die Zahl
+   * antippen müssen.
+   */
+  const blaetternGriff = (name: string, zeichen: string, aus: boolean, onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={aus}
+      title={name}
+      aria-label={name}
+      className="blatt-zahl min-h-11 text-ink2 disabled:text-ink3"
+    >
+      {zeichen}
+    </button>
+  );
+
   const blaettern = (
-    <div className="mt-3.5 flex items-center justify-between border-t border-line pt-2.5">
-      <span className="blatt-zahl text-[11.5px] text-ink3">
+    <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-t border-line pt-2.5">
+      <span className="blatt-zahl flex items-center gap-1.5 text-[11.5px] text-ink3">
         {t("games.rangeInfo", { from: deInt(von), to: deInt(bis), total: deInt(treffer) })}
+        <span aria-hidden>·</span>
+        {groesse !== null ? (
+          <input
+            autoFocus
+            type="number"
+            min={minProBlatt}
+            max={maxProBlatt}
+            value={groesse}
+            onFocus={(event) => event.target.select()}
+            onChange={(event) => setGroesse(event.target.value)}
+            onBlur={uebernehmeGroesse}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") uebernehmeGroesse();
+              else if (event.key === "Escape") setGroesse(null);
+            }}
+            aria-label={t("blatt.setPerSheet")}
+            className="blatt-zahl w-10 border-b border-ink bg-transparent pb-px text-center text-ink focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setGroesse(String(proBlatt))}
+            title={t("blatt.setPerSheet")}
+            aria-label={t("blatt.setPerSheet")}
+            className="border-b border-dotted border-line2 pb-px text-ink2 hover:border-ink hover:text-ink"
+          >
+            {t("blatt.perSheet", { n: proBlatt })}
+          </button>
+        )}
       </span>
       <span className="flex items-center gap-4 text-[12.5px]">
+        {blaetternGriff(t("blatt.firstSheet"), "|←", blatt <= 1, () => onBlattWaehlen(1))}
         <button
           type="button"
           onClick={onZurueck}
@@ -372,9 +464,33 @@ export default function GamesBlatt({
         >
           ← {t("games.prev")}
         </button>
-        <span className="blatt-zahl border-b border-ink px-1.5 pb-0.5 text-ink">
-          {t("blatt.sheetOf", { n: deInt(blatt), total: deInt(blaetter) })}
-        </span>
+        {sprung !== null ? (
+          <input
+            autoFocus
+            type="number"
+            min={1}
+            max={blaetter}
+            value={sprung}
+            onFocus={(event) => event.target.select()}
+            onChange={(event) => setSprung(event.target.value)}
+            onBlur={uebernehmeSprung}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") uebernehmeSprung();
+              else if (event.key === "Escape") setSprung(null);
+            }}
+            aria-label={t("blatt.goToSheet")}
+            className="blatt-zahl w-14 border-b border-ink bg-transparent px-1.5 pb-0.5 text-center text-ink focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSprung(String(blatt))}
+            title={t("blatt.goToSheet")}
+            className="blatt-zahl min-h-11 border-b border-ink px-1.5 pb-0.5 text-ink"
+          >
+            {t("blatt.sheetOf", { n: deInt(blatt), total: deInt(blaetter) })}
+          </button>
+        )}
         <button
           type="button"
           onClick={onWeiter}
@@ -383,6 +499,9 @@ export default function GamesBlatt({
         >
           {t("games.next")} →
         </button>
+        {blaetternGriff(t("blatt.lastSheet"), "→|", blatt >= blaetter, () =>
+          onBlattWaehlen(blaetter)
+        )}
       </span>
     </div>
   );

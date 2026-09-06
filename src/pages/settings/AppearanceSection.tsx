@@ -213,6 +213,15 @@ export default function AppearanceSection({
   // Schloss, das nach einer Sekunde verschwindet, ist schlechter als eines,
   // das eine Sekunde später erscheint.
   const locked = !gate.unlocked && !gate.pending;
+  /**
+   * Der Stern sagt „das gibt es mit Plus" · er ist ein Hinweis für den, der
+   * es noch nicht hat. Wer Plus hat, bekäme sonst dreiundzwanzig Sterne auf
+   * einer Seite gezeigt, die nichts mehr unterscheiden: Alles steht ihm offen,
+   * und ein Merkmal, das auf alles zutrifft, ist keins. Er hängt deshalb an
+   * derselben Bedingung wie die Sperre selbst — und bleibt während der Prüfung
+   * ebenso weg, statt für einen Wimpernschlag aufzublitzen.
+   */
+  const hint = locked;
 
   const pickTheme = (theme: ThemeId) => onChange({ ...appearance, theme });
   const pickNight = (night: ThemeId) => onChange({ ...appearance, night });
@@ -242,7 +251,7 @@ export default function AppearanceSection({
         <ThemePreview />
         <span className="flex items-center gap-1.5 px-0.5">
           <span className="flex-1 truncate text-[12.5px] font-medium text-ink">{t(def.nameKey)}</span>
-          {def.plus && <Sparkles size={12} className="shrink-0 text-accent" />}
+          {def.plus && hint && <Sparkles size={12} className="shrink-0 text-accent" />}
         </span>
       </button>
     );
@@ -292,7 +301,7 @@ export default function AppearanceSection({
             >
               <BoardPreview />
               {t(set.nameKey)}
-              {plus && <Sparkles size={12} className="text-accent" />}
+              {plus && hint && <Sparkles size={12} className="text-accent" />}
             </button>
           );
         })}
@@ -321,7 +330,7 @@ export default function AppearanceSection({
             >
               <PiecePreview set={set.id} />
               {t(set.nameKey)}
-              {set.plus && <Sparkles size={12} className="text-accent" />}
+              {set.plus && hint && <Sparkles size={12} className="text-accent" />}
             </button>
           );
         })}
@@ -357,22 +366,17 @@ export default function AppearanceSection({
                       ? "set.themeAutoSystem"
                       : "set.themeAutoTime"
                 )}
-                {plus && <Sparkles size={12} className="text-accent" />}
+                {plus && hint && <Sparkles size={12} className="text-accent" />}
               </span>
             </Chip>
           );
         })}
       </div>
 
-      {appearance.auto !== "off" && (
-        <>
-          <p className="mt-3 text-[12px] text-ink3">{t("set.themeNight")}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 min-[640px]:grid-cols-4">
-            {THEMES.map((theme) => themeTile(theme.id, appearance.night === theme.id, pickNight))}
-          </div>
-        </>
-      )}
-
+      {/* Die Grenzen der Nacht stehen vor der Nachtseite und nicht hinter den
+          Kacheln: Erst sagt man, wann die Nacht ist, dann, wie sie aussieht ·
+          und hinter acht Kacheln übersieht man die zwei Uhrzeiten ohnehin.
+          Beides zusammen ist ein Satz, und die Zeitspanne ist sein Anfang. */}
       {appearance.auto === "time" && (
         <div className="mt-3 grid grid-cols-2 gap-3 min-[640px]:max-w-sm">
           <Field label={t("set.themeNightFrom")}>
@@ -392,6 +396,15 @@ export default function AppearanceSection({
             />
           </Field>
         </div>
+      )}
+
+      {appearance.auto !== "off" && (
+        <>
+          <p className="mt-3 text-[12px] text-ink3">{t("set.themeNight")}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 min-[640px]:grid-cols-4">
+            {THEMES.map((theme) => themeTile(theme.id, appearance.night === theme.id, pickNight))}
+          </div>
+        </>
       )}
     </>
   );

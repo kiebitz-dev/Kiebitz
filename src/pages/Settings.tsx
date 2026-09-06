@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useBackendInfo } from "../lib/backend";
+import { holdPage } from "../lib/pageReset";
 import { useMobileShell } from "../components/MobileShell";
 import { LOCALES, LOCALE_NAMES, useI18n, type Key, type Locale } from "../lib/i18n";
 import {
@@ -513,6 +514,19 @@ export default function SettingsPage({
    */
   const tokenDirty = lichessTok.trim() !== lichessTokStored.trim();
   const dirty = settingsDirty || tokenDirty;
+
+  /**
+   * Solange etwas ungesichert ist, hält die Seite sich fest.
+   *
+   * Ein zweiter Tipp auf den Reiter, auf dem man steht, hängt die Seite sonst
+   * neu ein und wirft den Entwurf mit weg · hier wird daraus wieder der bloße
+   * Griff an den Kopf der Seite. Gefragt wird über den Ref und nicht über den
+   * Wert selbst: Die Anmeldung soll einmal geschehen und nicht bei jedem
+   * angefassten Feld (siehe lib/pageReset.ts).
+   */
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  useEffect(() => holdPage(() => dirtyRef.current), []);
 
   const patch = (p: Partial<Settings>) => setDraft((d) => (d ? { ...d, ...p } : d));
 

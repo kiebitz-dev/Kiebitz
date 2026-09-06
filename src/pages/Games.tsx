@@ -53,7 +53,20 @@ import { replaySans } from "../lib/position";
 import { exportPgn, importPgn, PgnPlayerMismatchError } from "../lib/pgn";
 
 const PAGE_SIZE_KEY = "kiebitz.games.pageSize";
-const PAGE_SIZES = [10, 25, 50, 100] as const;
+/**
+ * Wie viele Partien auf eine Seite gehen · frei zwischen diesen Grenzen.
+ *
+ * Vier feste Stufen standen hier früher als Pillenreihe. Sie kosteten eine
+ * eigene Zeile, um eine Frage zu beantworten, die man einmal beantwortet und
+ * dann nie wieder — und wer fünfzehn wollte, bekam fünfzig. Jetzt steht der
+ * geltende Wert im Satz neben der Spanne („1–10 von 1.523 · 10 je Seite") und
+ * ist zugleich der Griff, der ihn ändert.
+ *
+ * Unten zehn, damit die Seite auf dem Telefon eine Seite bleibt; oben hundert,
+ * weil darüber jede Seite die Datenbank spürbar länger befragt.
+ */
+const MIN_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
 type ImportTone = "info" | "success" | "warning" | "error";
 
 /** Ein gesetzter Filter, wie ihn die Pillenzeile zeigt und wieder entfernt. */
@@ -63,15 +76,20 @@ interface ActiveFilter {
   clear: () => void;
 }
 
+/** Auf den gültigen Bereich holen · alles andere wäre keine Seite. */
+function clampPageSize(n: number): number {
+  return Math.min(Math.max(Math.round(n), MIN_PAGE_SIZE), MAX_PAGE_SIZE);
+}
+
 /** Gemerkte Seitengröße lesen; beim ersten Öffnen auf 10 (ungültig/leer). */
 function readStoredPageSize(): number {
   try {
     const n = Number(localStorage.getItem(PAGE_SIZE_KEY));
-    if ((PAGE_SIZES as readonly number[]).includes(n)) return n;
+    if (Number.isFinite(n) && n > 0) return clampPageSize(n);
   } catch {
     /* Storage nicht verfügbar */
   }
-  return 10;
+  return MIN_PAGE_SIZE;
 }
 
 export default function Games({
@@ -137,6 +155,9 @@ export default function Games({
   const [page, setPage] = useState(1);
   // Inline-Eingabe zum direkten Springen auf eine bestimmte Seite.
   const [pageInput, setPageInput] = useState<string | null>(null);
+  // Dieselbe Bewegung für die Seitengröße: Der geltende Wert steht im Satz,
+  // ein Klick macht ihn zum Eingabefeld.
+  const [sizeInput, setSizeInput] = useState<string | null>(null);
   const reloadSequence = useRef(0);
 
   // Gewählte Seitengröße merken (nur UI-Präferenz → localStorage).
@@ -445,6 +466,32 @@ export default function Games({
     if (!Number.isNaN(n)) setPage(Math.min(Math.max(n, 1), totalPages));
     setPageInput(null);
   };
+
+  /**
+   * Eingetippte Seitengröße übernehmen · dieselbe Regel wie beim Sprung: Was
+   * außerhalb der Grenzen liegt, wird auf die nächste gültige Zahl geholt und
+   * nicht verworfen. Wer 500 tippt, will offensichtlich „viele" und soll nicht
+   * mit seiner alten Zehnerseite dastehen.
+   */
+  const commitPageSize = () => {
+    const n = parseInt(sizeInput ?? "", 10);
+    if (!Number.isNaN(n)) setPageSize(clampPageSize(n));
+    setSizeInput(null);
+  };
+
+  /**
+   * "1–10 von 1.523 · 10 je Seite" · Spanne und Seitengröße in einem Satz.
+   *
+   * Die Zahl je Seite ist zugleich der Griff, der sie ändert; im Blatt heißt
+   * dieselbe Angabe „je Blatt", weil dort eine Seite ein Blatt ist. Beide
+   * Fassungen lesen dieselbe Zahl und schreiben in denselben Zustand — der
+   * Modus wechselt nur das Wort und den Satz drumherum.
+   */
+  const rangeLabel = t("games.rangeInfo", {
+    from: deInt(rangeFrom),
+    to: deInt(rangeTo),
+    total: deInt(totalResults),
+  });
 
   /**
    * Ein Lauf über die komplette Historie zieht sich über Dutzende Monatsarchive
@@ -1162,6 +1209,11 @@ export default function Games({
           bis={rangeTo}
           blatt={safePage}
           blaetter={totalPages}
+          proBlatt={pageSize}
+          minProBlatt={MIN_PAGE_SIZE}
+          maxProBlatt={MAX_PAGE_SIZE}
+          onProBlatt={(n) => setPageSize(clampPageSize(n))}
+          onBlattWaehlen={(n) => setPage(Math.min(Math.max(n, 1), totalPages))}
           onZurueck={() => setPage((value) => Math.max(1, value - 1))}
           onWeiter={() => setPage((value) => Math.min(totalPages, value + 1))}
           onWaehlen={(game) => setSelectedId(game.id)}
@@ -1446,24 +1498,42 @@ export default function Games({
 
         {filtered.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-[12.5px] text-ink3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span>{t("games.perPage")}</span>
-              {PAGE_SIZES.map((n) => (
-                <Chip key={n} active={pageSize === n} onClick={() => setPageSize(n)}>
-                  {n}
-                </Chip>
-              ))}
-              {/* Die Spanne "1-10 von 1.518" steht auf dem Handy direkt
-                  ueber derselben Seitenzahl, die rechts daneben schon zaehlt ·
-                  dort entfaellt sie, auf dem Desktop ist Platz genug. */}
-              {!mobile && (
-                <span className="ml-1 tabular-nums">
-                  {t("games.rangeInfo", {
-                    from: deInt(rangeFrom),
-                    to: deInt(rangeTo),
-                    total: deInt(totalResults),
-                  })}
-                </span>
+            {/* Spanne und Seitengröße in einem Satz · die Zahl je Seite ist
+                zugleich der Griff, der sie ändert. Auf dem Telefon steht die
+                Spanne mit, obwohl die Seitenzahl rechts schon zählt: Sie trägt
+                jetzt die einzige Stelle, an der die Seitengröße zu sehen und zu
+                ändern ist, und die darf nicht am Bildschirmformat hängen. */}
+            <div className="flex flex-wrap items-center gap-1.5 tabular-nums">
+              <span>{rangeLabel}</span>
+              <span aria-hidden className="text-ink3/60">
+                ·
+              </span>
+              {sizeInput !== null ? (
+                <input
+                  autoFocus
+                  type="number"
+                  min={MIN_PAGE_SIZE}
+                  max={MAX_PAGE_SIZE}
+                  value={sizeInput}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setSizeInput(e.target.value)}
+                  onBlur={commitPageSize}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitPageSize();
+                    else if (e.key === "Escape") setSizeInput(null);
+                  }}
+                  aria-label={t("games.setPerPage")}
+                  className="w-14 rounded-lg border border-accent-dim bg-panel px-2 py-1 text-center tabular-nums text-ink focus:border-accent focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              ) : (
+                <button
+                  onClick={() => setSizeInput(String(pageSize))}
+                  title={t("games.setPerPage")}
+                  aria-label={t("games.setPerPage")}
+                  className="rounded-lg px-1.5 py-1 underline decoration-line2 decoration-dotted underline-offset-4 transition-colors hover:text-accent hover:decoration-accent"
+                >
+                  {t("games.perPageValue", { n: pageSize })}
+                </button>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1490,6 +1560,7 @@ export default function Games({
                   min={1}
                   max={totalPages}
                   value={pageInput}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setPageInput(e.target.value)}
                   onBlur={commitPageJump}
                   onKeyDown={(e) => {

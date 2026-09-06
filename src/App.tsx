@@ -1,4 +1,5 @@
 import {
+  Fragment,
   lazy,
   Suspense,
   useCallback,
@@ -46,6 +47,7 @@ import {
 import { useT, type Key } from "./lib/i18n";
 import { useNavStack, type PageId, type RouteParams } from "./lib/nav";
 import { forgetPages, keepScroll, rememberScroll, takeScroll } from "./lib/pageMemory";
+import { pageHeld } from "./lib/pageReset";
 import {
   MobileAppBar,
   MobileNav,
@@ -545,27 +547,66 @@ export default function App() {
     main.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
   }, []);
 
+  /**
+   * Die laufende Nummer der offenen Seite · sie steht im Schlüssel des
+   * Seiteninhalts und ist die einzige Stelle, an der er sich ändert, ohne dass
+   * die Seite gewechselt hätte. Ein anderer Schlüssel heißt für React: neu
+   * einhängen, also von vorn.
+   */
+  const [pageRun, setPageRun] = useState(0);
+
+  /**
+   * Zurück auf Anfang · dieselbe Seite, aber wie beim ersten Mal.
+   *
+   * Wer den Reiter antippt, auf dem er ohnehin steht, meint nicht „dorthin, wo
+   * ich schon bin", sondern „von vorn": Die besondere Analyse einer Partie
+   * wird wieder das freie Brett, der gefilterte Bestand wieder der ganze, das
+   * halb ausgefüllte Formular wieder leer.
+   *
+   * Beides gehört dazu, und beides fehlte einzeln:
+   *
+   * · `goTo` nimmt der Seite ihre Deep-Link-Parameter (die vorgewählte Partie,
+   *   den Vorfilter aus dem Dashboard) und kürzt den Stapel auf das Hauptziel.
+   *   Ohne das schlüge dieselbe Partie beim Neueinhängen sofort wieder auf.
+   * · Der neue Schlüssel nimmt ihr den Zustand, den sie selbst führt. Ohne das
+   *   bliebe bei gleichen Parametern alles stehen, weil React dieselbe Instanz
+   *   weiterlaufen ließe.
+   *
+   * An den Kopf geht es zuletzt: Eine neu eingehängte Seite ist zwar kurz,
+   * aber der Scroll-Container gehört der Hülle und behielte seinen Stand.
+   */
+  const resetPage = useCallback(
+    (id: PageId) => {
+      goTo(id);
+      setPageRun((run) => run + 1);
+      scrollToTop();
+    },
+    [goTo, scrollToTop]
+  );
+
   // Ein Ziel, dessen Elternseite gerade offen ist, wird als Detailebene
   // geöffnet · Zurück führt dann dorthin zurück statt auf den Start.
   //
-  // Und wer die Seite wählt, auf der er ohnehin steht, will an ihren Anfang.
-  // Ein zweites Mal dieselbe Seite einzuhängen wäre die Alternative gewesen ·
-  // dann verlöre die Seite aber ihren Zustand (offener Reiter, laufende
-  // Sitzung, halb ausgefülltes Feld), und das will beim Blättern niemand.
+  // Liegt ein Detailblatt über der Seite (mobil das Blatt einer Partie), dann
+  // ist es das, was zwischen ihm und der Seite steht · derselbe Tipp schließt
+  // es, statt darunter aufzuräumen. Erst der nächste stellt die Seite zurück.
   //
-  // Liegt allerdings ein Detailblatt über der Seite (mobil das Blatt einer
-  // Partie), dann ist es das, was zwischen ihm und der Liste steht · derselbe
-  // Tipp schließt es, statt unter ihm zu scrollen. Erst der nächste führt an
-  // den Anfang.
+  // Und hält die Seite ungesicherte Arbeit — die Einstellungen tun das bis zum
+  // Speichern —, bleibt es beim Griff nach oben: Zurücksetzen hieße dort
+  // wegwerfen, und das sieht dem Griff nach oben zu ähnlich (siehe
+  // lib/pageReset.ts).
   const navigate = useCallback(
     (id: PageId) => {
       if (id === pageRef.current) {
-        if (!dismissLayers()) scrollToTop();
+        if (dismissLayers()) {
+          // Die Schicht darüber ist weg · die Seite darunter bleibt, wie sie war.
+        } else if (pageHeld()) scrollToTop();
+        else resetPage(id);
       } else if (NAV_PARENT[id] === pageRef.current) push(id);
       else goTo(id);
       setNavOpen(false);
     },
-    [goTo, push, scrollToTop]
+    [goTo, push, resetPage, scrollToTop]
   );
 
   // Auf dem Desktop führt der Rundgang an der Seitenleiste entlang, mobil an
@@ -745,6 +786,11 @@ export default function App() {
         <Loader2 size={22} className="animate-spin text-accent" />
       </div>
     }>
+      {/* Der Schlüssel wechselt bei jedem Seitenwechsel — dort hängt React
+          ohnehin um — und zusätzlich, wenn jemand den offenen Reiter antippt.
+          Das ist die eine Stelle, an der eine Seite von vorn beginnt, ohne dass
+          eine andere dazwischen gestanden hätte · siehe `resetPage`. */}
+      <Fragment key={`${page}:${pageRun}`}>
       {page === "dashboard" && (
         <Dashboard go={navigate} openAnalysis={openAnalysis} openGames={openGames} />
       )}
@@ -779,6 +825,7 @@ export default function App() {
         <SettingsPage openSupport={openSupport} startTour={() => setTourOpen(true)} />
       )}
       {page === "support" && <Support initialType={route.reportType ?? "feedback"} />}
+      </Fragment>
     </Suspense>
   );
 

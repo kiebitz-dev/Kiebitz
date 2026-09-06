@@ -79,6 +79,48 @@ describe("layout mode row", () => {
   });
 });
 
+describe("automatic switch by time", () => {
+  /**
+   * Erst wann die Nacht ist, dann wie sie aussieht · die zwei Uhrzeiten
+   * standen hinter acht Kacheln und wurden dort übersehen.
+   */
+  it("sets the hours above the night themes", () => {
+    show({ auto: "time" });
+    const von = screen.getByText("set.themeNightFrom");
+    const nachtUeberschrift = screen.getByText("set.themeNight");
+    expect(
+      von.compareDocumentPosition(nachtUeberschrift) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("keeps the hours away when the switch follows the system", () => {
+    show({ auto: "system" });
+    expect(screen.queryByText("set.themeNightFrom")).toBeNull();
+    expect(screen.getByText("set.themeNight")).toBeTruthy();
+  });
+});
+
+describe("with Plus", () => {
+  /**
+   * Der Stern sagt „das gibt es mit Plus". Wer Plus hat, dem sagt er nichts
+   * mehr — dreiundzwanzig davon auf einer Seite unterscheiden nichts.
+   */
+  it("drops every Plus star", () => {
+    const { container } = render(
+      <AppearanceSection appearance={{ ...DEFAULT_APPEARANCE, auto: "time" }} onChange={onChange} />
+    );
+    expect(container.querySelectorAll(".lucide-sparkles").length).toBe(0);
+  });
+
+  it("still shows them without Plus", () => {
+    revokePlus();
+    const { container } = render(
+      <AppearanceSection appearance={{ ...DEFAULT_APPEARANCE, auto: "time" }} onChange={onChange} />
+    );
+    expect(container.querySelectorAll(".lucide-sparkles").length).toBeGreaterThan(0);
+  });
+});
+
 describe("without Plus", () => {
   it("leaves the default board open", () => {
     revokePlus();
