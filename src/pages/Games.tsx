@@ -122,6 +122,10 @@ export default function Games({
   const [dateKey, setDateKey] = useState(initialFilter?.date ?? "");
   const [opponent, setOpponent] = useState(initialFilter?.opponent ?? "");
   const [opening, setOpening] = useState(initialFilter?.opening ?? "");
+  // Farbe und ECO kommen aus einem Klick in der Partienzeile · das Kästchen
+  // vor dem Namen und die Kennung hinter der Eröffnung sind dort Griffe.
+  const [color, setColor] = useState<"" | "white" | "black">(initialFilter?.color ?? "");
+  const [eco, setEco] = useState(initialFilter?.eco ?? "");
   // Der Zeitraum ist ein Filter des Diagramm-Modus: Dort steht er als
   // Formularfeld neben Quelle und Ergebnis · in der gewöhnlichen Fassung
   // führen die Pillen dieselbe Einschränkung über das genaue Datum.
@@ -161,6 +165,8 @@ export default function Games({
       since: zeitraumStart(zeitraum),
       opponent,
       opening,
+      color,
+      eco,
       query,
     })
       .then((resultPage) => {
@@ -174,7 +180,7 @@ export default function Games({
 
   useEffect(() => {
     if (backend.mode === "desktop") reload();
-  }, [backend.mode, locale, source, result, query, pageSize, page, tc, dateKey, opponent, opening, zeitraum]);
+  }, [backend.mode, locale, source, result, query, pageSize, page, tc, dateKey, opponent, opening, color, eco, zeitraum]);
 
   const databaseLoaded = dbGames !== null;
   const allGames: UiGame[] = databaseLoaded ? dbGames : demoGames;
@@ -204,12 +210,14 @@ export default function Games({
           (zeitraumSeit === 0 || (gamePlayedTs(g) ?? -1) >= zeitraumSeit) &&
           (opponent === "" || g.opponent === opponent) &&
           (opening === "" || g.opening === opening) &&
+          (color === "" || g.color === color) &&
+          (eco === "" || g.eco === eco) &&
           (query === "" ||
             g.opponent.toLowerCase().includes(query.toLowerCase()) ||
             g.opening.toLowerCase().includes(query.toLowerCase()) ||
             g.tags.some((tag) => tag.toLowerCase().includes(query.toLowerCase())))
       ),
-    [allGames, databaseLoaded, source, result, tc, dateKey, opponent, opening, query, zeitraumSeit]
+    [allGames, databaseLoaded, source, result, tc, dateKey, opponent, opening, color, eco, query, zeitraumSeit]
   );
 
   const selectedSummary = filtered.find((g) => g.id === selectedId) ?? filtered[0];
@@ -235,7 +243,7 @@ export default function Games({
   }, [selectedSummary?.dbId]);
 
   // Paginierung: bei Filter-/Seitengröße-Wechsel zurück auf Seite 1.
-  useEffect(() => setPage(1), [source, result, query, pageSize, tc, dateKey, opponent, opening, zeitraum]);
+  useEffect(() => setPage(1), [source, result, query, pageSize, tc, dateKey, opponent, opening, color, eco, zeitraum]);
   const totalResults = databaseLoaded ? filteredTotal : filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -278,6 +286,13 @@ export default function Games({
   if (tc) exactFilters.push({ key: "tc", label: t("games.filterMode", { v: tcLabel(tc, locale) }), clear: () => setTc("") });
   if (opponent) exactFilters.push({ key: "opponent", label: t("games.filterOpponent", { v: opponent }), clear: () => setOpponent("") });
   if (opening) exactFilters.push({ key: "opening", label: t("games.filterOpening", { v: opening }), clear: () => setOpening("") });
+  if (color)
+    exactFilters.push({
+      key: "color",
+      label: t("games.filterColor", { v: t(color === "white" ? "common.white" : "common.black") }),
+      clear: () => setColor(""),
+    });
+  if (eco) exactFilters.push({ key: "eco", label: t("games.filterEco", { v: eco }), clear: () => setEco("") });
   const chipFilters: ActiveFilter[] = [];
   if (source !== "alle")
     chipFilters.push({
@@ -288,11 +303,29 @@ export default function Games({
   if (result !== "alle") chipFilters.push({ key: "result", label: resultLabels[result], clear: () => setResult("alle") });
   const activeFilters = mobile ? [...chipFilters, ...exactFilters] : exactFilters;
 
+  /**
+   * Einen Vorfilter übernehmen · aus dem Start oder aus einem Klick in der
+   * Liste. Gesetzt wird nur, was der Filter nennt; was er auslässt, bleibt so,
+   * wie der Nutzer es eingestellt hat.
+   */
+  const applyFilter = (filter: GamesFilter) => {
+    if (filter.source !== undefined) setSource(filter.source);
+    if (filter.result !== undefined) setResult(filter.result);
+    if (filter.tc !== undefined) setTc(filter.tc);
+    if (filter.date !== undefined) setDateKey(filter.date);
+    if (filter.opponent !== undefined) setOpponent(filter.opponent);
+    if (filter.opening !== undefined) setOpening(filter.opening);
+    if (filter.color !== undefined) setColor(filter.color);
+    if (filter.eco !== undefined) setEco(filter.eco);
+  };
+
   const clearExactFilters = () => {
     setDateKey("");
     setTc("");
     setOpponent("");
     setOpening("");
+    setColor("");
+    setEco("");
     setZeitraum("alle");
   };
   const clearAllFilters = () => {
@@ -938,6 +971,7 @@ export default function Games({
               wert: query,
               platzhalter: t("games.searchPlaceholder"),
               leer: query === "",
+              suche: true,
               onChange: setQuery,
             },
             {
@@ -1010,6 +1044,28 @@ export default function Games({
                     leer: false,
                     breite: 160,
                     onClick: () => setOpening(""),
+                  },
+                ]
+              : []),
+            ...(color
+              ? [
+                  {
+                    label: t("ins.color"),
+                    wert: t(color === "white" ? "common.white" : "common.black"),
+                    leer: false,
+                    breite: 96,
+                    onClick: () => setColor(""),
+                  },
+                ]
+              : []),
+            ...(eco
+              ? [
+                  {
+                    label: "ECO",
+                    wert: eco,
+                    leer: false,
+                    breite: 80,
+                    onClick: () => setEco(""),
                   },
                 ]
               : []),
@@ -1109,6 +1165,21 @@ export default function Games({
           onZurueck={() => setPage((value) => Math.max(1, value - 1))}
           onWeiter={() => setPage((value) => Math.min(totalPages, value + 1))}
           onWaehlen={(game) => setSelectedId(game.id)}
+          onFilter={applyFilter}
+          // Aufschlagen lassen sich die Filter nur mobil · am Rechner stehen
+          // sie ohnehin alle in der Kopfleiste.
+          filterOffen={filterOpen}
+          onFilterUmschalten={mobile ? () => setFilterOpen((open) => !open) : undefined}
+          einfuhr={
+            backend.mode === "desktop"
+              ? {
+                  offen: importOpen,
+                  onUmschalten: () => setImportOpen((open) => !open),
+                  inhalt: importBody,
+                  meldung: importMsg,
+                }
+              : undefined
+          }
           onAnalyse={() => selected?.dbId != null && openAnalysis(selected.dbId)}
           onOriginal={
             selected && selected.source !== "manual"

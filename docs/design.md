@@ -40,7 +40,11 @@ Its rules:
 - **A register, not a nav bar.** Chapter left, dotted leader, number right; the
   current page is marked at the spine like a bookmark. `Register.tsx`
 - **Rows, not cards.** A game is a line in a tournament book — result as a dot,
-  colour as a field, two marks at the end instead of a tag column. `PartieZeile.tsx`
+  colour as a field, two marks at the end instead of a tag column, and the key
+  to those marks right-aligned under the column it explains. Every column of a
+  row is also a handle: date, colour box, opponent, opening, ECO and result dot
+  each narrow the game index to that one value, the same move the ordinary
+  version makes. `PartieZeile.tsx`
 - **Ranks, not colour bars.** A finding carries its severity as a number saying
   which one is due first, not as a red bar saying how bad it is. `Befund.tsx`
 - **Every state of a page, not only the full one.** A tab opened with nothing
@@ -48,8 +52,12 @@ Its rules:
   carries no form head and no annotations, but it keeps the controls that get
   you to a game and shows the engine's lines where the commentary would be.
   A page hands those controls to its variant (`laufleiste`, `motor` in
-  `AnalysisBlatt`) instead of dropping them — the mode changes the layout and
-  must not cost a function.
+  `AnalysisBlatt`, `einfuhr` in `GamesBlatt`) instead of dropping them — the
+  mode changes the layout and must not cost a function. Where a control is a
+  control and nothing else, the variant hands the ordinary one back and only
+  re-sets it: `.blatt-formular` in `blatt.css` squares the corners and turns
+  filled surfaces into edges, which is how the settings and the PGN import
+  live in the mode without being built a second time.
 - **Book type.** Source Serif 4, and only where `.buch` is set — the interface
   stays on Inter. `blatt.css` also holds the four typographic rules the mode
   uses: `.blatt-kolumne` (running heads and section rules), `.blatt-feld` (form

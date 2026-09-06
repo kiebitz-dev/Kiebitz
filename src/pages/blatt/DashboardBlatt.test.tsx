@@ -89,6 +89,16 @@ function show(props: Partial<Parameters<typeof DashboardBlatt>[0]> = {}) {
   return handlers;
 }
 
+/**
+ * Der Gegnername in der Partienliste · er steht auch im Formularkopf, und dort
+ * ist er Auskunft und kein Griff.
+ */
+const gegnerInDerListe = () =>
+  screen
+    .getAllByText(/DragonSlayer_88/)
+    .map((el) => el.closest("button"))
+    .find((el): el is HTMLButtonElement => el != null)!;
+
 describe("Blatt des Starts", () => {
   it("prints a diagram instead of four tiles", () => {
     show();
@@ -163,6 +173,46 @@ describe("Blatt des Starts", () => {
     // Das Fazit der ganzen Partie gehört nicht zu dieser einen Stellung.
     expect(screen.queryByText("expl.verdict")).toBeNull();
     expect(screen.queryByText(/Solide gespielt/)).toBeNull();
+  });
+
+  it("says where the price comes from under the note", () => {
+    show({
+      quelle: {
+        ...spiel,
+        analysen: [undefined, undefined, undefined, "Sc6 kostet 5,3 Bewertungspunkte."],
+        gruende: [undefined, undefined, undefined, "Widerlegt wird der Zug durch Sxe5."],
+      },
+    });
+    expect(screen.getByText(/Sc6 kostet 5,3/)).toBeTruthy();
+    expect(screen.getByText(/Widerlegt wird der Zug durch Sxe5/)).toBeTruthy();
+  });
+
+  /**
+   * Jede Angabe der Zeile ist ein Griff in das Verzeichnis · geprüft werden
+   * die drei, die keinen eigenen Text tragen oder erst dazugekommen sind.
+   */
+  it("filters from the colour box, the ECO and the result dot", () => {
+    const onFilter = vi.fn();
+    show({ onFilter });
+    fireEvent.click(screen.getByLabelText("games.filterColor"));
+    expect(onFilter).toHaveBeenLastCalledWith({ color: "white" });
+    fireEvent.click(screen.getByLabelText("games.filterEco"));
+    expect(onFilter).toHaveBeenLastCalledWith({ eco: "C50" });
+    fireEvent.click(screen.getByLabelText("games.filterResult"));
+    expect(onFilter).toHaveBeenLastCalledWith({ result: "win" });
+    // Und der Gegner, den es vorher schon gab · die Zeile trägt beides.
+    // Sein Name steht auch im Formularkopf; gemeint ist der in der Liste.
+    fireEvent.click(gegnerInDerListe());
+    expect(onFilter).toHaveBeenLastCalledWith({ opponent: "DragonSlayer_88" });
+  });
+
+  it("keeps the row a plain button on the phone, where there are no columns", () => {
+    const onFilter = vi.fn();
+    const handlers = show({ mobile: true, onFilter });
+    expect(screen.queryByLabelText("games.filterColor")).toBeNull();
+    fireEvent.click(gegnerInDerListe());
+    expect(onFilter).not.toHaveBeenCalled();
+    expect(handlers.onPartie).toHaveBeenCalled();
   });
 
   it("stays silent when the analysis found nothing to say", () => {

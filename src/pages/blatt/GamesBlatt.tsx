@@ -9,6 +9,17 @@
  * sondern ausgefüllte Formularfelder. Damit liest man den Filterzustand als
  * Satz und nicht als Sammlung angeschalteter Knöpfe.
  *
+ * Auf dem Telefon stehen sie nicht alle nebeneinander — dort passen zwei
+ * Felder in eine Zeile, und vier davon schöben die erste Partie unter den
+ * Bildrand. Die Leiste trägt deshalb nur das Suchfeld und daneben zwei Griffe
+ * in derselben Höhe: Filter und Import, beide als Kästchen aus einer Haarlinie,
+ * beide schlagen ihren Abschnitt darunter auf. Am Rechner ist die Zeile breit
+ * genug für alle Felder; dort steht nur der Import als Griff daneben.
+ *
+ * Auch die Zeilen der Liste sind Griffe: Datum, Farbfeld, Gegner, Eröffnung,
+ * ECO und Ergebnispunkt schränken das Verzeichnis auf genau diesen Wert ein,
+ * statt die Partie zu wählen — dieselbe Bewegung wie auf dem Startblatt.
+ *
  * Rechts der Eintrag zur gewählten Partie: Schlussstellung als Diagramm — hier
  * wird gelesen, nicht gezogen, also ein Abdruck — darunter die Bildunterschrift
  * mit dem letzten Zug und dem Ausgang, die Angaben als Formularfelder, und
@@ -23,6 +34,7 @@
  * solange in seinen Zeilen nichts steht, was zur nächsten nicht passt.
  */
 import type { ReactNode } from "react";
+import { Download, SlidersHorizontal } from "lucide-react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { MarkenSchluessel, PartieZeile } from "../../components/blatt/PartieZeile";
 import {
@@ -35,7 +47,7 @@ import {
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
 import { deInt } from "../../lib/format";
-import type { UiGame } from "../../lib/gameUi";
+import type { GamesFilter, UiGame } from "../../lib/gameUi";
 
 /**
  * Ein Filter als ausgefülltes Formularfeld.
@@ -51,8 +63,34 @@ export interface Filterfeld {
   breite?: number;
   /** Platzhalter des Schreibfeldes. */
   platzhalter?: string;
+  /**
+   * Das Suchfeld · genau eines der Felder trägt die Marke.
+   *
+   * Am Rechner ändert sie nichts: Dort stehen alle Felder nebeneinander. Auf
+   * dem Telefon bleibt allein dieses in der Leiste stehen, und die übrigen
+   * kommen erst, wenn man die Filter aufschlägt — sonst steht die halbe Seite
+   * voll Formular, bevor die erste Partie zu sehen ist.
+   */
+  suche?: boolean;
   onChange?: (value: string) => void;
   onClick?: () => void;
+}
+
+/**
+ * Der Import als aufklappbarer Abschnitt.
+ *
+ * Der Inhalt kommt fertig aus `Games.tsx` — es ist derselbe Import wie in der
+ * gewöhnlichen Fassung, nur unter `.blatt-formular` gesetzt (siehe
+ * `blatt.css`): eckige Felder, Linien statt Flächen. Ihn hier ein zweites Mal
+ * zu bauen hieße, jede neue Importquelle an zwei Stellen zu pflegen, und die
+ * zweite bliebe zurück.
+ */
+export interface Importbereich {
+  offen: boolean;
+  onUmschalten: () => void;
+  inhalt: ReactNode;
+  /** Die Meldung des laufenden Imports · steht über dem Abschnitt. */
+  meldung?: ReactNode;
 }
 
 export interface GamesBlattProps {
@@ -96,6 +134,23 @@ export interface GamesBlattProps {
   onWaehlen: (game: UiGame) => void;
   onAnalyse: () => void;
   onOriginal?: () => void;
+  /** Import und Export · fehlt ohne Datenbank, also in der Web-Vorschau. */
+  einfuhr?: Importbereich;
+  /**
+   * Sind die Filter auf dem Telefon aufgeschlagen?  Am Rechner stehen sie
+   * ohnehin alle in der Kopfleiste.
+   */
+  filterOffen?: boolean;
+  onFilterUmschalten?: () => void;
+  /**
+   * Ein Klick auf eine einzelne Angabe in der Liste · er schränkt das
+   * Verzeichnis auf genau diesen Wert ein, statt die Partie zu wählen.
+   * Dieselben sechs Griffe wie auf dem Startblatt: Datum, Farbfeld, Gegner,
+   * Eröffnung, ECO und Ergebnispunkt. Mobil gibt es sie nicht — dort steht die
+   * Zeile zweizeilig und ohne eigene Spalten, und ein Griff bräuchte eine
+   * Spalte, an der er hinge.
+   */
+  onFilter?: (filter: GamesFilter) => void;
 }
 
 export default function GamesBlatt({
@@ -120,45 +175,105 @@ export default function GamesBlatt({
   onWaehlen,
   onAnalyse,
   onOriginal,
+  einfuhr,
+  filterOffen = false,
+  onFilterUmschalten,
+  onFilter,
 }: GamesBlattProps) {
   const { t } = useI18n();
+
+  /** Ein einzelnes Filterfeld · ausgefülltes Formular statt Pillenreihe. */
+  const feldSatz = (feld: Filterfeld) => {
+    // Ein gefülltes Feld steht auf einer kräftigen Linie, ein leeres auf
+    // einer blassen · so liest man den Filterzustand als Satz.
+    const linie = `mt-1.5 block w-full min-h-11 truncate border-b pb-[5px] text-start text-[13.5px] ${
+      feld.leer ? "border-line2 text-ink3" : "border-ink text-ink"
+    }`;
+    return (
+      <div
+        key={feld.label}
+        className={feld.breite ? "flex-none" : "min-w-0 flex-1"}
+        style={feld.breite ? { width: feld.breite } : undefined}
+      >
+        <Feldname>{feld.label}</Feldname>
+        {feld.onChange ? (
+          <input
+            value={feld.wert}
+            onChange={(event) => feld.onChange!(event.target.value)}
+            placeholder={feld.platzhalter}
+            aria-label={feld.label}
+            className={`${linie} bg-transparent placeholder:text-ink3 focus:outline-none`}
+          />
+        ) : feld.onClick ? (
+          <button type="button" onClick={feld.onClick} className={linie}>
+            {feld.wert}
+          </button>
+        ) : (
+          <span className={linie}>{feld.wert}</span>
+        )}
+      </div>
+    );
+  };
 
   // Über die vier festen Felder hinaus kommen die Einschränkungen dazu, die
   // aus dem Start oder aus dem Eintrag gesetzt wurden · sie umbrechen lieber
   // in eine zweite Zeile, als das Suchfeld auf nichts zusammenzudrücken.
   const filterfelder = (
-    <div className="flex min-w-0 flex-1 flex-wrap gap-x-6 gap-y-2">
-      {filter.map((feld) => {
-        // Ein gefülltes Feld steht auf einer kräftigen Linie, ein leeres auf
-        // einer blassen · so liest man den Filterzustand als Satz.
-        const linie = `mt-1.5 block w-full min-h-11 truncate border-b pb-[5px] text-start text-[13.5px] ${
-          feld.leer ? "border-line2 text-ink3" : "border-ink text-ink"
-        }`;
-        return (
-          <div
-            key={feld.label}
-            className={feld.breite ? "flex-none" : "min-w-0 flex-1"}
-            style={feld.breite ? { width: feld.breite } : undefined}
-          >
-            <Feldname>{feld.label}</Feldname>
-            {feld.onChange ? (
-              <input
-                value={feld.wert}
-                onChange={(event) => feld.onChange!(event.target.value)}
-                placeholder={feld.platzhalter}
-                aria-label={feld.label}
-                className={`${linie} bg-transparent placeholder:text-ink3 focus:outline-none`}
-              />
-            ) : feld.onClick ? (
-              <button type="button" onClick={feld.onClick} className={linie}>
-                {feld.wert}
-              </button>
-            ) : (
-              <span className={linie}>{feld.wert}</span>
-            )}
-          </div>
-        );
-      })}
+    <div className="flex min-w-0 flex-1 flex-wrap gap-x-6 gap-y-2">{filter.map(feldSatz)}</div>
+  );
+
+  // ── Die Leiste des Telefons ───────────────────────────────────────────────
+  // Ein Feld zum Suchen, eines zum Filtern, eines zum Einlesen — in einer
+  // Zeile, wie in der gewöhnlichen Fassung. Untereinander gesetzt schöbe das
+  // Formular die erste Partie unter den Bildrand, und ein Verzeichnis, dessen
+  // Einträge man erst suchen muss, ist keins.
+  const suchfeld = filter.find((feld) => feld.suche);
+  const weitereFelder = filter.filter((feld) => !feld.suche);
+  const gesetzt = weitereFelder.filter((feld) => !feld.leer).length;
+
+  /** Ein Griff der Leiste · quadratisch, Haarlinie, wie ein Formularkästchen. */
+  const leistenGriff = (
+    name: string,
+    aktiv: boolean,
+    zeichen: ReactNode,
+    onClick: () => void,
+    zahl?: number
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      title={name}
+      aria-label={name}
+      aria-expanded={aktiv}
+      className={`relative flex h-11 w-11 flex-none items-center justify-center border ${
+        aktiv ? "border-ink text-ink" : "border-line2 text-ink2"
+      }`}
+    >
+      {zeichen}
+      {zahl != null && zahl > 0 && (
+        <span className="blatt-zahl absolute end-[3px] top-[3px] text-[10px] text-ink">{zahl}</span>
+      )}
+    </button>
+  );
+
+  const leiste = (
+    <div className="flex items-end gap-3">
+      {suchfeld && feldSatz(suchfeld)}
+      {onFilterUmschalten &&
+        leistenGriff(
+          t("games.filters"),
+          filterOffen,
+          <SlidersHorizontal size={17} />,
+          onFilterUmschalten,
+          gesetzt
+        )}
+      {einfuhr &&
+        leistenGriff(
+          t("games.manageImports"),
+          einfuhr.offen,
+          <Download size={17} />,
+          einfuhr.onUmschalten
+        )}
     </div>
   );
 
@@ -181,7 +296,15 @@ export default function GamesBlatt({
         <span className="blatt-feld w-[18px] flex-none text-center text-ink3">
           {t("blatt.points")}
         </span>
-        <span className="blatt-feld w-[52px] flex-none text-end text-ink3">
+        {/* Die Genauigkeit ist die einzige Spalte, deren Beschriftung kürzer
+            ist als ihre Zahlen. Rechtsbündig stünde sie deshalb zwar bündig
+            mit deren Ende, aber gut fünf Bildpunkte rechts von deren Anfang —
+            und über einer Zahlenspalte liest man die Beschriftung von links.
+            Sie steht deshalb linksbündig, um genau den leeren Teil einer
+            zweistelligen Prozentzahl eingerückt („91,2 %" ist 43 der 52
+            Bildpunkte breit). Beides sind Logik-Eigenschaften, also stimmt es
+            auch in einer Sprache, die von rechts nach links läuft. */}
+        <span className="blatt-feld w-[52px] flex-none truncate ps-[9px] text-start text-ink3">
           {t("blatt.accuracyShort")}
         </span>
         <span className="w-2.5 flex-none" />
@@ -213,6 +336,18 @@ export default function GamesBlatt({
                 aktiv={mobile && aktiv}
                 notiz={Boolean(game.note)}
                 offen={!game.analyzed}
+                filter={
+                  onFilter && !mobile
+                    ? {
+                        onDatum: () => onFilter({ date: game.dateKey ?? game.date }),
+                        onFarbe: () => onFilter({ color: game.color }),
+                        onGegner: () => onFilter({ opponent: game.opponent }),
+                        onEroeffnung: () => onFilter({ opening: game.opening }),
+                        onEco: () => onFilter({ eco: game.eco }),
+                        onErgebnis: () => onFilter({ result: game.result }),
+                      }
+                    : undefined
+                }
                 onClick={() => onWaehlen(game)}
               />
             </span>
@@ -321,6 +456,21 @@ export default function GamesBlatt({
     </div>
   );
 
+  /**
+   * Der aufgeschlagene Import · derselbe Abschnitt in beiden Fassungen.
+   *
+   * `.blatt-formular` setzt die gewöhnlichen Bedienteile in den Satz des
+   * Blattes um (eckige Felder, Linien statt Flächen) — dieselbe Regel, mit der
+   * die Einstellungen im Modus auskommen, ohne sich zu verdoppeln.
+   */
+  const einfuhrBereich = einfuhr?.offen && (
+    <div className="blatt-formular mt-4 border-t border-ink pt-3">
+      <Rubrik>{t("games.importPanelTitle")}</Rubrik>
+      {einfuhr.meldung && <div className="mt-2 text-[12px] text-ink2">{einfuhr.meldung}</div>}
+      <div className="mt-3">{einfuhr.inhalt}</div>
+    </div>
+  );
+
   const kopf = (
     <Kolumnentitel
       links={t("blatt.gamesTitle")}
@@ -332,7 +482,19 @@ export default function GamesBlatt({
     return (
       <div className="flex flex-col px-3.5 pb-6 pt-3">
         {kopf}
-        <div className="mt-3 flex flex-col gap-3">{filterfelder}</div>
+        <div className="mt-3">{leiste}</div>
+        {/* Aufgeschlagen stehen die übrigen Felder unter der Leiste, in
+            denselben zwei Spalten wie ein Formularkopf. */}
+        {filterOffen && weitereFelder.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-2">
+            {weitereFelder.map((feld) => (
+              <div key={feld.label} className="min-w-[126px] flex-1">
+                {feldSatz({ ...feld, breite: undefined })}
+              </div>
+            ))}
+          </div>
+        )}
+        {einfuhrBereich}
         <div className="mt-4">
           <Rubrik>{t("games.rangeInfo", { from: deInt(von), to: deInt(bis), total: deInt(treffer) })}</Rubrik>
           {liste}
@@ -345,8 +507,18 @@ export default function GamesBlatt({
   return (
     <div className="mx-auto flex min-h-full max-w-[1560px] flex-col px-10 pb-[22px] pt-6">
       {kopf}
-      <div className="mt-4 flex items-end">
+      {einfuhrBereich}
+      <div className="mt-4 flex items-end gap-4">
         {filterfelder}
+        {/* Der Import steht am Rechner neben den Filtern und nicht in einer
+            Leiste · dort ist die Zeile breit genug für beides. */}
+        {einfuhr &&
+          leistenGriff(
+            t("games.manageImports"),
+            einfuhr.offen,
+            <Download size={17} />,
+            einfuhr.onUmschalten
+          )}
         <div className="w-24 flex-none border-s border-line ps-4">
           <Feldname>{t("blatt.hits")}</Feldname>
           <div className="mt-1.5">

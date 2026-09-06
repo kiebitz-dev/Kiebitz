@@ -7,7 +7,7 @@
  * nicht ungeprüft auf die Seite kommt.
  */
 import { beforeAll, describe, expect, it } from "vitest";
-import { erklaereFazit, erklaereZug, type Zugzeile } from "./erklaerung";
+import { begruendeZug, erklaereFazit, erklaereZug, type Zugzeile } from "./erklaerung";
 import { loadLocale, translator } from "./locales/registry";
 import { setFormatLocale } from "./format";
 
@@ -107,6 +107,62 @@ describe("Erklärung eines Zuges", () => {
       { t: de(), locale: "de" }
     );
     expect(satz).not.toContain("expl.");
+  });
+});
+
+describe("Begründung eines Zuges", () => {
+  it("schweigt, solange die Engine den Zug nicht bemängelt", () => {
+    const satz = begruendeZug(zeile({ judgment: "" }), { t: de(), locale: "de" });
+    expect(satz).toBeNull();
+  });
+
+  it("schweigt, wenn weder Widerlegung noch Bewertungen dastehen", () => {
+    expect(begruendeZug(zeile(), { t: de(), locale: "de" })).toBeNull();
+  });
+
+  it("nennt Widerlegung und Bewertungen, wo kein Motiv erkannt wurde", () => {
+    // Der Fall, für den die Zeile gebaut ist: Die Analyse hat ein Urteil, aber
+    // kein Motiv · dann sagt der Satz darüber nur den Preis.
+    const satz = begruendeZug(
+      // Halbzug 25 · ungerade, also zieht Weiß, und die gespeicherte Zahl
+      // steht schon aus seiner Sicht.
+      zeile({ ply: 25, motif: "none", motif_detail: JSON.stringify({ reply: "Nxe4" }) }),
+      { t: de(), locale: "de", evalDavor: 40, evalDanach: -490 }
+    );
+    expect(satz).toContain("Sxe4");
+    expect(satz).toContain("+0,4");
+    expect(satz).toContain("−4,9");
+  });
+
+  it("dreht die Bewertungen auf die Sicht des Ziehenden", () => {
+    // Halbzug 26 · Schwarz zieht. Gespeichert ist die Zahl aus Weiß-Sicht;
+    // die Zeile muss sie umdrehen, sonst stiege sie, während Schwarz verliert.
+    const satz = begruendeZug(zeile({ ply: 26, motif: "none" }), {
+      t: de(),
+      locale: "de",
+      evalDavor: -40,
+      evalDanach: 490,
+    });
+    expect(satz).toContain("+0,4");
+    expect(satz).toContain("−4,9");
+  });
+
+  it("wiederholt die Widerlegung nicht, die das Motiv schon nennt", () => {
+    const satz = begruendeZug(
+      zeile({ ply: 25, motif: "fork", motif_detail: JSON.stringify({ reply: "Qd5+" }) }),
+      { t: de(), locale: "de", evalDavor: 40, evalDanach: -490 }
+    );
+    expect(satz).not.toContain("Dd5+");
+    expect(satz).toContain("+0,4");
+  });
+
+  it("lässt die Bewertung fort, wo sich nichts geändert hat", () => {
+    const satz = begruendeZug(
+      zeile({ ply: 25, motif: "none", motif_detail: JSON.stringify({ reply: "Nxe4" }) }),
+      { t: de(), locale: "de", evalDavor: 40, evalDanach: 40 }
+    );
+    expect(satz).toContain("Sxe4");
+    expect(satz).not.toContain("+0,4");
   });
 });
 

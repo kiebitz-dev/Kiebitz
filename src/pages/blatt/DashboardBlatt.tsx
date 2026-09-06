@@ -73,6 +73,13 @@ export type Tagesquelle =
        * sagen gibt — das ist der Normalfall und kein Fehler.
        */
       analysen?: (string | undefined)[];
+      /**
+       * Warum der Zug so teuer war · eine Zeile je Halbzug, gleich lang wie
+       * `sans`. Sie nennt die Widerlegung und die beiden Bewertungen und
+       * bleibt leer, wo die Analyse nichts davon hergibt — siehe
+       * `begruendeZug` in `lib/erklaerung.ts`.
+       */
+      gruende?: (string | undefined)[];
       /** Das Fazit der Partie · schon fertige Sätze, sonst leer. */
       fazit?: string[];
       weiss: string;
@@ -128,6 +135,8 @@ interface Tagesdiagramm {
   offset?: number;
   /** Was die Analyse zum Zug im Diagramm sagt · leer, wenn nichts. */
   analyse?: string;
+  /** Woher der Preis kommt · steht unter der Anmerkung, leer wenn nichts. */
+  grund?: string;
   /** Das Fazit der ganzen Partie · leer, solange keins gerechnet wurde. */
   fazit?: string[];
   /** Eigene Notiz zur Partie, wenn eine da ist. */
@@ -162,8 +171,9 @@ export interface DashboardBlattProps {
   onAllePartien: () => void;
   onPartie: (game: UiGame) => void;
   /**
-   * Ein Klick auf Datum, Gegner oder Eröffnung in der Partienliste · er führt
-   * in das Partienverzeichnis, auf genau diese Angabe eingeschränkt. Dieselbe
+   * Ein Klick auf eine der Angaben in der Partienliste · er führt in das
+   * Partienverzeichnis, auf genau diese Angabe eingeschränkt. Datum, Farbfeld,
+   * Gegner, Eröffnung, ECO und Ergebnispunkt tragen je einen Griff. Dieselbe
    * Bewegung wie in der gewöhnlichen Fassung, damit sich der Modus nicht
    * anders bedienen lässt als die Seite, die er ersetzt.
    */
@@ -294,6 +304,7 @@ function bauen(
       // Das Diagramm steht *vor* dem Zug, um den es geht · erklärt wird
       // deshalb `sans[cut]` und nicht der letzte Zug davor.
       analyse: quelle.analysen?.[cut],
+      grund: quelle.gruende?.[cut],
       fazit: quelle.fazit,
       notiz: quelle.notiz,
       onOeffnen: quelle.onOeffnen,
@@ -451,7 +462,13 @@ export default function DashboardBlatt({
       )}
       {diagramm.analyse && (
         <div className="mt-[13px]">
-          <Zitat quelle={t("expl.source")}>{`„${diagramm.analyse}“`}</Zitat>
+          <Zitat quelle={t("expl.source")}>
+            {`„${diagramm.analyse}“`}
+            {/* Der Satz darüber nennt den Preis, diese Zeile, woher er kommt.
+                Ohne Anführungszeichen: Sie ist keine zweite Anmerkung, sondern
+                die Rechnung dahinter. */}
+            {diagramm.grund && <div className="mt-1 text-[12.5px] text-ink3">{diagramm.grund}</div>}
+          </Zitat>
         </div>
       )}
       {diagramm.notiz && (
@@ -583,8 +600,11 @@ export default function DashboardBlatt({
             onFilter && !mobile
               ? {
                   onDatum: () => onFilter({ date: g.dateKey ?? g.date }),
+                  onFarbe: () => onFilter({ color: g.color }),
                   onGegner: () => onFilter({ opponent: g.opponent }),
                   onEroeffnung: () => onFilter({ opening: g.opening }),
+                  onEco: () => onFilter({ eco: g.eco }),
+                  onErgebnis: () => onFilter({ result: g.result }),
                 }
               : undefined
           }
@@ -656,7 +676,12 @@ export default function DashboardBlatt({
         )}
         {diagramm?.analyse && (
           <div className="mt-3.5">
-            <Zitat quelle={t("expl.source")}>{`„${diagramm.analyse}“`}</Zitat>
+            <Zitat quelle={t("expl.source")}>
+              {`„${diagramm.analyse}“`}
+              {diagramm.grund && (
+                <div className="mt-1 text-[12.5px] text-ink3">{diagramm.grund}</div>
+              )}
+            </Zitat>
           </div>
         )}
         {herkunft && <div className="mt-4">{herkunft}</div>}

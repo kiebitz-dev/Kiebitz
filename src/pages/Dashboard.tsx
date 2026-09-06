@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState, type MouseEvent } from "r
 import { ArrowDownRight, ArrowUpRight, BookOpen, ChevronRight, Cpu, Puzzle } from "lucide-react";
 import {
   featuredGame,
+  type AnalyzedMove,
   games as demoGames,
   profile,
   ratings,
@@ -13,7 +14,7 @@ import { useBackendInfo } from "../lib/backend";
 import { LOCALE_TAGS, useI18n } from "../lib/i18n";
 import { getGame, listGameSummaries, type GameRecord, type GameSummary } from "../lib/db";
 import { gameAnalysis, type MoveEvalRow } from "../lib/analysis";
-import { erklaereFazit, erklaereZug } from "../lib/erklaerung";
+import { begruendeZug, erklaereFazit, erklaereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 import { getSettings } from "../lib/settings";
 import { repStats, type RepStats } from "../lib/repertoire";
@@ -113,6 +114,24 @@ const KURZDATUM: Intl.DateTimeFormatOptions = {
   month: "2-digit",
   year: "numeric",
 };
+
+/**
+ * Ein Zug der Demo-Partie als Zeile der Auto-Analyse.
+ *
+ * Die Vorschau hat keine Datenbank; die Motive liegen im Datensatz. Beides
+ * geht durch dieselbe Satzmaschine wie in der App, damit die Vorschau zeigt,
+ * was die App zeigen würde, und nicht etwas Ähnliches.
+ */
+function demoZeile(move: AnalyzedMove, index: number) {
+  return {
+    ply: index + 1,
+    san: move.san,
+    judgment: move.nag === "??" ? "blunder" : "inaccuracy",
+    motif: move.motif,
+    motif_detail: move.motifDetail,
+    loss_cp: move.lossCp,
+  };
+}
 
 /**
  * Wann die Demo-Partie der Web-Vorschau gespielt wurde · `demoGames[0].date`
@@ -327,6 +346,21 @@ export default function Dashboard({
           ? (erklaereZug(row, { t, locale, seed: `${record.id}:${row.ply}` }) ?? undefined)
           : undefined;
       });
+      // Und die Zeile darunter: woher der Preis kommt. Die Bewertung *vor*
+      // dem Zug ist die Bewertung *nach* dem vorigen · beim ersten Halbzug
+      // gibt es keine, und dann bleibt der Satz bei der Widerlegung.
+      const gruende = sans.map((_, index) => {
+        const row = rows[index];
+        if (!row) return undefined;
+        return (
+          begruendeZug(row, {
+            t,
+            locale,
+            evalDavor: index > 0 ? rows[index - 1]?.eval_cp : undefined,
+            evalDanach: row.eval_cp,
+          }) ?? undefined
+        );
+      });
       const me = record.my_name || users.name || users.cc || users.li || t("blatt.you");
       const white = record.color === "white" ? me : record.opponent;
       const black = record.color === "white" ? record.opponent : me;
@@ -335,6 +369,7 @@ export default function Dashboard({
         sans,
         nags: sans.map((_, index) => nagOf(rows[index]?.judgment ?? "")),
         analysen,
+        gruende,
         fazit: erklaereFazit(record.verdict, { t, locale }),
         weiss: white,
         weissElo: String(record.color === "white" ? record.my_elo : record.opp_elo),
@@ -372,17 +407,21 @@ export default function Dashboard({
         // nicht im Datensatz · so zeigt sie, was die App zeigen würde.
         analysen: featuredGame.moves.map((move, index) =>
           move.motif
-            ? (erklaereZug(
-                {
-                  ply: index + 1,
-                  san: move.san,
-                  judgment: move.nag === "??" ? "blunder" : "inaccuracy",
-                  motif: move.motif,
-                  motif_detail: move.motifDetail,
-                  loss_cp: move.lossCp,
-                },
-                { t, locale, seed: `demo:${index + 1}` }
-              ) ?? undefined)
+            ? (erklaereZug(demoZeile(move, index), {
+                t,
+                locale,
+                seed: `demo:${index + 1}`,
+              }) ?? undefined)
+            : undefined
+        ),
+        gruende: featuredGame.moves.map((move, index) =>
+          move.motif
+            ? (begruendeZug(demoZeile(move, index), {
+                t,
+                locale,
+                evalDavor: index > 0 ? featuredGame.moves[index - 1].eval : undefined,
+                evalDanach: move.eval,
+              }) ?? undefined)
             : undefined
         ),
         fazit: erklaereFazit(featuredGame.verdict, { t, locale }),

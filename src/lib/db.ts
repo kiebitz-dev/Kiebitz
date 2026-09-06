@@ -75,6 +75,10 @@ export interface GamePageRequest {
   since?: number;
   opponent?: string;
   opening?: string;
+  /** Gespielte Farbe ("white"/"black"); leer heisst: beide. */
+  color?: string;
+  /** ECO-Kennung; leer heisst: alle. */
+  eco?: string;
   query?: string;
 }
 

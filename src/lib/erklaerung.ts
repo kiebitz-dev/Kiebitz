@@ -23,6 +23,7 @@
 import type { Key, Locale, TFunc } from "./i18n";
 import { translateSan } from "./notation";
 import { de } from "./format";
+import { evalLabel } from "./evaluation";
 
 /** So viele Formulierungen gibt es je Motiv · siehe `expl.*.1` / `expl.*.2`. */
 const VARIANTS = 2;
@@ -199,6 +200,68 @@ export function erklaereZug(
     });
   }
   return t(pick("lossOnly"), { san: san(row.san) });
+}
+
+/**
+ * Warum ein bemängelter Zug so teuer ist · `null`, wenn sich das nicht sagen
+ * lässt.
+ *
+ * Der Satz aus `erklaereZug` nennt den Preis. Diese Zeile nennt, woher er
+ * kommt, und sie tut es aus zwei Angaben, die ohnehin gespeichert sind: dem
+ * Gegenzug, mit dem die Analyse den Zug widerlegt (`motif_detail.reply`, in
+ * `motifs.rs` gesetzt), und den beiden Bewertungen davor und danach. Fehlt
+ * beides, bleibt die Zeile fort — erfunden wird hier so wenig wie eine Zeile
+ * höher.
+ *
+ * Die Widerlegung steht nur da, wo der Satz darüber sie nicht schon nennt. Zu
+ * einer Gabel oder einer hängenden Figur sagt er den Gegenzug selbst; ihn
+ * gleich darunter zu wiederholen, machte aus einer Begründung eine
+ * Verdopplung. Bleibt es beim schlichten Satz über den Preis — dem Fall, für
+ * den diese Zeile überhaupt gebaut ist —, steht die Widerlegung hier zum
+ * ersten Mal.
+ *
+ * Nur zu bemängelten Zügen: „Widerlegt" ist ein Wort über einen Fehler, und
+ * ein gutgeheißener Zug wird nicht widerlegt. Dieselbe Regel, nach der
+ * `motifs.rs` seine Bestrafungsmotive erst ab einem Urteil vergibt.
+ *
+ * Gespeichert sind die Bewertungen aus Sicht von Weiß; gedreht werden sie hier
+ * auf die Sicht des Ziehenden. Nur so geht die Rechnung des Satzes darüber
+ * sichtbar auf: „kostet 5,3" und „fällt von +0,4 auf −4,9" sind dann dieselbe
+ * Auskunft, einmal als Differenz und einmal als die beiden Zahlen. Aus
+ * Weiß-Sicht stiege die Zahl, während Schwarz verliert, und der Leser müsste
+ * die Umrechnung selbst machen.
+ */
+export function begruendeZug(
+  row: Zugzeile,
+  options: {
+    t: TFunc;
+    locale: Locale;
+    /** Bewertung vor dem Zug in Zentibauern, aus Weiß-Sicht. */
+    evalDavor?: number | null;
+    /** Bewertung nach dem Zug, ebenso · bei einem Matt fehlt sie. */
+    evalDanach?: number | null;
+  }
+): string | null {
+  const { t, locale, evalDavor, evalDanach } = options;
+  if (!row.judgment) return null;
+  const detail = parseDetail(row.motif_detail);
+  // Steht ein erkanntes Motiv dahinter, hat `erklaereZug` den Gegenzug schon
+  // gesagt · dann bleibt hier nur die Rechnung.
+  const reply =
+    detail.reply && !isMotif(row.motif ?? "") ? translateSan(detail.reply, locale) : "";
+  // Halbzüge zählen ab eins · ungerade zieht Weiß, und dann steht die
+  // gespeicherte Zahl schon richtig herum.
+  const dreh = row.ply % 2 === 1 ? 1 : -1;
+  // Gleiche Zahlen auf beiden Seiten wären keine Auskunft · dann bleibt der
+  // Teil über die Bewertung fort.
+  const zahlen =
+    evalDavor != null && evalDanach != null && evalDavor !== evalDanach
+      ? { before: evalLabel(dreh * evalDavor), after: evalLabel(dreh * evalDanach) }
+      : null;
+  if (reply && zahlen) return t("expl.why.replyEval", { reply, ...zahlen });
+  if (reply) return t("expl.why.reply", { reply });
+  if (zahlen) return t("expl.why.eval", zahlen);
+  return null;
 }
 
 // ── Das Fazit der Partie ─────────────────────────────────────────────────────

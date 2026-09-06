@@ -145,3 +145,11 @@
   background: transparent;
   border-color: var(--color-accent);
 }
+
+/* Eine Gruppe im Formular ist ein Abschnitt und keine Karte · Ecken eckig,
+   Fläche fort, die Linie bleibt. Ausdrücklich nur `section`: Die farbigen
+   Vorschauflächen der Einstellungen sind Flächen und keine Abschnitte. */
+.blatt-formular section {
+  border-radius: 0;
+  background: transparent;
+}

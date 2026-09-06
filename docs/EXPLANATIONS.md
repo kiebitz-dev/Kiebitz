@@ -8,7 +8,26 @@ place in the interface shows them.
 ```
 AUS DER ANALYSE
 „Dd5+ trifft König g8 und Springer e5 zugleich."
+Die Bewertung fällt dabei von −2,1 auf −5,2.
 ```
+
+The second line is the **reason**, and it exists because the first one alone
+does not answer "why that much?". It is built from two things the analysis has
+already stored: the reply the engine punishes the move with, and the two
+evaluations around it. Where neither is there, the line stays out.
+
+Two rules of its own:
+
+- **It repeats nothing.** A fork sentence names the refuting move itself, so
+  the reason line then carries only the numbers. After the plain sentence about
+  the price — the case it was built for — it names the refutation first.
+- **It counts from the mover's side.** The database stores evaluations from
+  White's point of view; the line flips them, so "costs 5.3" and "falls from
+  +0.4 to −4.9" are visibly the same statement. `begruendeZug`, same file.
+
+The price itself is stated in **points of evaluation**, not in pawns. "5.3
+pawns" is correct engine speech and reads as a claim about material, which it
+is not.
 
 ## The shape of it
 
@@ -100,8 +119,8 @@ a game that cannot produce one is not retried on every launch.
 
 `DashboardBlatt` only, for now, in both its layouts: a quote block
 `AUS DER ANALYSE` carrying the sentence for the diagram move — which
-`lib/blatt.ts` already chooses as the first blunder or mistake — and one
-`FAZIT DER PARTIE` under it.
+`lib/blatt.ts` already chooses as the first blunder or mistake — its reason
+line under it, and one `FAZIT DER PARTIE` under that.
 
 Everything else — the analysis board, the move list, Dashboard mode, an
 Insights aggregation over recurring motifs — comes later, deliberately.

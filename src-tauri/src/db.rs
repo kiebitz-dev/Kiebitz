@@ -376,6 +376,12 @@ pub struct GamePageRequest {
     pub opponent: String,
     #[serde(default)]
     pub opening: String,
+    /// Gespielte Farbe ("white"/"black"); leer heisst: beide.
+    #[serde(default)]
+    pub color: String,
+    /// ECO-Kennung; leer heisst: alle.
+    #[serde(default)]
+    pub eco: String,
     #[serde(default)]
     pub query: String,
 }
@@ -1393,7 +1399,9 @@ pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<G
                 OR instr(lower(opening), lower(?9)) > 0
                 OR instr(lower(tags), lower(?9)) > 0)
            AND (?10 = 0 OR (played_ts > 0 AND played_ts >= ?10)
-                OR (played_ts <= 0 AND played_at >= date(?10, 'unixepoch')))";
+                OR (played_ts <= 0 AND played_at >= date(?10, 'unixepoch')))
+           AND (?11 = '' OR color = ?11)
+           AND (?12 = '' OR eco = ?12)";
     let total = conn
         .query_row(
             &format!("SELECT COUNT(*) FROM games {WHERE}"),
@@ -1407,7 +1415,9 @@ pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<G
                 request.opponent,
                 request.opening,
                 request.query,
-                request.since
+                request.since,
+                request.color,
+                request.eco
             ],
             |r| r.get(0),
         )
@@ -1417,7 +1427,7 @@ pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<G
         .map_err(|e| e.to_string())?;
     let sql = format!(
         "SELECT {GAME_SUMMARY_COLUMNS} FROM games {WHERE}
-         ORDER BY played_ts DESC, played_at DESC, id DESC LIMIT ?11 OFFSET ?12"
+         ORDER BY played_ts DESC, played_at DESC, id DESC LIMIT ?13 OFFSET ?14"
     );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -1433,6 +1443,8 @@ pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<G
                 request.opening,
                 request.query,
                 request.since,
+                request.color,
+                request.eco,
                 request.limit.clamp(1, 100),
                 request.offset.max(0)
             ],
@@ -1793,6 +1805,49 @@ mod tests {
         .unwrap();
         assert_eq!(seit.total, 1);
         assert_eq!(seit.items[0].id, first_id);
+
+        // Farbe und ECO schraenken wie die uebrigen Exakt-Filter ein · beide
+        // kommen aus einem Klick in der Partienzeile.
+        let weiss = list_games_page(
+            &conn,
+            &GamePageRequest {
+                limit: 25,
+                color: "white".into(),
+                ..GamePageRequest::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(weiss.total, 2);
+        let schwarz = list_games_page(
+            &conn,
+            &GamePageRequest {
+                limit: 25,
+                color: "black".into(),
+                ..GamePageRequest::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(schwarz.total, 0);
+        let eco = list_games_page(
+            &conn,
+            &GamePageRequest {
+                limit: 25,
+                eco: sample("first").eco,
+                ..GamePageRequest::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(eco.total, 2);
+        let fremd = list_games_page(
+            &conn,
+            &GamePageRequest {
+                limit: 25,
+                eco: "Z99".into(),
+                ..GamePageRequest::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(fremd.total, 0);
 
         let detail = get_game(&conn, first_id).unwrap();
         assert_eq!(detail.moves, "e4 c6 Qf3 e5");

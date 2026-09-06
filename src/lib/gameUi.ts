@@ -31,6 +31,10 @@ export interface GamesFilter {
   date?: string;
   opponent?: string;
   opening?: string;
+  /** Gespielte Farbe · „Partien als Weiß". */
+  color?: "white" | "black";
+  /** ECO-Kennung der Eröffnung · gröber als `opening`, absichtlich. */
+  eco?: string;
 }
 
 /**
