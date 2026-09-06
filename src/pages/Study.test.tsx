@@ -448,6 +448,37 @@ describe("Study page", () => {
       expect(document.querySelector("[role='dialog']")).toBeTruthy();
     });
 
+    // Der Bericht lag als Vollbild-Dialog über allem — auch über der
+    // Navigationsleiste, und unter dem Anzeigenband, das auf Android als native
+    // Fläche über der WebView liegt und deshalb von nichts zu überdecken ist.
+    it("stays inside the content area of the mobile shell", async () => {
+      const root = document.createElement("div");
+      root.id = "mobile-sheet-root";
+      document.body.appendChild(root);
+      try {
+        mockBackend(backend());
+        renderStudy(vi.fn(), vi.fn(), true);
+
+        fireEvent.click(await screen.findByRole("button", { name: /Neuer Wochenbericht/ }));
+        const report = document.querySelector("[data-weekly-report]");
+        expect(report).toBeTruthy();
+        expect(root.contains(report as Node)).toBe(true);
+        // Kein `fixed` mehr · der Schleier deckt genau den Behälter.
+        expect((report as HTMLElement).parentElement?.className).toContain("absolute");
+      } finally {
+        root.remove();
+      }
+    });
+
+    it("keeps the window-wide dialog where there is no such shell", async () => {
+      mockBackend(backend());
+      renderStudy();
+
+      fireEvent.click(await screen.findByRole("button", { name: /Neuer Wochenbericht/ }));
+      const report = document.querySelector("[data-weekly-report]") as HTMLElement;
+      expect(report.parentElement?.className).toContain("fixed");
+    });
+
     it("stops flagging the report as new once it has been opened", async () => {
       mockBackend(backend());
       renderStudy();

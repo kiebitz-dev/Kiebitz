@@ -151,6 +151,7 @@ export const de = {
   "games.searchPlaceholder": "Gegner oder Eröffnung suchen …",
   "games.allSources": "Alle Quellen",
   "games.allResults": "Alle Ergebnisse",
+  "games.sourceManual": "Manuell",
   "games.filterDate": "Datum: {v}",
   "games.filterMode": "Modus: {v}",
   "games.filterPeriod": "Zeitraum: {v}",

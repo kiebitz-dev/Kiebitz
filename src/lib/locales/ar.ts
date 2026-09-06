@@ -138,6 +138,7 @@ export const ar: Record<Key, string> = {
   "games.searchPlaceholder": "ابحث عن خصم أو افتتاح …",
   "games.allSources": "كل المصادر",
   "games.allResults": "كل النتائج",
+  "games.sourceManual": "يدوي",
   "games.filterDate": "التاريخ: {v}",
   "games.filterMode": "النمط: {v}",
   "games.filterPeriod": "الفترة: {v}",

@@ -2039,9 +2039,27 @@ export default function Analysis({
           {boardControls(false)}
         </div>
 
-        {/* Zugliste + Eval-Graph */}
-        <div className="flex min-w-0 flex-col gap-4">
-          <Card title={scratch ? t("an.freeBoard") : t("an.game")} pad={false} className="flex-1">
+        {/* Zugliste + Eval-Graph.
+
+            Wie hoch diese Spalte ist, sagt das Brett links · nicht die Länge
+            der Partie. Deshalb steht der Stapel ab zwei Spalten ausgehängt
+            (`absolute`) in seinem Rahmen: Er trägt dann nichts zur Zeilenhöhe
+            bei, sondern nimmt sie an. Stapelte er mit, wüchse die Gitterzeile
+            mit jeder langen Partie, und neben dem Brett stünde ein Meter
+            Notation. Einspaltig fällt er in den normalen Fluss zurück. */}
+        <div className="relative min-w-0">
+        <div className="flex min-w-0 flex-col gap-4 min-[1100px]:absolute min-[1100px]:inset-0">
+          {/* Die Karte füllt die Spalte, und die Zugliste füllt die Karte.
+              Vorher deckelte die Liste sich selbst auf 290 px · daneben stand
+              dann eine halbe Kartenhöhe leer, während die Züge in einem
+              handbreiten Fenster scrollten. Wie hoch die Spalte ist, sagt das
+              Brett links; die Höhe wird hier nur durchgereicht. */}
+          <Card
+            title={scratch ? t("an.freeBoard") : t("an.game")}
+            pad={false}
+            className="flex min-h-0 flex-1 flex-col"
+            bodyClass="flex min-h-0 flex-1 flex-col"
+          >
             {/* Die Züge aus dem Link · sie stehen vor der eigenen Zugliste,
                 weil die Stellung genau dort herkommt. Nicht anklickbar: Die
                 Stellungen davor reisen nicht mit, nur ihre Notation. */}
@@ -2050,7 +2068,10 @@ export default function Analysis({
                 {opened.history}
               </p>
             )}
-            <div className="max-h-[290px] overflow-y-auto p-3">
+            {/* Einspaltig gibt es keine Spaltenhöhe, an der die Liste sich
+                ausrichten könnte · dort bleibt der alte Deckel, sonst schiebt
+                eine lange Partie alles Weitere um Bildschirmlängen nach unten. */}
+            <div className="max-h-[290px] flex-1 overflow-y-auto p-3 min-[1100px]:max-h-none">
               <div className="flex flex-wrap gap-x-1 gap-y-1.5 text-[13.5px] leading-relaxed">
                 {viewMoves.map((m, i) => (
                   <span key={i} className="inline-flex items-center">
@@ -2147,6 +2168,7 @@ export default function Analysis({
               )}
             </div>
           </Card>
+        </div>
         </div>
 
         {/* Engine-Panel + Annotationen + Positionssuche */}

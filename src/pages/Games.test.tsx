@@ -194,6 +194,30 @@ describe("Games page", () => {
     expect(screen.queryByText(/^\d+–\d+ von /)).toBeNull();
   });
 
+  // Die dritte Quelle ist kein Eigenname wie chess.com und lichess · sie stand
+  // trotzdem in jeder Sprache als "manual" da.
+  it("names the hand-entered source in the reading language", async () => {
+    render(<LocaleProvider><Games openAnalysis={vi.fn()} /></LocaleProvider>);
+    await screen.findByRole("button", { name: "Testgegner" });
+    expect(screen.getByRole("button", { name: "Manuell" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "manual" })).toBeNull();
+  });
+
+  // Zwischen den Pfeilen ist auf einem Telefon kaum Breite · "Seite 1 / 153"
+  // brach dort hinter dem Wort *und* hinter dem Schrägstrich, also dreizeilig.
+  it("keeps the page count together so the label stays two lines", async () => {
+    render(
+      <LocaleProvider>
+        <ShellProvider mobile>
+          <Games openAnalysis={vi.fn()} />
+        </ShellProvider>
+      </LocaleProvider>
+    );
+    await screen.findByTestId("games-list");
+    const label = screen.getByRole("button", { name: /^Seite/ }).textContent ?? "";
+    expect(label).toBe("Seite 1 / 1");
+  });
+
   it("keeps the range line on the desktop", async () => {
     render(<LocaleProvider><Games openAnalysis={vi.fn()} /></LocaleProvider>);
     await screen.findByRole("button", { name: "Testgegner" });

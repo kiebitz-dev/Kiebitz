@@ -138,6 +138,7 @@ export const hi: Record<Key, string> = {
   "games.searchPlaceholder": "प्रतिद्वंद्वी या ओपनिंग खोजें …",
   "games.allSources": "सभी स्रोत",
   "games.allResults": "सभी परिणाम",
+  "games.sourceManual": "मैनुअल",
   "games.filterDate": "तारीख: {v}",
   "games.filterMode": "मोड: {v}",
   "games.filterPeriod": "अवधि: {v}",

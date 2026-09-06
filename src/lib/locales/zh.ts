@@ -138,6 +138,7 @@ export const zh: Record<Key, string> = {
   "games.searchPlaceholder": "搜索对手或开局 …",
   "games.allSources": "所有来源",
   "games.allResults": "所有结果",
+  "games.sourceManual": "手动",
   "games.filterDate": "日期：{v}",
   "games.filterMode": "模式：{v}",
   "games.filterPeriod": "时间范围：{v}",

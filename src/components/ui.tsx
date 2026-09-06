@@ -12,6 +12,7 @@ export function Card({
   action,
   children,
   className = "",
+  bodyClass = "",
   pad = true,
   tour,
 }: {
@@ -19,6 +20,12 @@ export function Card({
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /**
+   * Klassen für den Rumpf unter der Überschrift. Braucht, wer eine Karte in
+   * einer gestreckten Spalte füllen lässt: Die Höhe kommt dann von der Spalte,
+   * und der Rumpf muss sie übernehmen, statt bei seinem Inhalt aufzuhören.
+   */
+  bodyClass?: string;
   pad?: boolean;
   /** Marke für den geführten Rundgang · siehe lib/tourSteps.ts. */
   tour?: string;
@@ -26,12 +33,12 @@ export function Card({
   return (
     <section className={`rounded-xl border border-line bg-panel ${className}`} data-tour={tour}>
       {(title || action) && (
-        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-[13px] font-medium text-ink2">{title}</h2>
           {action}
         </header>
       )}
-      <div className={pad ? "p-4" : ""}>{children}</div>
+      <div className={`${pad ? "p-4" : ""} ${bodyClass}`.trim()}>{children}</div>
     </section>
   );
 }

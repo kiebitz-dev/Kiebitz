@@ -138,6 +138,7 @@ export const fr: Record<Key, string> = {
   "games.searchPlaceholder": "Rechercher un adversaire ou une ouverture …",
   "games.allSources": "Toutes les sources",
   "games.allResults": "Tous les résultats",
+  "games.sourceManual": "Manuel",
   "games.filterDate": "Date : {v}",
   "games.filterMode": "Mode : {v}",
   "games.filterPeriod": "Période : {v}",

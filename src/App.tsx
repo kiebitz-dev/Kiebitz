@@ -53,6 +53,7 @@ import {
   useLandscapePhone,
 } from "./components/MobileShell";
 import { SHEET_ROOT_ID } from "./components/MobileSheet";
+import { dismissLayers } from "./lib/backDismiss";
 import type { EndgameCategory } from "./data/endgames";
 import AdBanner from "./components/AdBanner";
 import PlanBadge from "./components/PlanBadge";
@@ -551,10 +552,16 @@ export default function App() {
   // Ein zweites Mal dieselbe Seite einzuhängen wäre die Alternative gewesen ·
   // dann verlöre die Seite aber ihren Zustand (offener Reiter, laufende
   // Sitzung, halb ausgefülltes Feld), und das will beim Blättern niemand.
+  //
+  // Liegt allerdings ein Detailblatt über der Seite (mobil das Blatt einer
+  // Partie), dann ist es das, was zwischen ihm und der Liste steht · derselbe
+  // Tipp schließt es, statt unter ihm zu scrollen. Erst der nächste führt an
+  // den Anfang.
   const navigate = useCallback(
     (id: PageId) => {
-      if (id === pageRef.current) scrollToTop();
-      else if (NAV_PARENT[id] === pageRef.current) push(id);
+      if (id === pageRef.current) {
+        if (!dismissLayers()) scrollToTop();
+      } else if (NAV_PARENT[id] === pageRef.current) push(id);
       else goTo(id);
       setNavOpen(false);
     },

@@ -22,7 +22,8 @@
  *
  * Gerechnet wird nichts hier · siehe `lib/weekly.ts`.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, CalendarCheck, Check, Minus, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useI18n, type Key } from "../lib/i18n";
 import { deInt } from "../lib/format";
@@ -32,6 +33,7 @@ import { ratingNoise } from "../lib/effect";
 import { AREA_COLOR, AREA_KEY } from "../lib/study";
 import { useBackDismiss } from "../lib/backDismiss";
 import { useMobileShell } from "./MobileShell";
+import { SHEET_ROOT_ID } from "./MobileSheet";
 import {
   formatDelta,
   formatMetric,
@@ -223,6 +225,25 @@ export default function WeeklyReportDialog({
 }) {
   const { locale, t } = useI18n();
   const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * Wohin der Bericht gezeichnet wird.
+   *
+   * Auf dem Handy in denselben Behälter wie das Detailblatt der Partien · er
+   * deckt genau die Fläche von <main>. Das hat zwei Gründe, und beide fehlten,
+   * solange der Bericht über dem ganzen Bildschirm lag: Die Navigationsleiste
+   * bleibt sichtbar und bedienbar, statt unter dem Schleier zu verschwinden.
+   * Und das Anzeigenband darunter ist kein Element dieser Seite, sondern eine
+   * native Fläche über der WebView — was dort hinläuft, kann sie nicht
+   * überdecken, sondern verschwindet dahinter. Oberhalb davon zu bleiben ist
+   * der einzige Weg, den ganzen Bericht zu sehen.
+   *
+   * Ausserhalb der mobilen Schale (Desktop, einzeln gerenderte Tests) gibt es
+   * den Behälter nicht · dann bleibt es beim Dialog über dem Fenster.
+   */
+  const [container] = useState<HTMLElement | null>(() =>
+    typeof document === "undefined" || !mobile ? null : document.getElementById(SHEET_ROOT_ID)
+  );
 
   // Escape schließt · derselbe Griff wie in den übrigen Dialogen der App.
   useEffect(() => {
@@ -449,18 +470,19 @@ export default function WeeklyReportDialog({
       : "var(--color-loss)"
     : "var(--color-line2)";
 
-  return (
+  const dialog = (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[2px] ${
+      className={`${container ? "absolute z-40" : "fixed z-50"} inset-0 flex items-center justify-center bg-black/70 backdrop-blur-[2px] ${
         mobile ? "p-3" : "p-4"
       }`}
-      // Auf dem Handy liegt der Schleier über der ganzen Fläche — auch unter
+      // Ohne Behälter liegt der Schleier über der ganzen Fläche — auch unter
       // Statusleiste und Navigationsleiste, weil die App randlos zeichnet. Ohne
       // diesen Zuschlag begann der Bericht hinter der Uhr und endete hinter den
       // Systemtasten. Der Rand des Dialogs trägt sie deshalb zusätzlich zu
-      // seinem eigenen Abstand; der Schleier bleibt randlos.
+      // seinem eigenen Abstand; der Schleier bleibt randlos. Im Behälter der
+      // mobilen Schale erledigt das die Schale selbst.
       style={
-        mobile
+        mobile && !container
           ? {
               paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
               paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))",
@@ -551,4 +573,6 @@ export default function WeeklyReportDialog({
       </div>
     </div>
   );
+
+  return container ? createPortal(dialog, container) : dialog;
 }

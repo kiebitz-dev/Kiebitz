@@ -34,7 +34,29 @@ vi.mock("./lib/updater", () => ({
   onUpdateState: () => Promise.resolve(() => {}),
 }));
 vi.mock("./pages/Dashboard", () => ({ default: () => <div>Dashboard</div> }));
-vi.mock("./pages/Games", () => ({ default: () => <div>Games</div> }));
+// Die Partien-Seite legt ihr Detail mobil als Blatt über den Inhalt · der
+// Mock tut dasselbe mit demselben Bauteil, damit die Leiste unten prüfbar
+// bleibt: Ein zweiter Tipp auf den eigenen Tab soll das Blatt schliessen.
+vi.mock("./pages/Games", async () => {
+  const { useState } = await import("react");
+  const MobileSheet = (await import("./components/MobileSheet")).default;
+  return {
+    default: () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <div>Games</div>
+          <button onClick={() => setOpen(true)}>Partie öffnen</button>
+          {open && (
+            <MobileSheet ariaLabel="Partiedetails" title="Partie" onClose={() => setOpen(false)}>
+              Zugliste
+            </MobileSheet>
+          )}
+        </div>
+      );
+    },
+  };
+});
 vi.mock("./pages/Analysis", () => ({ default: () => <div>Analysis</div> }));
 vi.mock("./pages/Repertoire", () => ({ default: () => <div>Repertoire</div> }));
 vi.mock("./pages/Endgame", () => ({ default: () => <div>Endgame</div> }));
@@ -164,6 +186,25 @@ describe("mobile navigation", () => {
     fireEvent.click(bottomBar().getByRole("button", { name: "Training" }));
     await waitFor(() => expect(pageTitle()).toBe("Study"));
     expect(main.scrollTop).toBe(0);
+  });
+
+  it("closes an open detail sheet when its own tab is tapped again", async () => {
+    const { container } = render(<LocaleProvider><App /></LocaleProvider>);
+    const main = container.querySelector("main") as HTMLElement;
+
+    fireEvent.click(bottomBar().getByRole("button", { name: "Partien" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Partie öffnen" }));
+    expect(screen.getByRole("dialog", { name: "Partiedetails" })).toBeTruthy();
+
+    // Der Tipp gilt dem Blatt, nicht dem Anfang der Liste · deren Stand bleibt.
+    main.scrollTop = 640;
+    fireEvent.click(bottomBar().getByRole("button", { name: "Partien" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(main.scrollTop).toBe(640);
+    expect(pageTitle()).toBe("Games");
+    // Der eigene History-Eintrag des Blattes ist mit ihm gegangen · die Tiefe
+    // steht wieder auf der Seite, und Zurück führt von hier zum Start.
+    await waitFor(() => expect(window.history.state).toEqual({ kd: 2 }));
   });
 
   it("opens a training area as a detail level under Training", async () => {

@@ -279,7 +279,12 @@ export default function Games({
   if (opponent) exactFilters.push({ key: "opponent", label: t("games.filterOpponent", { v: opponent }), clear: () => setOpponent("") });
   if (opening) exactFilters.push({ key: "opening", label: t("games.filterOpening", { v: opening }), clear: () => setOpening("") });
   const chipFilters: ActiveFilter[] = [];
-  if (source !== "alle") chipFilters.push({ key: "source", label: source, clear: () => setSource("alle") });
+  if (source !== "alle")
+    chipFilters.push({
+      key: "source",
+      label: source === "manual" ? t("games.sourceManual") : source,
+      clear: () => setSource("alle"),
+    });
   if (result !== "alle") chipFilters.push({ key: "result", label: resultLabels[result], clear: () => setResult("alle") });
   const activeFilters = mobile ? [...chipFilters, ...exactFilters] : exactFilters;
 
@@ -327,9 +332,11 @@ export default function Games({
     </div>
   );
 
+  // "chess.com" und "lichess" bleiben stehen · das sind Eigennamen. Die
+  // dritte Quelle ist keiner: Sie heißt in jeder Sprache anders.
   const sourceChips = (["alle", "chess.com", "lichess", "manual"] as const).map((s) => (
     <Chip key={s} active={source === s} onClick={() => setSource(s)}>
-      {s === "alle" ? t("games.allSources") : s}
+      {s === "alle" ? t("games.allSources") : s === "manual" ? t("games.sourceManual") : s}
     </Chip>
   ));
   const resultChips = (
@@ -385,6 +392,19 @@ export default function Games({
     selectGame(edgeSelect === "first" ? paged[0].id : paged[paged.length - 1].id);
     setEdgeSelect(null);
   }, [edgeSelect, paged]);
+
+  /**
+   * "Seite 1 / 153" · zwischen den Pfeilen bleibt auf einem Telefon so wenig
+   * Breite, dass der Text umbricht. Wo er umbricht, entscheidet sonst der
+   * Zufall: Bei dreistelliger Seitenzahl fiel er hinter das Wort *und* hinter
+   * den Schrägstrich und stand dreizeilig da. Geschützte Leerzeichen um den
+   * Schrägstrich halten die Zahlengruppe zusammen · umbrochen wird dann nur
+   * noch hinter dem Wort, und mehr als zwei Zeilen können es nicht werden.
+   */
+  const pageOfLabel = t("games.pageOf", { page: safePage, pages: totalPages }).replace(
+    /\s*\/\s*/,
+    "\u00a0/\u00a0"
+  );
 
   // Eingetippte Zielseite übernehmen (auf gültigen Bereich begrenzt).
   const commitPageJump = () => {
@@ -1414,7 +1434,7 @@ export default function Games({
                   title={t("games.goToPage")}
                   className="rounded-lg px-1.5 py-1 tabular-nums transition-colors hover:text-accent"
                 >
-                  {t("games.pageOf", { page: safePage, pages: totalPages })}
+                  {pageOfLabel}
                 </button>
               )}
               <button
