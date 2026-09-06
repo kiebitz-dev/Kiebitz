@@ -47,11 +47,18 @@ function layerState(state: unknown): boolean {
   return (state as { sheet?: boolean } | null)?.sheet === true;
 }
 
-export function useBackDismiss(onClose: () => void): void {
+/**
+ * @param active Ob die Schicht gerade offen ist. Der Vorgabewert passt für
+ *   alles, was nur solange überhaupt gerendert wird · eine Schicht, die
+ *   dauerhaft hängt und sich selbst ein- und ausblendet (der Plus-Dialog),
+ *   reicht ihren Zustand hier herein, statt den Haken bedingt aufzurufen.
+ */
+export function useBackDismiss(onClose: () => void, active = true): void {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
   useEffect(() => {
+    if (!active) return;
     if (!layerState(window.history.state)) {
       const depth = (window.history.state as { kd?: number } | null)?.kd ?? 1;
       window.history.pushState({ kd: depth, sheet: true }, "");
@@ -75,5 +82,5 @@ export function useBackDismiss(onClose: () => void): void {
         if (layers.length === 0 && layerState(window.history.state)) window.history.back();
       }, 0);
     };
-  }, []);
+  }, [active]);
 }

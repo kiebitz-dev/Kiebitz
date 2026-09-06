@@ -7,6 +7,7 @@
  * Checkout genannt, nicht im App-Code.
  */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ExternalLink, Loader2, Sparkles, X } from "lucide-react";
 import { useI18n, useT } from "../lib/i18n";
 import { openExternal } from "../lib/ext";
@@ -21,11 +22,15 @@ import { billingAvailable } from "../lib/plus/billing";
 import { pollAfterReturn, purchaseWithGooglePlay, startCheckout } from "../lib/plus/store";
 import { usePlus } from "../lib/plus/usePlus";
 import { isPlusOnlyFeature, type PlusFeature } from "../lib/plus/types";
+import { useBackDismiss } from "../lib/backDismiss";
+import { useMobileShell } from "./MobileShell";
+import { SHEET_ROOT_ID } from "./MobileSheet";
 import { Button } from "./ui";
 
 export default function PlusDialog({ openSettings }: { openSettings?: () => void }) {
   const t = useT();
   const plus = usePlus();
+  const mobile = useMobileShell();
   // Der Checkout und die spätere Vertragsbestätigung folgen der Sprache, in
   // der dieser Dialog gerade steht.
   const { locale } = useI18n();
@@ -108,7 +113,25 @@ export default function PlusDialog({ openSettings }: { openSettings?: () => void
     };
   }, [open]);
 
+  // Android-Zurück schliesst den Dialog, statt die Seite darunter zu wechseln
+  // und ihn stehen zu lassen. Zugleich ist er damit eine Schicht wie jede
+  // andere · ein zweiter Tipp auf den eigenen Tab räumt ihn ab.
+  useBackDismiss(() => setOpen(false), open);
+
   if (!open) return null;
+
+  /**
+   * Wohin der Dialog gezeichnet wird · dieselbe Überlegung wie beim
+   * Wochenbericht (siehe WeeklyReportDialog).
+   *
+   * Auf dem Handy in den Behälter, der genau die Fläche von <main> abdeckt:
+   * Die Navigationsleiste bleibt sichtbar und bedienbar, und der Dialog endet
+   * oberhalb des Anzeigenbands. Das Band ist auf Android eine native Fläche
+   * über der WebView — was darunter läuft, verschwindet dahinter und ist von
+   * HTML aus nicht zu überdecken. Ausserhalb der mobilen Schale gibt es den
+   * Behälter nicht, dann bleibt es beim Dialog über dem Fenster.
+   */
+  const container = mobile ? document.getElementById(SHEET_ROOT_ID) : null;
 
   const buy = async () => {
     setBusy(true);
@@ -152,9 +175,9 @@ export default function PlusDialog({ openSettings }: { openSettings?: () => void
     </Button>
   );
 
-  return (
+  const dialog = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
+      className={`${container ? "absolute z-40 p-3" : "fixed z-50 p-4"} inset-0 flex items-center justify-center bg-black/70 backdrop-blur-[2px]`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="plus-dialog-title"
@@ -164,7 +187,9 @@ export default function PlusDialog({ openSettings }: { openSettings?: () => void
     >
       <div
         ref={panelRef}
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50"
+        className={`flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50 ${
+          container ? "max-h-full" : "max-h-[88vh]"
+        }`}
       >
         <div className="flex items-start gap-3 border-b border-line px-5 py-4">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
@@ -232,4 +257,6 @@ export default function PlusDialog({ openSettings }: { openSettings?: () => void
       </div>
     </div>
   );
+
+  return container ? createPortal(dialog, container) : dialog;
 }

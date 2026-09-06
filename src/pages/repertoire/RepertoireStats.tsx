@@ -3,6 +3,7 @@ import { ChevronDown, Plus } from "lucide-react";
 import { useT } from "../../lib/i18n";
 import { type RepGap, type RepStats } from "../../lib/repertoire";
 import { Button, Card, Chip } from "../../components/ui";
+import { useMobileShell } from "../../components/MobileShell";
 import { de } from "../../lib/format";
 
 const COVERAGE_PLIES = [6, 8, 12, 16];
@@ -76,14 +77,22 @@ export function CoverageCard({
  */
 export function GapsCard({ gaps, onAdopt }: { gaps: RepGap[] | null; onAdopt: (gap: RepGap) => void }) {
   const t = useT();
+  const mobile = useMobileShell();
   const [open, setOpen] = useState(false);
+  // Auf dem Handy bricht die Überschrift zweizeilig um, und die Zahl blieb
+  // hinter ihrer zweiten Zeile stehen — mit Luft nach links und dem Knopf
+  // dicht rechts daneben sah sie aus, als gehöre sie zu ihm. Sie gehört zur
+  // Überschrift, also steht sie dort nur, wo dafür eine Zeile da ist. Verloren
+  // geht sie nicht: Zugeklappt beginnt der Satz darunter mit derselben Zahl,
+  // aufgeklappt steht die Liste selbst da.
+  const count = !mobile && gaps != null && gaps.length > 0 ? gaps.length : null;
   return (
     <Card
       title={
         <span className="flex items-baseline gap-2">
           {t("rep.gaps")}
-          {gaps != null && gaps.length > 0 && (
-            <span className="text-[11.5px] font-normal tabular-nums text-ink3">{gaps.length}</span>
+          {count != null && (
+            <span className="text-[11.5px] font-normal tabular-nums text-ink3">{count}</span>
           )}
         </span>
       }
