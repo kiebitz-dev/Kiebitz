@@ -123,13 +123,24 @@ export default function FocusBoard({
   /** Direkt unter dem Brett · die Bedienleiste der Seite. */
   below?: ReactNode;
   /**
-   * Breite der Inhaltsspalte. Ohne sie hätte das Brett hier gar keine Grenze:
-   * Die Karte richtet sich nach ihrem Inhalt, der Inhalt nach der Karte, und
-   * am Ende gilt nur noch `BOARD_MAX` · das Brett würde höher als der Schirm.
+   * Breite des Bretts. Ohne sie hätte es hier gar keine Grenze: Die Karte
+   * richtet sich nach ihrem Inhalt, der Inhalt nach der Karte, und am Ende
+   * gilt nur noch `BOARD_MAX` · das Brett würde höher als der Schirm.
    *
    * Voreinstellung ist die Brettkante. Seiten, die neben dem Brett noch etwas
    * stehen haben (die Analyse ihren Bewertungsbalken), reichen stattdessen
    * `var(--board-col)` herein.
+   *
+   * Für die Reihen über und unter dem Brett gilt sie nur als Untergrenze von
+   * 20 rem an · und das ist der Punkt. `--board-edge` hängt an der Höhe, die
+   * die Reihen übrig lassen; machte man die Reihen genauso breit, hinge auch
+   * ihre Breite wieder am Brett: Ein Knopf mehr macht das Brett kleiner, das
+   * kleinere Brett macht die Spalte schmaler, die schmalere Spalte bricht die
+   * Zeile um, der Umbruch macht das Brett wieder kleiner. Genau so ist der
+   * Puzzle-Fokus auf einem 360 px breiten Telefon bis auf die Untergrenze des
+   * Bretts zusammengelaufen · mit einer Bildlaufleiste am Ende. Unterhalb von
+   * 20 rem behalten die Reihen ihre Breite, und die Rechnung läuft nur noch in
+   * eine Richtung.
    */
   frameWidth?: string;
   children: ReactNode;
@@ -250,7 +261,12 @@ function useChrome(mobile: boolean) {
       const aboveHeight = rows.current?.getBoundingClientRect().height ?? 0;
       const belowHeight = controls.current?.getBoundingClientRect().height ?? 0;
       const gaps = gap * Math.max(0, columnEl.children.length - 1);
-      const next = Math.ceil(around + shellAround(shell, bodyEl) + aboveHeight + belowHeight + gaps);
+      // Ein Pixel Zugabe. Jeder Summand ist eine gemessene Bruchzahl, und das
+      // Stylesheet rechnet mit dem Ergebnis weiter · ohne die Zugabe blieb am
+      // Ende ein halbes Pixel übrig, und ein halbes Pixel ist eine ganze
+      // Bildlaufleiste.
+      const next =
+        Math.ceil(around + shellAround(shell, bodyEl) + aboveHeight + belowHeight + gaps) + 1;
       setChrome((previous) => (previous != null && Math.abs(previous - next) < 1 ? previous : next));
 
       // Der Vorlauf rechnet in der Fläche, die der Spalte bleibt · das ist die
@@ -260,7 +276,9 @@ function useChrome(mobile: boolean) {
       const under = belowHeight + (belowHeight > 0 ? gap : 0);
       const middle = (area - boardHeight) / 2 - over;
       const free = area - over - boardHeight - under;
-      const room = Math.max(0, Math.round(Math.min(middle, free)));
+      // Abgerundet, nicht gerundet: Der Vorlauf ist Schmuck, der Platz unter
+      // dem Brett ist es nicht.
+      const room = Math.max(0, Math.floor(Math.min(middle, free)));
       setLead((previous) => (Math.abs(previous - room) < 1 ? previous : room));
     };
 
@@ -357,7 +375,7 @@ function FocusLayer({
       <div
         ref={column}
         className="mx-auto flex w-full grow flex-col gap-2"
-        style={{ maxWidth: frameWidth, paddingTop: lead || undefined }}
+        style={{ maxWidth: `min(100%, max(${frameWidth}, 20rem))`, paddingTop: lead || undefined }}
       >
         {/* Die Reihen tragen eigene Hüllen, damit `useChrome` weiß, welcher
             Teil der Spalte das Brett ist · alles andere ist die Höhe, die ihm
@@ -368,7 +386,7 @@ function FocusLayer({
             {above}
           </div>
         )}
-        <div ref={board} className="min-w-0">
+        <div ref={board} className="mx-auto w-full min-w-0" style={{ maxWidth: frameWidth }}>
           {children}
         </div>
         {below && (

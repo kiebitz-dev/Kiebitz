@@ -489,34 +489,47 @@ function TrainerView({
    * Aufgabe, Brett und Bedienung als benannte Bausteine · die Seite und das
    * Fokus-Brett zeigen dieselben, nur in unterschiedlicher Umgebung. Das Brett
    * bekommt je eine eigene Kennung, weil react-chessboard seine Instanzen
-   * daran unterscheidet.
+   * daran unterscheidet. `inFocus` sagt jedem Baustein, in welcher der beiden
+   * er gerade steht · im Fokus ist die Breite knapp und die Höhe kostbar.
+   *
+   * Diese Zeile: Motiv links, Zugrecht rechts · und auf einem schmalen Telefon
+   * bleibt sie eine Zeile.
+   *
+   * Alles hier ist entweder unverkürzbar (Symbol, „Weiß am Zug", die Marke der
+   * eigenen Partie) oder darf abschneiden (der Motivname). Vorher durfte jedes
+   * Stück umbrechen, und auf 260 px standen drei Fetzen untereinander · die
+   * Zeile war dreimal so hoch, und im Fokus fehlte genau diese Höhe dem Brett.
+   *
+   * Im Fokus steht das Rating in der Kopfzeile über dem Brett; hier fällt es
+   * deshalb weg, statt zweimal dazustehen und den Platz zu nehmen, den der
+   * Motivname braucht.
    */
-  const puzzleHead = (
-    <div className="mb-3 flex items-center justify-between">
-      <div className="flex items-center gap-2 text-[13.5px]">
-        <Target size={15} className="text-accent" />
+  const puzzleHead = (inFocus: boolean) => (
+    <div className={`flex items-center justify-between gap-2 ${inFocus ? "" : "mb-3"}`}>
+      <div className="flex min-w-0 items-center gap-2 text-[13.5px]">
+        <Target size={15} className="shrink-0 text-accent" />
         {puzzle?.source !== "own" && mainTheme && themeHidden ? (
           <button
             type="button"
             onClick={() => setThemeRevealed(true)}
             title={t("pz.themeRevealHint")}
-            className="rounded-md border border-dashed border-line2 px-2 py-0.5 text-[12px] text-ink3 transition-colors hover:border-accent-dim hover:text-accent"
+            className="shrink-0 rounded-md border border-dashed border-line2 px-2 py-0.5 text-[12px] text-ink3 transition-colors hover:border-accent-dim hover:text-accent"
           >
             {t("pz.themeHidden")}
           </button>
         ) : (
-          <span className="font-medium">
+          <span className="truncate font-medium">
             {puzzle?.source === "own" ? t("pz.missedMove") : mainTheme ? themeLabel(mainTheme, locale) : "…"}
           </span>
         )}
-        {puzzle && <span className="text-ink3">· Rating {puzzle.rating}</span>}
+        {puzzle && !inFocus && <span className="shrink-0 text-ink3">· Rating {puzzle.rating}</span>}
         {puzzle?.source === "own" && (
-          <span className="rounded-md border border-accent-dim bg-accent-soft px-1.5 py-0.5 text-[10.5px] text-accent">
+          <span className="shrink-0 rounded-md border border-accent-dim bg-accent-soft px-1.5 py-0.5 text-[10.5px] text-accent">
             {t("pz.fromOwnGame")}
           </span>
         )}
       </div>
-      <span className="text-[12.5px] text-ink3">
+      <span className="shrink-0 whitespace-nowrap text-[12.5px] text-ink3">
         {status === "loading"
           ? t("pz.loading")
           : orientation === "white"
@@ -545,11 +558,23 @@ function TrainerView({
     </div>
   );
 
-  /** Im Fokus fehlt der Griff zum Fokus · dort ist man schon. */
+  /**
+   * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
+   *
+   * Die Tastenreihe ist ein eigenes, umbruchfähiges Element mit `max-w-full`.
+   * Ohne das trat sie als Ganzes über den Rahmen hinaus, sobald sie neben der
+   * Beschriftung nicht mehr passte · zu sehen war das am Teilen-Knopf, der
+   * rechts aus dem Kasten stand. Jetzt rückt sie zuerst unter die
+   * Beschriftung und bricht erst danach in sich selbst um.
+   */
   const puzzleHistory = (inFocus: boolean) => (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-panel px-3 py-2">
-      <span className="text-[12.5px] text-ink2">{t("pz.positionHistory")}</span>
-      <div className="flex items-center gap-1">
+    <div
+      className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-line bg-panel px-3 py-2 ${
+        inFocus ? "" : "mt-3"
+      }`}
+    >
+      <span className="min-w-0 truncate text-[12.5px] text-ink2">{t("pz.positionHistory")}</span>
+      <div className="ms-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1">
         <Button onClick={() => goToPly(0)} title={t("pz.firstPosition")} compact>
           <ChevronFirst size={14} />
         </Button>
@@ -567,7 +592,7 @@ function TrainerView({
         </Button>
         <Button
           onClick={openShare}
-          className="ml-1"
+          className="ms-1"
           title={t("sh.title")}
           disabled={!puzzle}
           compact
@@ -584,6 +609,29 @@ function TrainerView({
    * Alle drei stehen im DOM (siehe `actionRow`); dieser hier ist sichtbar.
    */
   const actionState = status === "solved" ? "solved" : wrong ? "wrong" : "open";
+
+  /**
+   * Die Grundform aller drei Zustände: eine Meldung und die Knöpfe dazu.
+   *
+   * Nebeneinander, solange die Meldung dabei mindestens 10 rem behält · sonst
+   * rücken die Knöpfe unter sie. Die Grenze ist der Punkt, weil ein
+   * Flex-Umbruch an der gedachten Breite entschieden wird und nicht am
+   * Ergebnis: Ohne sie schrumpfte die Meldung, statt umzubrechen, und im
+   * Puzzle-Fokus stand „Leider falsch (Rating -15) · versuch es noch einmal."
+   * auf einem 360 px breiten Telefon als siebenzeilige Säule neben zwei
+   * Knöpfen. Zwei Zeilen über der ganzen Breite sind nicht nur lesbarer,
+   * sondern auch halb so hoch · und die Höhe ist im Fokus das Brett.
+   *
+   * `ms-auto` stellt die Knöpfe an die rechte Kante · auf der gemeinsamen
+   * Zeile ohnehin, in der eigenen Zeile ebenso. `max-w-full` hält sie im
+   * Rahmen, falls selbst dort zwei nebeneinander nicht mehr passen.
+   */
+  const actionShell = (message: ReactNode, buttons: ReactNode) => (
+    <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="min-w-0 grow basis-40">{message}</div>
+      <div className="ms-auto flex max-w-full shrink-0 flex-wrap justify-end gap-2">{buttons}</div>
+    </div>
+  );
 
   /**
    * Ein Zustand der Zeile · sichtbar oder als Platzhalter.
@@ -627,16 +675,18 @@ function TrainerView({
    * gerade auf die Meldung schaut. Reserviert steht die Höhe von Anfang an.
    */
   const wrongRow = (delta: string) => (
-    <div className="flex w-full items-center justify-between gap-3 rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-2.5">
-      <span className="min-w-0 text-[13.5px] text-loss">{t("pz.wrong", { d: delta })}</span>
-      <div className="flex shrink-0 gap-2">
-        <Button onClick={() => setShowHint(true)}>
-          <Lightbulb size={15} /> {t("pz.hint")}
-        </Button>
-        <Button onClick={revealSolution}>
-          <Eye size={15} /> {t("pz.solution")}
-        </Button>
-      </div>
+    <div className="rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-2.5">
+      {actionShell(
+        <span className="text-[13.5px] text-loss">{t("pz.wrong", { d: delta })}</span>,
+        <>
+          <Button onClick={() => setShowHint(true)}>
+            <Lightbulb size={15} /> {t("pz.hint")}
+          </Button>
+          <Button onClick={revealSolution}>
+            <Eye size={15} /> {t("pz.solution")}
+          </Button>
+        </>
+      )}
     </div>
   );
 
@@ -650,26 +700,20 @@ function TrainerView({
       <div className="mt-3 grid min-h-[52px] items-center">
         {actionRow(
           "solved",
-          <div className="flex w-full items-center justify-between gap-3 rounded-lg border border-accent-dim bg-accent-soft px-3.5 py-2.5">
-            {/* Die Meldung darf umbrechen, der Knopf nicht: `min-w-0` hebt die
-                Mindestbreite eines Flex-Kindes auf, sonst schöbe sich der Text
-                bis unter „Weiter". Auf einem 360 px breiten Schirm steht die
-                Bewertung dadurch in der zweiten Zeile statt an der Kante des
-                Knopfes · das Rasterfeld darüber hält die Höhe (siehe
-                `actionRow`). */}
-            <div className="flex min-w-0 items-center gap-2 text-[13.5px] font-medium text-accent">
-              <CheckCircle2 size={17} className="shrink-0" />
-              <span className="min-w-0">
-                {failedRef.current ? t("pz.solvedWithHelp") : t("pz.correct")}
-                {ratingDelta != null &&
-                  t("pz.ratingDelta", { d: `${ratingDelta >= 0 ? "+" : ""}${ratingDelta}` })}
-              </span>
-            </div>
-            <div className="flex shrink-0 gap-2">
+          <div className="rounded-lg border border-accent-dim bg-accent-soft px-3.5 py-2.5">
+            {actionShell(
+              <div className="flex items-center gap-2 text-[13.5px] font-medium text-accent">
+                <CheckCircle2 size={17} className="shrink-0" />
+                <span className="min-w-0">
+                  {failedRef.current ? t("pz.solvedWithHelp") : t("pz.correct")}
+                  {ratingDelta != null &&
+                    t("pz.ratingDelta", { d: `${ratingDelta >= 0 ? "+" : ""}${ratingDelta}` })}
+                </span>
+              </div>,
               <Button primary onClick={() => load()}>
                 <SkipForward size={15} /> {t("common.next")}
               </Button>
-            </div>
+            )}
           </div>
         )}
         {actionRow("wrong", wrongRow(ratingDelta != null ? ` (Rating ${ratingDelta})` : ""))}
@@ -678,20 +722,20 @@ function TrainerView({
         {actionRow("reserve", wrongRow(" (Rating -00)"))}
         {actionRow(
           "open",
-          <div className="flex w-full items-center justify-between gap-3">
-            <span className="min-w-0 text-[13px] text-ink3">
+          actionShell(
+            <span className="text-[13px] text-ink3">
               {status === "loading"
                 ? t("pz.loadingNext")
                 : status === "empty"
                   ? t("pz.noneFound")
                   : t("pz.findBest")}
-            </span>
-            {status === "playing" && (
+            </span>,
+            status === "playing" && (
               <Button onClick={() => setShowHint(true)}>
                 <Lightbulb size={15} /> {t("pz.hint")}
               </Button>
-            )}
-          </div>
+            )
+          )
         )}
       </div>
       {showHint && status === "playing" && (
@@ -838,7 +882,7 @@ function TrainerView({
 
       <div className="grid grid-cols-1 gap-6 min-[1180px]:grid-cols-[minmax(0,var(--board-edge))_minmax(0,1fr)]">
         <div className="max-w-[var(--board-edge)]">
-          {puzzleHead}
+          {puzzleHead(false)}
           {puzzleBoard("puzzle")}
           {puzzleHistory(false)}
 
@@ -964,7 +1008,7 @@ function TrainerView({
         onClose={() => setFocused(false)}
         title={t("pz.title")}
         subtitle={puzzle ? `Rating ${puzzle.rating}` : undefined}
-        above={puzzleHead}
+        above={puzzleHead(true)}
         below={
           <>
             {puzzleHistory(true)}

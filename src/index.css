@@ -303,14 +303,29 @@ html[data-store-capture="true"] .chess-backdrop {
    Fokus — die Ansicht, in der nur das Brett zählt — bekam eine
    Bildlaufleiste. Der Fokus misst seine Höhe deshalb selbst und schreibt sie
    hier hinein (siehe `useChrome` in components/FocusBoard.tsx); der Wert unten
-   ist nur noch das, was bis zur ersten Messung gilt. */
+   ist nur noch das, was bis zur ersten Messung gilt.
+
+   Zwei Abweichungen von der Rechnung der Seiten, beide aus demselben Grund ·
+   im Fokus darf keine Bildlaufleiste stehen:
+
+   · Der Austritt zählt mit. `.board-bleed` zieht das Brett um `--board-bleed`
+     nach beiden Seiten aus dem Innenabstand heraus; das Brett wird dadurch um
+     das Doppelte breiter als seine Hülle · und weil es quadratisch ist, genau
+     so viel höher. Ungerechnet fehlten am Ende diese Pixel.
+   · Die Untergrenze ist niedriger. 260 px sind auf einer Seite ein sinnvolles
+     Mindestmaß, weil die Seite notfalls scrollt. Hier ist die Grenze das
+     Gegenteil einer Hilfe: Sie hält das Brett groß und schiebt dafür die
+     Bedienung unter die Kante. Ein kleineres Brett ist der bessere Tausch. */
 .board-focus {
   --board-max: min(92vw, 880px);
   --board-chrome: 300px;
   --board-vh: 100dvh;
   --board-bleed: 0px;
   --board-gutter: 2rem;
-  --board-edge: min(var(--board-max), max(260px, calc(var(--board-vh) - var(--board-chrome))));
+  --board-edge: min(
+    var(--board-max),
+    max(176px, calc(var(--board-vh) - var(--board-chrome) - 2 * var(--board-bleed)))
+  );
   --board-col: calc(var(--board-edge) + var(--board-gutter));
 }
 

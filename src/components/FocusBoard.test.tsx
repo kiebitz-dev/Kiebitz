@@ -143,7 +143,9 @@ describe("focus board", () => {
 
     // Vorlauf = halbe freie Fläche über dem Brett: (740 − 360) / 2 − 40.
     expect(column.style.paddingTop).toBe("150px");
-    expect(layer.style.getPropertyValue("--board-chrome")).toBe("200px");
+    // 60 (Hülle) + 40 (Reihe) + 100 (Leiste) + 0 (Abstände, jsdom kennt keine)
+    // · plus das eine Pixel Zugabe gegen Bruchzahlen (siehe `useChrome`).
+    expect(layer.style.getPropertyValue("--board-chrome")).toBe("201px");
     // Die Höhe, von der abgezogen wird, ist die gemessene und nicht `100dvh` ·
     // die Android-WebView löst `dvh` gegen den ganzen Schirm auf, also samt
     // Status- und Navigationsleiste, und das Brett wurde um genau die beiden
@@ -154,7 +156,26 @@ describe("focus board", () => {
     fireEvent(window, new Event("resize"));
     expect(column.style.paddingTop).toBe("150px");
     // Die Leiste zählt weiter als Chrom · nur eben nicht mehr als Verschiebung.
-    expect(layer.style.getPropertyValue("--board-chrome")).toBe("260px");
+    expect(layer.style.getPropertyValue("--board-chrome")).toBe("261px");
+  });
+
+  /**
+   * Die Breite der Reihen darf nicht am Brett hängen · sonst dreht sich die
+   * Rechnung im Kreis: Eine Zeile mehr macht das Brett kleiner, das kleinere
+   * Brett macht die Spalte schmaler, die schmalere Spalte bricht die nächste
+   * Zeile um. Genau daran ist der Puzzle-Fokus auf einem schmalen Telefon bis
+   * auf die Untergrenze des Bretts zusammengelaufen. Deshalb bindet die
+   * Brettbreite nur noch das Brett; die Spalte behält 20 rem.
+   */
+  it("keeps the rows from shrinking along with the board", () => {
+    open(true);
+    const layer = screen.getByTestId("focus-board");
+    const content = layer.querySelector(".overflow-y-auto") as HTMLDivElement;
+    const column = content.firstElementChild as HTMLDivElement;
+    const board = column.children[1] as HTMLDivElement;
+
+    expect(column.style.maxWidth).toBe("min(100%, max(var(--board-edge), 20rem))");
+    expect(board.style.maxWidth).toBe("var(--board-edge)");
   });
 
   /** Passt die Bedienung unter dem mittigen Brett nicht mehr, weicht es hoch. */
