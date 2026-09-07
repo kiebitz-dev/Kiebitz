@@ -37,19 +37,21 @@
  * diesen Wert ein.
  */
 import { useRef, useState, type ReactNode } from "react";
-import { Download, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, SlidersHorizontal } from "lucide-react";
+import MobileSheet from "../../components/MobileSheet";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { MarkenSchluessel, PartieZeile } from "../../components/blatt/PartieZeile";
 import {
   Ergebniskasten,
   Feldname,
   Kolumnentitel,
+  Punkt,
   Rubrik,
   Stichwortzeile,
   Weg,
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
-import { deInt } from "../../lib/format";
+import { de, deInt } from "../../lib/format";
 import type { GamesFilter, UiGame } from "../../lib/gameUi";
 
 /**
@@ -184,10 +186,28 @@ export interface GamesBlattProps {
    * Spalte, an der er hinge.
    */
   onFilter?: (filter: GamesFilter) => void;
+  /**
+   * Die Partie-Ansicht des Telefons.
+   *
+   * Am Rechner steht der Eintrag rechts neben dem Verzeichnis; auf dem Telefon
+   * gibt es die zweite Spalte nicht, dort liegt er als eigenes Blatt darüber.
+   * Geblättert wird in der festen Leiste darunter und per Wischen — beides
+   * bringt die Detailschicht der Hülle schon mit, der Modus setzt sie nur neu.
+   */
+  eintragBlatt?: {
+    offen: boolean;
+    onSchliessen: () => void;
+    onZurueck?: () => void;
+    onWeiter?: () => void;
+    /** Stelle der Partie in der Trefferliste · eins­basiert wie in der Liste. */
+    stelle: number;
+    gesamt: number;
+  };
 }
 
 export default function GamesBlatt({
   mobile,
+  eintragBlatt,
   bestand,
   filter,
   treffer,
@@ -588,10 +608,43 @@ export default function GamesBlatt({
     </div>
   );
 
+  /**
+   * Genauigkeit nach Phase · drei Felder auf Linien statt drei Kacheln.
+   *
+   * Sie stehen nur im Blatt des Telefons, weil sie auch in der gewöhnlichen
+   * Fassung nur dort stehen. Ohne Analyse gibt es sie nicht; ohne Wert steht
+   * ein Gedankenstrich, wie überall im Formular.
+   */
+  const phasen = gewaehlt?.analyzed && (
+    <div className="mt-3.5">
+      <Feldname>{t("blatt.accuracyByPhase")}</Feldname>
+      <div className="mt-1.5 flex gap-4">
+        {(
+          [
+            [t("ins.phase.opening"), gewaehlt.accuracyOpening],
+            [t("ins.phase.middlegame"), gewaehlt.accuracyMiddlegame],
+            [t("ins.phase.endgame"), gewaehlt.accuracyEndgame],
+          ] as const
+        ).map(([label, wert]) => (
+          <div key={label} className="min-w-0 flex-1">
+            <Feldname>{label}</Feldname>
+            <div
+              className={`blatt-zahl mt-1 border-b border-line2 pb-1 text-[13.5px] ${
+                wert == null ? "text-ink3" : "text-ink"
+              }`}
+            >
+              {wert == null ? "\u2014" : `${de(wert)} %`}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const eintrag = gewaehlt && (
     <div className="flex flex-col">
-      <Rubrik>{t("blatt.theEntry")}</Rubrik>
-      <div className="mt-3.5">
+      {!mobile && <Rubrik>{t("blatt.theEntry")}</Rubrik>}
+      <div className={mobile ? "" : "mt-3.5"}>
         <Diagramm fen={fen} size={mobile ? undefined : 262} gutter={13} />
         <Bildunterschrift
           nummer={unterschrift.nummer}
@@ -622,6 +675,7 @@ export default function GamesBlatt({
           </div>
         ))}
       </div>
+      {phasen}
       {/* Stichwörter und Bemerkung gehören zusammen: Beides schreibt der Nutzer
           selbst zu dieser einen Partie, und beides steht im Band unter dem
           Diagramm und nicht in der Zeile darüber.
@@ -708,6 +762,68 @@ export default function GamesBlatt({
     </div>
   );
 
+  // Die Leiste unter dem Blatt · 44 px je Griff, die Stelle dazwischen.
+  const blaetternImBlatt = eintragBlatt && (
+    <div className="flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={eintragBlatt.onZurueck}
+        disabled={!eintragBlatt.onZurueck}
+        className="flex min-h-11 items-center gap-1 px-2.5 text-[12.5px] text-ink2 disabled:text-ink3"
+      >
+        <ChevronLeft size={16} /> {t("games.prev")}
+      </button>
+      <span className="blatt-zahl shrink-0 text-[11.5px] text-ink3">
+{`${deInt(eintragBlatt.stelle)} / ${deInt(eintragBlatt.gesamt)}`}
+      </span>
+      <button
+        type="button"
+        onClick={eintragBlatt.onWeiter}
+        disabled={!eintragBlatt.onWeiter}
+        className="flex min-h-11 items-center gap-1 px-2.5 text-[12.5px] text-accent disabled:text-ink3"
+      >
+        {t("games.next")} <ChevronRight size={16} />
+      </button>
+    </div>
+  );
+
+  const partieBlatt = eintragBlatt?.offen && gewaehlt && (
+    <MobileSheet
+      blatt
+      testId="game-detail-sheet"
+      ariaLabel={t("games.detailTitle")}
+      scrollKey={gewaehlt.id}
+      onClose={eintragBlatt.onSchliessen}
+      onPrev={eintragBlatt.onZurueck}
+      onNext={eintragBlatt.onWeiter}
+      title={
+        <div className="flex items-center gap-2">
+          <Punkt ergebnis={gewaehlt.result} />
+          <span className="min-w-0 flex-1 truncate text-[14px] text-ink">
+            {gewaehlt.opponent}{" "}
+            <span className="blatt-zahl text-ink3">({deInt(gewaehlt.oppElo)})</span>
+          </span>
+        </div>
+      }
+      subtitle={
+        <div className="blatt-kolumne mt-1.5 truncate text-ink3">
+          {gewaehlt.source} · {gewaehlt.tc} · {gewaehlt.date}
+        </div>
+      }
+      headerRight={
+        <div>
+          <Feldname>{t("games.colAccuracy")}</Feldname>
+          <div className="blatt-zahl mt-0.5 text-[14px] text-ink">
+            {gewaehlt.accuracy == null ? "\u2014" : `${de(gewaehlt.accuracy)} %`}
+          </div>
+        </div>
+      }
+      footer={blaetternImBlatt}
+    >
+      <div className="px-3.5 pb-4 pt-3">{eintrag}</div>
+    </MobileSheet>
+  );
+
   const kopf = (
     <Kolumnentitel
       links={t("blatt.gamesTitle")}
@@ -737,6 +853,7 @@ export default function GamesBlatt({
           {liste}
         </div>
         {blaettern}
+        {partieBlatt}
       </div>
     );
   }

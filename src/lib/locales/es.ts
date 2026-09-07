@@ -1838,6 +1838,7 @@ export const es: Record<Key, string> = {
   "blatt.axis": "Eje",
   "blatt.weakest": "Más débil",
   "blatt.basis": "De dónde sale el cálculo",
+  "blatt.errorMoves": "{n} jugadas con error",
   "blatt.accuracyByPhase": "Precisión por fase",
   "blatt.strongestFindings": "Los hallazgos más fuertes",
   "blatt.accuracyByMonth": "Precisión por mes",

@@ -1838,6 +1838,7 @@ export const hi: Record<Key, string> = {
   "blatt.axis": "अक्ष",
   "blatt.weakest": "सबसे कमज़ोर",
   "blatt.basis": "यह किससे गणना हुआ",
+  "blatt.errorMoves": "{n} गलत चालें",
   "blatt.accuracyByPhase": "चरण के अनुसार सटीकता",
   "blatt.strongestFindings": "सबसे प्रबल निष्कर्ष",
   "blatt.accuracyByMonth": "प्रति माह सटीकता",

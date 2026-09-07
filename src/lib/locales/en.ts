@@ -1845,6 +1845,7 @@ export const en: Record<Key, string> = {
   "blatt.axis": "Axis",
   "blatt.weakest": "Weakest",
   "blatt.basis": "What this is computed from",
+  "blatt.errorMoves": "{n} error moves",
   "blatt.accuracyByPhase": "Accuracy by phase",
   "blatt.strongestFindings": "The strongest findings",
   "blatt.accuracyByMonth": "Accuracy per month",

@@ -46,6 +46,7 @@ export default function MobileSheet({
   /** Wechselt dieser Wert, beginnt der Inhalt wieder oben. */
   scrollKey,
   testId,
+  blatt = false,
   children,
 }: {
   ariaLabel: string;
@@ -60,6 +61,13 @@ export default function MobileSheet({
   onNext?: () => void;
   scrollKey?: string;
   testId?: string;
+  /**
+   * Im Diagramm-Modus verliert die Karte ihre Rundung und ihren Schatten und
+   * wird zum Blatt · dieselbe Regel, mit der die Einstellungen im Modus
+   * auskommen, ohne sich zu verdoppeln (siehe blatt.css). Die Mechanik —
+   * Wischen, Zurück-Geste, Tastatur — bleibt genau dieselbe.
+   */
+  blatt?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -156,7 +164,9 @@ export default function MobileSheet({
     >
       <div
         ref={panelRef}
-        className="mobile-sheet-panel flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/60"
+        className={`mobile-sheet-panel flex max-h-full w-full max-w-md flex-col overflow-hidden border border-line2 bg-panel ${
+          blatt ? "blatt-formular" : "rounded-2xl shadow-2xl shadow-black/60"
+        }`}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

@@ -84,7 +84,7 @@ German, like the design vocabulary they carry: `Kolumnentitel`, `Rubrik`,
 | Mode flag, cache, `data-diagram` | `src/lib/theme.ts`, `src/lib/diagramMode.ts` |
 | Rules that can be computed | `src/lib/blatt.ts` |
 | Composition pieces, type | `src/components/blatt/`, `blatt.css` |
-| Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx` |
+| Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx`, the five Insights tabs in `src/pages/blatt/insights/` |
 
 Each page renders its regular version and lazy-loads its `*Blatt.tsx` variant
 when the mode is on — Dashboard mode must not pay for type and layout it never

@@ -13,17 +13,21 @@
  * Diagrammfehler überhaupt; zwei kleine Bilder untereinander kosten nichts und
  * lügen nicht.
  *
- * Die Reiterleiste wird zum Register mit Marke an der Kante. Umgesetzt ist die
- * Übersicht; die fünf Tiefenreiter behalten ihren Inhalt und folgen denselben
- * Regeln der Hülle.
+ * Die Reiterleiste wird zum Register mit Marke an der Kante. Diese Datei setzt
+ * die Übersicht; die fünf Tiefenreiter stehen in `blatt/insights/` und bringen
+ * ihren eigenen Formularkopf mit — Kolumnentitel und Register sind Hülle und
+ * bleiben hier.
  */
 import type { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import {
   Ergebniskasten,
   Feldname,
+  Figur,
   Formularkopf,
+  Kennzahlen,
   Kolumnentitel,
+  Kurve,
   Rubrik,
   type Feld,
 } from "../../components/blatt/Satz";
@@ -51,87 +55,6 @@ export interface InsightsReiter {
   plus: boolean;
 }
 
-/** Eine Kurve mit eigener Skala · nie zwei Größen an zwei Achsen in einem Bild. */
-function Kurve({
-  werte,
-  farbe,
-  breite = 460,
-  hoehe = 46,
-}: {
-  werte: number[];
-  farbe: string;
-  breite?: number;
-  hoehe?: number;
-}) {
-  if (werte.length < 2) return null;
-  const min = Math.min(...werte);
-  const max = Math.max(...werte);
-  const spanne = max - min || 1;
-  const x = (i: number) => (i / (werte.length - 1)) * breite;
-  const y = (v: number) => hoehe - ((v - min) / spanne) * (hoehe - 6) - 3;
-  const punkte = werte.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const letzte = werte.length - 1;
-  return (
-    <svg
-      viewBox={`0 0 ${breite} ${hoehe}`}
-      width="100%"
-      height={hoehe}
-      className="block overflow-visible"
-      aria-hidden="true"
-    >
-      <polyline
-        points={punkte}
-        fill="none"
-        stroke={farbe}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <circle cx={x(letzte)} cy={y(werte[letzte])} r="4" fill={farbe} />
-    </svg>
-  );
-}
-
-/** Eine Figur: Titel, letzter Wert, Kurve, Anfangswert. */
-function Figur({
-  titel,
-  werte,
-  einheit,
-  farbe,
-  unten,
-}: {
-  titel: string;
-  werte: number[];
-  einheit: string;
-  farbe: string;
-  unten: string;
-}) {
-  if (werte.length < 2) return null;
-  const erst = werte[0];
-  const letzt = werte[werte.length - 1];
-  return (
-    <div className="mt-3">
-      <div className="flex items-baseline justify-between">
-        <Feldname>{titel}</Feldname>
-        <span className="blatt-zahl text-[12.5px] text-ink">
-          {de(letzt)}
-          {einheit}
-        </span>
-      </div>
-      <div className="mt-1.5 border-y border-line py-[7px]">
-        <Kurve werte={werte} farbe={farbe} />
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] text-ink3">
-        <span className="blatt-zahl">
-          {de(erst)}
-          {einheit}
-        </span>
-        <span>{unten}</span>
-      </div>
-    </div>
-  );
-}
-
 export interface InsightsBlattProps {
   mobile: boolean;
   kopfRechts: ReactNode;
@@ -153,8 +76,35 @@ export interface InsightsBlattProps {
   patzer: number[];
   kurvenNote: string;
   monateNote: string;
-  /** Auf einem Tiefenreiter steht hier der bisherige Inhalt. */
+  /** Auf einem Tiefenreiter steht hier dessen Blatt · siehe blatt/insights/. */
   kinder?: ReactNode;
+}
+
+/** Eine Monatskurve mit ihren beiden Randwerten · zweimal auf diesem Blatt. */
+function Monatsfigur({
+  titel,
+  werte,
+  einheit,
+  farbe,
+  unten,
+}: {
+  titel: string;
+  werte: number[];
+  einheit: string;
+  farbe: string;
+  unten: string;
+}) {
+  if (werte.length < 2) return null;
+  return (
+    <Figur
+      titel={titel}
+      rechts={`${de(werte[werte.length - 1])}${einheit}`}
+      links={`${de(werte[0])}${einheit}`}
+      unten={unten}
+    >
+      <Kurve werte={werte} farbe={farbe} />
+    </Figur>
+  );
 }
 
 export default function InsightsBlatt({
@@ -202,25 +152,6 @@ export default function InsightsBlatt({
     </div>
   );
 
-  const kennzahlen = (zahlen: Kennzahl[], gross: number) => (
-    <div className="mt-2 flex">
-      {zahlen.map((zahl, index) => (
-        <div
-          key={zahl.name}
-          className={`min-w-0 flex-1 ${index ? "border-s border-line ps-3" : ""} ${
-            index < zahlen.length - 1 ? "pe-3" : ""
-          }`}
-        >
-          <Feldname>{zahl.name}</Feldname>
-          <div className="blatt-zahl mt-1 truncate text-ink" style={{ fontSize: gross }}>
-            {zahl.wert}
-          </div>
-          <div className="blatt-zahl mt-0.5 truncate text-[10px] text-ink3">{zahl.neben}</div>
-        </div>
-      ))}
-    </div>
-  );
-
   const dnaBlock = (
     <div>
       <Rubrik>{t("dna.title")}</Rubrik>
@@ -228,7 +159,10 @@ export default function InsightsBlatt({
         <span className="blatt-feld w-[86px] flex-none text-ink3">{t("blatt.axis")}</span>
         <span className="blatt-feld flex-1 text-ink3">0 – 100</span>
         <span className="blatt-feld w-[26px] text-end text-ink3">{t("dna.you")}</span>
-        <span className="blatt-feld w-[34px] text-end" style={{ color: "var(--color-violet)" }}>
+        <span
+          className="blatt-feld w-[34px] truncate text-end"
+          style={{ color: "var(--color-violet)" }}
+        >
           {t("dna.field")}
         </span>
       </div>
@@ -270,10 +204,16 @@ export default function InsightsBlatt({
     </div>
   );
 
-  const kopf = (
+  const titelUndRegister = (
     <>
       <Kolumnentitel links={t("blatt.insightsTitle")} rechts={kopfRechts} />
       {register}
+    </>
+  );
+
+  const kopf = (
+    <>
+      {titelUndRegister}
       <div className="mt-4 flex items-end">
         <div className="min-w-0 flex-1">
           <Formularkopf
@@ -293,11 +233,17 @@ export default function InsightsBlatt({
     </>
   );
 
-  // Ein Tiefenreiter behält seinen Inhalt · die Hülle ist dieselbe.
+  // Ein Tiefenreiter bringt seinen eigenen Formularkopf mit · nur er weiß,
+  // welche vier Zahlen seine Frage beantworten. Gemeinsam bleiben der
+  // Kolumnentitel und das Register: Sie sind die Hülle, nicht die Seite.
   if (kinder) {
     return (
-      <div className="mx-auto flex min-h-full max-w-[1280px] flex-col px-4 pb-6 pt-6 sm:px-10">
-        {kopf}
+      <div
+        className={`mx-auto flex min-h-full max-w-[1280px] flex-col ${
+          mobile ? "px-3.5 pb-6 pt-3" : "px-10 pb-[22px] pt-6"
+        }`}
+      >
+        {titelUndRegister}
         <div className="pt-5">{kinder}</div>
       </div>
     );
@@ -309,13 +255,13 @@ export default function InsightsBlatt({
       {grundlage.length > 0 && (
         <div>
           <Rubrik>{t("blatt.basis")}</Rubrik>
-          {kennzahlen(grundlage, 15)}
+          <Kennzahlen zahlen={grundlage} gross={15} />
         </div>
       )}
       {phasen.length > 0 && (
         <div>
           <Rubrik>{t("blatt.accuracyByPhase")}</Rubrik>
-          {kennzahlen(phasen, 17)}
+          <Kennzahlen zahlen={phasen} gross={17} />
         </div>
       )}
     </div>
@@ -326,14 +272,14 @@ export default function InsightsBlatt({
       <Rubrik>{t("blatt.strongestFindings")}</Rubrik>
       <div className="mt-0.5">{befunde}</div>
       <div className="flex-1" />
-      <Figur
+      <Monatsfigur
         titel={t("blatt.accuracyByMonth")}
         werte={genauigkeit}
         einheit=" %"
         farbe="var(--color-ink)"
         unten={monateNote}
       />
-      <Figur
+      <Monatsfigur
         titel={t("blatt.blundersPer100")}
         werte={patzer}
         einheit=""

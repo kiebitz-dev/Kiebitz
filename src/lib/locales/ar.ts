@@ -1838,6 +1838,7 @@ export const ar: Record<Key, string> = {
   "blatt.axis": "المحور",
   "blatt.weakest": "الأضعف",
   "blatt.basis": "مصدر هذا الحساب",
+  "blatt.errorMoves": "{n} نقلة خاطئة",
   "blatt.accuracyByPhase": "الدقة حسب المرحلة",
   "blatt.strongestFindings": "أقوى النتائج",
   "blatt.accuracyByMonth": "الدقة شهريًا",

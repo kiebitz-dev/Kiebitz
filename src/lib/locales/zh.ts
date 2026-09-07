@@ -1838,6 +1838,7 @@ export const zh: Record<Key, string> = {
   "blatt.axis": "轴",
   "blatt.weakest": "最弱",
   "blatt.basis": "据以计算的数据",
+  "blatt.errorMoves": "{n} 步失误",
   "blatt.accuracyByPhase": "各阶段准确率",
   "blatt.strongestFindings": "最强的发现",
   "blatt.accuracyByMonth": "每月准确率",

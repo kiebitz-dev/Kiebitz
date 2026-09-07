@@ -29,10 +29,18 @@ import {
 import { de, deInt } from "../lib/format";
 import { useDiagramMode } from "../lib/diagramMode";
 import { Befund } from "../components/blatt/Befund";
+import { Rubrik } from "../components/blatt/Satz";
 
 /** Das Profil kommt nach · siehe Dashboard.tsx. */
 import { LeereSeite } from "../components/blatt/LeereSeite";
 const InsightsBlatt = lazy(() => import("./blatt/InsightsBlatt"));
+// Die fünf Tiefenreiter im Modus · jeder lädt erst, wenn er aufgeschlagen
+// wird. Der Dashboard-Modus zahlt für keinen von ihnen.
+const StrengthBlatt = lazy(() => import("./blatt/insights/StrengthBlatt"));
+const TimeBlatt = lazy(() => import("./blatt/insights/TimeBlatt"));
+const OpeningsBlatt = lazy(() => import("./blatt/insights/OpeningsBlatt"));
+const PatternsBlatt = lazy(() => import("./blatt/insights/PatternsBlatt"));
+const TrainingBlatt = lazy(() => import("./blatt/insights/TrainingBlatt"));
 import { usePageMemory } from "../lib/pageMemory";
 import type { PageId } from "../App";
 import Overview from "./insights/Overview";
@@ -179,8 +187,9 @@ export default function InsightsV2({
   // ── Das Profil ────────────────────────────────────────────────────────────
   //
   // Dieselben Daten, andere Form: Aus dem Netz werden gestapelte Skalen, aus
-  // der Reiterleiste ein Register. Die fünf Tiefenreiter behalten ihren
-  // Inhalt und bekommen nur die Hülle.
+  // der Reiterleiste ein Register. Die fünf Tiefenreiter haben ihre eigene
+  // Fassung in `blatt/insights/` · aus den aufklappbaren Abschnitten werden
+  // dort Rubriken mit Linie.
   //
   // Solange die Zahlen fehlen, bleibt die Seite leer, statt einen Augenblick
   // in ihrer gewöhnlichen Fassung zu stehen · siehe LeereSeite.tsx.
@@ -188,6 +197,38 @@ export default function InsightsV2({
   if (diagramMode && !loading && deepData) {
     const monate = deepData.progress.months;
     const befundListe = findings.slice(0, 3);
+    /**
+     * Die Befunde eines Tiefenreiters · in der gewöhnlichen Fassung stehen
+     * sie als Streifen über der Seite, im Blatt als Rubrik mit Rangzahl.
+     * Ohne Befund steht dort nichts: Eine leere Rubrik ist kein Abschnitt.
+     */
+    const reiterBefunde = (id: InsightTab) => {
+      // Drei · so viele zeigt auch der Befundstreifen der gewöhnlichen
+      // Fassung. Alle stehen weiterhin auf der Übersicht.
+      const liste = findingsFor(findings, id as FindingTab).slice(0, 3);
+      if (liste.length === 0) return null;
+      return (
+        <div className="mb-5">
+          <Rubrik>{t("blatt.strongestFindings")}</Rubrik>
+          <div className="mt-0.5">
+            {liste.map((finding, index) => {
+              const params = localizeFindingParams(finding.params, t, locale);
+              return (
+                <Befund
+                  key={finding.id}
+                  titel={t(finding.titleKey, params)}
+                  text={t(finding.bodyKey, params)}
+                  schwere={finding.severity}
+                  ton={finding.tone}
+                  letzte={index === liste.length - 1}
+                  onClick={finding.action ? () => onAction(finding) : undefined}
+                />
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
     return (
       <Suspense fallback={<LeereSeite />}>
         <InsightsBlatt
@@ -286,44 +327,31 @@ export default function InsightsV2({
           kinder={
             tab === "overview" ? undefined : (
               <PlusLock feature="full_insights">
+                {/* Die Befunde des Reiters stehen auch im Blatt oben · der
+                    Modus ändert die Darstellung und darf keinen Weg kosten. */}
+                {reiterBefunde(tab)}
                 {tab === "strength" && (
-                  <Strength
+                  <StrengthBlatt
+                    mobile={mobile}
                     deep={deepData}
                     live={live}
                     errors={analysisErrors}
-                    findings={findingsFor(findings, "strength")}
-                    onAction={onAction}
                   />
                 )}
-                {tab === "time" && (
-                  <Time deep={deepData} findings={findingsFor(findings, "time")} onAction={onAction} />
-                )}
+                {tab === "time" && <TimeBlatt mobile={mobile} deep={deepData} />}
                 {tab === "openings" && (
-                  <Openings
+                  <OpeningsBlatt
+                    mobile={mobile}
                     deep={deepData}
-                    live={live}
-                    findings={findingsFor(findings, "openings")}
-                    onAction={onAction}
                     desktop={desktop}
                     onOpenRepertoire={toRepertoire}
                   />
                 )}
                 {tab === "patterns" && (
-                  <Patterns
-                    deep={deepData}
-                    live={live}
-                    findings={findingsFor(findings, "patterns")}
-                    onAction={onAction}
-                  />
+                  <PatternsBlatt mobile={mobile} deep={deepData} live={live} />
                 )}
                 {tab === "training" && (
-                  <Training
-                    deep={deepData}
-                    puzzles={puzzleData}
-                    findings={findingsFor(findings, "training")}
-                    onAction={onAction}
-                    desktop={desktop}
-                  />
+                  <TrainingBlatt mobile={mobile} deep={deepData} puzzles={puzzleData} />
                 )}
               </PlusLock>
             )

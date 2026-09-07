@@ -361,3 +361,62 @@ describe("Partienverzeichnis im Blatt", () => {
     expect((screen.getByLabelText("blatt.remarks") as HTMLTextAreaElement).value).toBe("Zweite");
   });
 });
+
+/**
+ * Die Partie-Ansicht des Telefons.
+ *
+ * Am Rechner steht der Eintrag neben der Liste, auf dem Telefon darüber. Die
+ * Ansicht ist dieselbe Detailschicht wie in der gewöhnlichen Fassung — sie
+ * bringt Wischen und die Zurück-Geste schon mit — nur im Buchsatz. Geprüft
+ * wird, dass sie erst auf Tipp erscheint, die Phasenwerte trägt und dass ein
+ * fehlender Wert als Gedankenstrich dasteht.
+ */
+describe("Die Partie auf dem Telefon", () => {
+  const blaettern = {
+    offen: true,
+    onSchliessen: vi.fn(),
+    onZurueck: vi.fn(),
+    onWeiter: vi.fn(),
+    stelle: 3,
+    gesamt: 1523,
+  };
+
+  it("bleibt zu, solange niemand eine Partie aufschlägt", () => {
+    show({ mobile: true, eintragBlatt: { ...blaettern, offen: false } });
+    expect(screen.queryByTestId("game-detail-sheet")).toBeNull();
+  });
+
+  it("trägt Kopf, Phasenwerte und die Stelle in der Trefferliste", () => {
+    show({
+      mobile: true,
+      eintragBlatt: blaettern,
+      gewaehlt: partie({ accuracyOpening: 92.6, accuracyMiddlegame: null, accuracyEndgame: null }),
+    });
+    const blatt = screen.getByTestId("game-detail-sheet");
+    expect(blatt.textContent).toContain("DragonSlayer_88");
+    // Genauigkeit im Kopf, Phasen darunter · der fehlende Wert als Strich.
+    // Die Trennzeichen setzt die Sprache · geprüft wird die Zahl, nicht das Komma.
+    expect(blatt.textContent).toMatch(/91[.,]2 %/);
+    expect(blatt.textContent).toContain("blatt.accuracyByPhase");
+    expect(blatt.textContent).toMatch(/92[.,]6 %/);
+    expect(blatt.textContent).toContain("—");
+    // Die Stelle steht wie in der gewöhnlichen Fassung: Zahl / Zahl.
+    expect(blatt.textContent).toMatch(/3 \/ 1[.,]523/);
+  });
+
+  it("blättert über die Leiste weiter", () => {
+    show({ mobile: true, eintragBlatt: blaettern });
+    fireEvent.click(screen.getByText("games.next"));
+    expect(blaettern.onWeiter).toHaveBeenCalled();
+  });
+
+  it("lässt die Phasenzeile weg, solange die Partie nicht analysiert ist", () => {
+    show({
+      mobile: true,
+      eintragBlatt: blaettern,
+      gewaehlt: partie({ analyzed: false }),
+    });
+    const blatt = screen.getByTestId("game-detail-sheet");
+    expect(blatt.textContent).not.toContain("blatt.accuracyByPhase");
+  });
+});

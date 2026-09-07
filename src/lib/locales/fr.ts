@@ -1838,6 +1838,7 @@ export const fr: Record<Key, string> = {
   "blatt.axis": "Axe",
   "blatt.weakest": "Le plus faible",
   "blatt.basis": "D’où vient ce calcul",
+  "blatt.errorMoves": "{n} coups fautifs",
   "blatt.accuracyByPhase": "Précision par phase",
   "blatt.strongestFindings": "Les constats les plus forts",
   "blatt.accuracyByMonth": "Précision par mois",

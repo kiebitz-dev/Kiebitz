@@ -1867,6 +1867,7 @@ export const de = {
   "blatt.axis": "Achse",
   "blatt.weakest": "Schwächste",
   "blatt.basis": "Woraus das gerechnet ist",
+  "blatt.errorMoves": "{n} Fehlzüge",
   "blatt.accuracyByPhase": "Genauigkeit nach Phase",
   "blatt.strongestFindings": "Die stärksten Befunde",
   "blatt.accuracyByMonth": "Genauigkeit je Monat",

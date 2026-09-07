@@ -1233,7 +1233,21 @@ export default function Games({
           onBlattWaehlen={(n) => setPage(Math.min(Math.max(n, 1), totalPages))}
           onZurueck={() => setPage((value) => Math.max(1, value - 1))}
           onWeiter={() => setPage((value) => Math.min(totalPages, value + 1))}
-          onWaehlen={(game) => setSelectedId(game.id)}
+          // Auf dem Telefon schlägt derselbe Tipp den Eintrag auf · am
+          // Rechner steht er ohnehin neben der Liste.
+          onWaehlen={(game) => selectGame(game.id, mobile)}
+          eintragBlatt={
+            mobile
+              ? {
+                  offen: sheetOpen,
+                  onSchliessen: () => setSheetOpen(false),
+                  onZurueck: canPrev ? () => stepGame(-1) : undefined,
+                  onWeiter: canNext ? () => stepGame(1) : undefined,
+                  stelle: globalIndex,
+                  gesamt: totalResults,
+                }
+              : undefined
+          }
           onFilter={applyFilter}
           // Aufschlagen lassen sich die Filter nur mobil · am Rechner stehen
           // sie ohnehin alle in der Kopfleiste.
