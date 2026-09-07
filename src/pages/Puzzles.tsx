@@ -581,6 +581,13 @@ function TrainerView({
    * zusätzlich enger zusammen und geben Innenabstand her · sonst stünde die
    * Reihe auf einem schmalen Telefon (oder bei großer Anzeigegröße, die
    * dasselbe bewirkt) wieder über dem Rahmen.
+   *
+   * Im Fokus steht die Reihe mittig: `mx-auto` gibt den freien Platz zu
+   * gleichen Teilen nach beiden Seiten. Ist sie unter die Beschriftung
+   * gerückt, sitzt sie damit in der Mitte des Rahmens · vorher klebte sie
+   * dort an der rechten Kante, während links die halbe Zeile leer blieb.
+   * Auf der Seite bleibt sie rechtsbündig: Dort schließt sie mit dem
+   * Fokus-Griff an der Kante ab.
    */
   const puzzleHistory = (inFocus: boolean) => (
     <div
@@ -589,7 +596,11 @@ function TrainerView({
       }`}
     >
       <span className="min-w-0 truncate text-[12.5px] text-ink2">{t("pz.positionHistory")}</span>
-      <div className="ms-auto flex min-w-0 grow flex-nowrap items-center justify-end gap-1 max-[359px]:gap-0.5 max-[359px]:[&>button]:px-1.5">
+      <div
+        className={`flex min-w-0 flex-nowrap items-center gap-1 max-[359px]:gap-0.5 max-[359px]:[&>button]:px-1.5 ${
+          inFocus ? "mx-auto" : "ms-auto grow justify-end"
+        }`}
+      >
         <Button onClick={() => goToPly(0)} title={t("pz.firstPosition")} compact>
           <ChevronFirst size={14} />
         </Button>
