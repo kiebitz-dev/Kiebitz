@@ -43,7 +43,13 @@ const limits = {
   // aus src/components/blatt/blatt.css und die Hilfsklassen seiner neun
   // Seitenfassungen. Beides steht im einen Stylesheet, weil Tailwind alles
   // zusammenzieht · geladen wird davon nichts nach.
-  css: 76 * 1024,
+  //
+  // 76 KiB ließen zuletzt nur noch 0,2 KiB Luft und rissen mit den neuen
+  // Blätterleisten von Games und GamesBlatt: Sie kosten 734 Byte an
+  // Hilfsklassen, davon 430 Byte allein für `decoration-line2` und
+  // `hover:decoration-accent` · Tailwind schreibt `-webkit-text-decoration-color`
+  // je Regel dreimal. Gemessen sind es damit 76,5 KiB.
+  css: 78 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht
