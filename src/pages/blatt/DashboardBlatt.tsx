@@ -558,7 +558,13 @@ export default function DashboardBlatt({
   const wertungenBlock = wertungen.length > 0 && (
     <div>
       <Rubrik>{t("blatt.ratings")}</Rubrik>
-      <div className="mt-0.5 grid gap-x-[26px] min-[900px]:grid-cols-2">
+      {/* Das Raster fragt seine eigene Breite und nicht die des Fensters:
+          `auto-fit` legt so viele Spalten an, wie zu 240 Punkten passen. Die
+          Fensterbreite log hier — die Wertungen stehen in der rechten Spalte,
+          und die war bei schmalem Fenster gut 200 Punkte breit, während das
+          Fenster die 900 längst überschritten hatte. Plattform, Zeit, Wert und
+          Veränderung lagen dann übereinander. */}
+      <div className="mt-0.5 grid gap-x-[26px] grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
         {wertungen.map((r) => (
           <div key={r.id} className="flex items-baseline gap-2 border-b border-line py-[5px]">
             <span
@@ -728,7 +734,13 @@ export default function DashboardBlatt({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 gap-9 pt-[22px]">
+      {/* Dieselbe Regel wie im Partienverzeichnis: Nebeneinander stehen
+          Diagramm und Spalte erst, wenn beide ihre Breite bekommen. Das
+          Diagramm misst mit seinem Steg 450 Punkte und kann nicht schmaler;
+          bei 1.000 Punkten Fensterbreite blieben der Spalte daneben gut 200,
+          und Tagesliste wie Wertungen liefen ineinander. Darunter steht das
+          Diagramm deshalb über der Spalte statt neben ihr. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-7 pt-[22px] min-[1220px]:flex-row min-[1220px]:gap-9">
         {diagrammBlock}
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-6">
           {/* Kommt die Stellung nicht aus einer Partie, steht rechts, woher

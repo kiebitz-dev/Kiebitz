@@ -555,13 +555,26 @@ export default function Games({
     }
   };
 
-  const saveNote = async () => {
-    if (!selected?.dbId || noteDraft === null) return;
-    await setGameNote(selected.dbId, noteDraft);
+  /**
+   * Die Notiz ablegen · derselbe Weg für beide Fassungen.
+   *
+   * Die gewöhnliche Fassung schickt den Entwurf, den ihr Textfeld im Zustand
+   * hält, und sagt es mit ihrem Knopf; das Blatt schickt beim Verlassen des
+   * Feldes den Text selbst und sagt es in der Beschriftungszeile. Abgelegt
+   * wird beides gleich, also steht das Ablegen einmal da.
+   */
+  const storeNote = async (text: string) => {
+    if (!selected?.dbId) return;
+    await setGameNote(selected.dbId, text);
     setDbGames((gs) =>
-      gs ? gs.map((g) => (g.id === selected.id ? { ...g, note: noteDraft || undefined } : g)) : gs
+      gs ? gs.map((g) => (g.id === selected.id ? { ...g, note: text || undefined } : g)) : gs
     );
-    setSelectedRecord((record) => record ? { ...record, note: noteDraft } : record);
+    setSelectedRecord((record) => (record ? { ...record, note: text } : record));
+  };
+
+  const saveNote = async () => {
+    if (noteDraft === null) return;
+    await storeNote(noteDraft);
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 1500);
   };
@@ -1205,6 +1218,10 @@ export default function Games({
           stichwoerter={selectedRecord?.tags ?? selected?.tags ?? []}
           stichwortVorsatz={selected?.analysisExcluded ? t("games.analysisExcludedTag") : undefined}
           notiz={selectedRecord?.note ?? selected?.note ?? ""}
+          // Geschrieben wird nur, wo die Partie auch bleibt · ohne Datenbank
+          // (Web-Vorschau, Demo-Partien) bleiben beide Felder Auskunft.
+          onStichwoerter={selected?.dbId != null ? saveTags : undefined}
+          onNotiz={selected?.dbId != null ? storeNote : undefined}
           von={rangeFrom}
           bis={rangeTo}
           blatt={safePage}
@@ -1232,7 +1249,10 @@ export default function Games({
                 }
               : undefined
           }
-          onAnalyse={() => selected?.dbId != null && openAnalysis(selected.dbId)}
+          onAnalyse={
+            selected?.dbId != null ? () => openAnalysis(selected.dbId!) : undefined
+          }
+          analysiert={selected?.analyzed}
           onOriginal={
             selected && selected.source !== "manual"
               ? () =>

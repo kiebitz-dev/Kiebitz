@@ -222,9 +222,13 @@ export default function StudyBlatt({
   const heute = aufgaben.length > 0 && (
     <div className="pt-4">
       <Rubrik>{t("blatt.today")}</Rubrik>
-      <div className={mobile ? "flex flex-col" : "flex gap-8"}>
+      {/* Drei Aufgaben nebeneinander brauchen Platz: Bei 1.000 Punkten
+          Fensterbreite blieben jeder gut 180, und davon gingen Kästchen, Zahl
+          und Weg schon 175 · von der Sache selbst stand dann ein Buchstabe da.
+          Sie umbrechen deshalb lieber in eine zweite Reihe. */}
+      <div className={mobile ? "flex flex-col" : "flex flex-wrap gap-x-8"}>
         {aufgaben.map((aufgabe) => (
-          <div key={aufgabe.sache} className="min-w-0 flex-1">
+          <div key={aufgabe.sache} className="min-w-[212px] flex-1">
             <ErledigenZeile
               zahl={aufgabe.zahl}
               zusatz={aufgabe.zusatz}

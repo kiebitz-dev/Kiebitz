@@ -103,6 +103,47 @@ function show(props: Partial<Parameters<typeof GamesBlatt>[0]> = {}) {
   return handlers;
 }
 
+/**
+ * Dasselbe Blatt, aber mit der Möglichkeit, die gewählte Partie zu wechseln ·
+ * dafür braucht es dieselben Pflichtangaben ein zweites Mal, und die stehen
+ * schon in `show`. Gebaut wird deshalb ein Blatt, das sich neu setzen lässt.
+ */
+function renderBlatt(props: Partial<Parameters<typeof GamesBlatt>[0]> = {}) {
+  const blatt = (gewaehlt: UiGame, notiz: string) => (
+    <GamesBlatt
+      mobile={false}
+      bestand={1523}
+      filter={[suchfeld]}
+      treffer={1}
+      zeilen={[{ game: gewaehlt, nummer: 1523 }]}
+      gewaehlt={gewaehlt}
+      fen={START}
+      unterschrift={{ nummer: "blatt.entryNo", zeilen: [] }}
+      angaben={[]}
+      stichwoerter={[]}
+      von={1}
+      bis={1}
+      blatt={1}
+      blaetter={1}
+      proBlatt={10}
+      minProBlatt={10}
+      maxProBlatt={100}
+      onZurueck={vi.fn()}
+      onWeiter={vi.fn()}
+      onWaehlen={vi.fn()}
+      onProBlatt={vi.fn()}
+      onBlattWaehlen={vi.fn()}
+      onNotiz={vi.fn()}
+      {...props}
+      notiz={notiz}
+    />
+  );
+  const view = render(blatt(partie(), props.notiz ?? ""));
+  return {
+    rerender: (gewaehlt: UiGame, notiz: string) => view.rerender(blatt(gewaehlt, notiz)),
+  };
+}
+
 /** Der Gegnername in der Zeile · in der Bildunterschrift steht er auch. */
 const gegnerInDerZeile = () =>
   screen
@@ -232,5 +273,91 @@ describe("Partienverzeichnis im Blatt", () => {
     fireEvent.change(feld, { target: { value: "37" } });
     fireEvent.keyDown(feld, { key: "Enter" });
     expect(onProBlatt).toHaveBeenCalledWith(37);
+  });
+
+  /**
+   * Sechs der acht Spalten einer Zeile führen ins Verzeichnis zurück · die
+   * laufende Nummer ist der Griff, der die Partie selbst aufschlägt. Ohne sie
+   * bliebe dafür nur der Rest zwischen den Spalten.
+   */
+  it("opens the entry from the running number", () => {
+    const handlers = show({ onFilter: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: "blatt.openEntry" }));
+    expect(handlers.onWaehlen).toHaveBeenCalled();
+  });
+
+  it("writes the keywords of the entry", () => {
+    const onStichwoerter = vi.fn();
+    show({ stichwoerter: ["Italienisch"], onStichwoerter });
+
+    // Anlegen · das Feld unter der Zeile nimmt das Wort auf.
+    const feld = screen.getByLabelText("blatt.addKeyword");
+    fireEvent.change(feld, { target: { value: "Miniatur" } });
+    fireEvent.keyDown(feld, { key: "Enter" });
+    expect(onStichwoerter).toHaveBeenLastCalledWith(["Italienisch", "Miniatur"]);
+
+    // Wegnehmen · ein Klick auf das Wort selbst. Es trägt seinen Namen
+    // sichtbar, der Griff heißt also wie das Stichwort und nicht wie die
+    // Handlung — genau wie die Pille in der gewöhnlichen Fassung.
+    fireEvent.click(screen.getByRole("button", { name: "Italienisch" }));
+    expect(onStichwoerter).toHaveBeenLastCalledWith([]);
+  });
+
+  it("keeps the entry readable where nothing can be written", () => {
+    show({ stichwoerter: ["Italienisch"], notiz: "Springergabel" });
+    expect(screen.queryByLabelText("blatt.addKeyword")).toBeNull();
+    expect(screen.queryByLabelText("blatt.remarks")).toBeNull();
+    expect(screen.getByText(/Springergabel/)).toBeTruthy();
+  });
+
+  /**
+   * Ein Formular auf Papier hat keinen Knopf „Sichern" · abgelegt wird beim
+   * Verlassen des Feldes. Was sich nicht geändert hat, wird dabei auch nicht
+   * abgelegt: Sonst schriebe jeder Blick in das Feld einen Datenbanksatz.
+   */
+  it("keeps the remark when the field is left", () => {
+    const onNotiz = vi.fn();
+    show({ notiz: "Springergabel", onNotiz });
+
+    const feld = screen.getByLabelText("blatt.remarks");
+    fireEvent.blur(feld);
+    expect(onNotiz).not.toHaveBeenCalled();
+
+    fireEvent.change(feld, { target: { value: "Springergabel nach d4" } });
+    fireEvent.blur(feld);
+    expect(onNotiz).toHaveBeenCalledWith("Springergabel nach d4");
+    expect(screen.getByText("blatt.saved")).toBeTruthy();
+  });
+
+  /**
+   * Ein Griff, der nichts tut, sieht aus wie ein Angebot und ist keins · ohne
+   * Datenbank steht hinter der Partie keine Analyse, also steht der Weg nicht
+   * da.
+   */
+  it("shows the way into the analysis only where there is one", () => {
+    const onAnalyse = vi.fn();
+    show({ onAnalyse, analysiert: true });
+    fireEvent.click(screen.getByRole("button", { name: /games.openAnalysis/ }));
+    expect(onAnalyse).toHaveBeenCalled();
+
+    cleanup();
+    show({ onAnalyse, analysiert: false });
+    expect(screen.getByRole("button", { name: /games.analyze/ })).toBeTruthy();
+
+    cleanup();
+    show({ onAnalyse: undefined });
+    expect(screen.queryByRole("button", { name: /games.openAnalysis/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /games.analyze/ })).toBeNull();
+  });
+
+  /**
+   * Die Bemerkung hängt an genau einer Partie · ein halb getippter Satz darf
+   * nicht in die nächste rutschen, wenn im Register weitergeblättert wird.
+   */
+  it("starts the remark field over for the next entry", () => {
+    const { rerender } = renderBlatt({ notiz: "Erste" });
+    expect((screen.getByLabelText("blatt.remarks") as HTMLTextAreaElement).value).toBe("Erste");
+    rerender(partie({ id: "g2", dbId: 8 }), "Zweite");
+    expect((screen.getByLabelText("blatt.remarks") as HTMLTextAreaElement).value).toBe("Zweite");
   });
 });

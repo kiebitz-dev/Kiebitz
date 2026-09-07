@@ -23,17 +23,20 @@
  * Rechts der Eintrag zur gewählten Partie: Schlussstellung als Diagramm — hier
  * wird gelesen, nicht gezogen, also ein Abdruck — darunter die Bildunterschrift
  * mit dem letzten Zug und dem Ausgang, die Angaben als Formularfelder, und
- * zuletzt die Stichwörter und die Notiz auf liniertem Grund.
+ * zuletzt die Stichwörter und die Bemerkung auf liniertem Grund.
  *
- * Geschrieben wird auf diesem Blatt nichts: Der Eintrag ist eine Seite zum
- * Lesen, und die Angaben sind Griffe zurück in die Liste — ein Klick auf
+ * Geschrieben wird im Eintrag, nicht in der Liste: Stichwörter und Bemerkung
+ * gehören zu genau einer Partie, und der Eintrag ist die Stelle, an der genau
+ * eine Partie steht. Das Register daneben bleibt lesbar — in seinen Zeilen
+ * steht nichts, was zur nächsten nicht passt. Was der Nutzer schreibt, geht
+ * beim Verlassen des Feldes in die Datenbank; ein Formular auf Papier hat
+ * keinen Knopf „Sichern", und die Zeile darüber sagt, dass es angekommen ist.
+ *
+ * Die Angaben darüber bleiben Griffe zurück in die Liste — ein Klick auf
  * Quelle, Datum, Gegner oder Eröffnung schränkt das Verzeichnis auf genau
- * diesen Wert ein. Der Tag-Editor bleibt in der gewöhnlichen Fassung. In der
- * Liste stehen Stichwörter und Notiz ohnehin nicht · dort ersetzen die zwei
- * Marken am Zeilenende die Tag-Spalte, und ein Register bleibt nur lesbar,
- * solange in seinen Zeilen nichts steht, was zur nächsten nicht passt.
+ * diesen Wert ein.
  */
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Download, SlidersHorizontal } from "lucide-react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { MarkenSchluessel, PartieZeile } from "../../components/blatt/PartieZeile";
@@ -48,6 +51,17 @@ import {
 import { useI18n } from "../../lib/i18n";
 import { deInt } from "../../lib/format";
 import type { GamesFilter, UiGame } from "../../lib/gameUi";
+
+/**
+ * Der linierte Grund der Bemerkung · 24 px Zeile, 1 px Linie.
+ *
+ * Er steht hier und nicht zweimal im Satz: Gelesen und geschrieben wird auf
+ * demselben Papier, und zwei Verläufe, die gleich aussehen sollen, laufen
+ * irgendwann auseinander. Die Farbe kommt aus dem Token.
+ */
+const LINIEN =
+  "repeating-linear-gradient(to bottom, transparent 0, transparent 24px," +
+  " var(--color-line) 24px, var(--color-line) 25px)";
 
 /**
  * Ein Filter als ausgefülltes Formularfeld.
@@ -118,13 +132,18 @@ export interface GamesBlattProps {
   angaben: { label: string; wert: ReactNode; onClick?: () => void }[];
   /**
    * Stichwörter der gewählten Partie · dieselben Tags wie in der Tabelle.
-   * Auf diesem Blatt stehen sie zum Lesen: Geschrieben werden sie in der
-   * gewöhnlichen Fassung, wo der Tag-Editor steht.
+   * Geschrieben werden sie hier, sobald `onStichwoerter` mitkommt; ohne die
+   * Rückmeldung bleibt die Zeile Auskunft — so in der Web-Vorschau, wo hinter
+   * der Partie keine Datenbank steht, die sie behalten könnte.
    */
   stichwoerter: string[];
   /** Wort, das die App selbst vergibt · steht mit wie ein eigenes. */
   stichwortVorsatz?: string;
+  /** Nimmt die geänderte Liste entgegen · fehlt sie, ist die Zeile nur zu lesen. */
+  onStichwoerter?: (woerter: string[]) => void;
   notiz: string;
+  /** Nimmt die geschriebene Bemerkung entgegen · dieselbe Bedingung. */
+  onNotiz?: (text: string) => void;
   von: number;
   bis: number;
   blatt: number;
@@ -139,7 +158,14 @@ export interface GamesBlattProps {
   onZurueck: () => void;
   onWeiter: () => void;
   onWaehlen: (game: UiGame) => void;
-  onAnalyse: () => void;
+  /**
+   * Der Weg in die Analyse · fehlt er, gibt es zu dieser Partie keine, weil
+   * sie nicht in der Datenbank steht. Ein Griff, der nichts tut, ist schlimmer
+   * als keiner: Er sieht aus wie ein Angebot und ist keins.
+   */
+  onAnalyse?: () => void;
+  /** Ist sie schon analysiert? Danach heißt der Weg „öffnen" statt „starten". */
+  analysiert?: boolean;
   onOriginal?: () => void;
   /** Import und Export · fehlt ohne Datenbank, also in der Web-Vorschau. */
   einfuhr?: Importbereich;
@@ -172,7 +198,9 @@ export default function GamesBlatt({
   angaben,
   stichwoerter,
   stichwortVorsatz,
+  onStichwoerter,
   notiz,
+  onNotiz,
   von,
   bis,
   blatt,
@@ -186,6 +214,7 @@ export default function GamesBlatt({
   onWeiter,
   onWaehlen,
   onAnalyse,
+  analysiert = false,
   onOriginal,
   einfuhr,
   filterOffen = false,
@@ -204,6 +233,29 @@ export default function GamesBlatt({
    */
   const [sprung, setSprung] = useState<string | null>(null);
   const [groesse, setGroesse] = useState<string | null>(null);
+
+  /**
+   * Die Bemerkung, solange sie im Feld steht, und die Auskunft, dass sie
+   * angekommen ist.
+   *
+   * Der Entwurf liegt in einem Ref und nicht im Zustand: Getippt wird Zeichen
+   * für Zeichen, zu sehen ist davon nichts, was die App setzen müsste — ein
+   * Zustand ließe das ganze Blatt bei jedem Buchstaben neu laufen. Beim
+   * Verlassen des Feldes wird er geleert; deshalb trägt er nie den halben Satz
+   * der einen Partie in die nächste.
+   */
+  const bemerkung = useRef<string | null>(null);
+  const [gesichert, setGesichert] = useState(false);
+
+  const sichereBemerkung = () => {
+    const text = bemerkung.current;
+    bemerkung.current = null;
+    // Nichts geschrieben oder nichts geändert · dann ist auch nichts zu melden.
+    if (!onNotiz || text === null || text === notiz) return;
+    onNotiz(text);
+    setGesichert(true);
+    window.setTimeout(() => setGesichert(false), 1500);
+  };
 
   const uebernehmeSprung = () => {
     const n = parseInt(sprung ?? "", 10);
@@ -325,8 +377,17 @@ export default function GamesBlatt({
       <span className="flex min-w-0 flex-1 items-center gap-[14px]">
         <span className="blatt-feld w-[76px] flex-none text-ink3">{t("games.colDate")}</span>
         <span className="w-2.5 flex-none" />
-        <span className="blatt-feld w-[168px] flex-none text-ink3">{t("games.colOpponent")}</span>
-        <span className="blatt-feld min-w-0 flex-1 text-ink3">{t("games.colOpening")}</span>
+        {/* Die Gegnerspalte ist die einzige feste, die nachgeben darf: Namen
+            sind ohnehin gekürzt, ein Datum oder eine Prozentzahl dagegen wäre
+            gekürzt nur noch falsch. Sie und die Eröffnung behalten dabei eine
+            Untergrenze — zwei Spalten, die auf null zusammengehen, sind keine
+            Spalten mehr. Der Kopf hält dieselben Maße wie die Zeile. */}
+        <span className="blatt-feld w-[168px] min-w-20 shrink truncate text-ink3">
+          {t("games.colOpponent")}
+        </span>
+        <span className="blatt-feld min-w-[72px] flex-1 truncate text-ink3">
+          {t("games.colOpening")}
+        </span>
         <span className="blatt-feld w-[34px] flex-none text-ink3">ECO</span>
         <span className="blatt-feld w-[18px] flex-none text-center text-ink3">
           {t("blatt.points")}
@@ -353,16 +414,37 @@ export default function GamesBlatt({
       {zeilen.map(({ game, nummer }) => {
         const aktiv = gewaehlt?.id === game.id;
         return (
-          <div key={game.id} className="relative flex items-center gap-[9px]">
+          <div key={game.id} className="group relative flex items-center gap-[9px]">
             {/* Die Marke des laufenden Eintrags steht am Bund, also vor der
                 Nummer und nicht zwischen Nummer und Datum · sie zeigt auf die
                 ganze Zeile, nicht auf eine ihrer Spalten. Mobil gibt es keine
-                Nummernspalte; dort setzt die Zeile sie selbst. */}
-            {!mobile && aktiv && (
-              <span aria-hidden className="absolute inset-y-1.5 -start-3.5 w-[3px] bg-ink" />
-            )}
+                Nummernspalte; dort setzt die Zeile sie selbst.
+
+                Beim Überfahren steht sie blass schon da. Das ist keine Zierde:
+                In dieser Zeile führen sechs Spalten ins Verzeichnis zurück und
+                nur der Rest zur Partie — ohne die Marke sähe man der Zeile
+                nicht an, dass sie überhaupt eine Partie aufschlägt. */}
             {!mobile && (
-              <span className="blatt-zahl w-8 flex-none text-[11px] text-ink3">{nummer ?? ""}</span>
+              <span
+                aria-hidden
+                className={`absolute inset-y-1.5 -start-3.5 w-[3px] ${
+                  aktiv ? "bg-ink" : "group-hover:bg-line2"
+                }`}
+              />
+            )}
+            {/* Die laufende Nummer ist der Griff auf die ganze Partie · im
+                Register schlägt man einen Eintrag über seine Nummer auf, und
+                sie ist die eine Spalte der Zeile, die nicht filtert. */}
+            {!mobile && (
+              <button
+                type="button"
+                onClick={() => onWaehlen(game)}
+                title={t("blatt.openEntry")}
+                aria-label={t("blatt.openEntry")}
+                className="blatt-zahl min-h-11 w-8 flex-none text-start text-[11px] text-ink3 hover:text-ink"
+              >
+                {nummer ?? ""}
+              </button>
             )}
             <span className="min-w-0 flex-1">
               <PartieZeile
@@ -508,9 +590,7 @@ export default function GamesBlatt({
 
   const eintrag = gewaehlt && (
     <div className="flex flex-col">
-      <Rubrik weg={t("games.openAnalysis")} onWeg={onAnalyse}>
-        {t("blatt.theEntry")}
-      </Rubrik>
+      <Rubrik>{t("blatt.theEntry")}</Rubrik>
       <div className="mt-3.5">
         <Diagramm fen={fen} size={mobile ? undefined : 262} gutter={13} />
         <Bildunterschrift
@@ -544,32 +624,70 @@ export default function GamesBlatt({
       </div>
       {/* Stichwörter und Bemerkung gehören zusammen: Beides schreibt der Nutzer
           selbst zu dieser einen Partie, und beides steht im Band unter dem
-          Diagramm und nicht in der Zeile darüber. */}
+          Diagramm und nicht in der Zeile darüber.
+
+          Beide Felder tragen die Kennung der Partie als Schlüssel: Sie halten
+          einen Entwurf, und ein halb getipptes Stichwort gehört zu der Partie,
+          bei der es getippt wurde, nicht zu der, die als Nächstes drankommt. */}
       <div className="mt-3.5">
-        <Feldname>{t("games.colTags")}</Feldname>
+        <Feldname>{t("blatt.keywords")}</Feldname>
         <Stichwortzeile
+          key={gewaehlt.id}
           woerter={stichwoerter}
           vorsatz={stichwortVorsatz}
-          leer={t("games.noTags")}
+          leer={t("blatt.noKeywords")}
+          platzhalter={t("blatt.addKeyword")}
+          entfernen={t("blatt.removeKeyword")}
+          onSchreiben={onStichwoerter}
         />
       </div>
       <div className="mt-3.5">
-        <Feldname>{t("games.notes")}</Feldname>
-        {/* Linierter Grund · das eine Feld auf dem Blatt, in das man schreibt.
-            Die Linien kommen aus dem Token, nicht aus einer Farbe. */}
-        <div
-          className="buch mt-1.5 pb-px text-[14px] leading-[1.85] text-ink2"
-          style={{
-            background:
-              "repeating-linear-gradient(to bottom, transparent 0, transparent 24px, var(--color-line) 24px, var(--color-line) 25px)",
-          }}
-        >
-          {notiz ? `„${notiz}“` : <span className="text-ink3">{t("blatt.noRemark")}</span>}
+        <div className="flex items-baseline justify-between gap-3">
+          <Feldname>{t("blatt.remarks")}</Feldname>
+          {/* Kein Knopf „Sichern" · ein Formular auf Papier hat keinen. Dass
+              das Geschriebene angekommen ist, sagt dieses Wort, und es steht
+              in der Zeile der Beschriftung statt als Meldung über der Seite. */}
+          {gesichert && <span className="blatt-feld text-accent">{t("blatt.saved")}</span>}
         </div>
+        {/* Linierter Grund · das eine Feld auf dem Blatt, in das man schreibt.
+            Die Zeilenhöhe ist genau der Abstand der Linien: Auf 1,85 gesetzt
+            liefe die Schrift gegen sie an, statt auf ihnen zu stehen. */}
+        {onNotiz ? (
+          <textarea
+            key={gewaehlt.id}
+            defaultValue={notiz}
+            onChange={(event) => {
+              bemerkung.current = event.target.value;
+            }}
+            onBlur={sichereBemerkung}
+            placeholder={t("blatt.writeRemark")}
+            aria-label={t("blatt.remarks")}
+            rows={4}
+            className="buch mt-1.5 block w-full resize-none border-0 bg-transparent p-0 text-[14px] text-ink2 placeholder:text-ink3 focus:outline-none"
+            style={{ lineHeight: "25px", background: LINIEN }}
+          />
+        ) : (
+          <div
+            className="buch mt-1.5 pb-px text-[14px] text-ink2"
+            style={{ lineHeight: "25px", background: LINIEN }}
+          >
+            {notiz ? `„${notiz}“` : <span className="text-ink3">{t("blatt.noRemark")}</span>}
+          </div>
+        )}
       </div>
-      {onOriginal && gewaehlt && (
-        <div className="mt-3 flex gap-[18px]">
-          <Weg onClick={onOriginal}>{t("blatt.originalAt", { p: gewaehlt.source })}</Weg>
+      {/* Die Wege aus dem Eintrag heraus · sie stehen unter dem, was man
+          geschrieben hat, und nicht oben in der Rubrik: Wer die Bemerkung
+          gerade abgelegt hat, ist mit der Hand hier unten. */}
+      {(onAnalyse || onOriginal) && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-[18px]">
+          {onAnalyse && (
+            <Weg onClick={onAnalyse}>
+              {analysiert ? t("games.openAnalysis") : t("games.analyze")}
+            </Weg>
+          )}
+          {onOriginal && (
+            <Weg onClick={onOriginal}>{t("blatt.originalAt", { p: gewaehlt.source })}</Weg>
+          )}
         </div>
       )}
     </div>
@@ -646,13 +764,23 @@ export default function GamesBlatt({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-9 pt-[22px]">
+      {/* Zwei Spalten sind eine aufgeschlagene Doppelseite, und die braucht
+          ihre Breite: Register und Eintrag zusammen wollen gut 1.200 Punkte.
+          Darunter — das Fenster darf bis auf 1.000 herunter — steht der
+          Eintrag unter dem Register statt neben ihm. Nebeneinander gezwungen
+          liefen die Spalten der Zeile in den Eintrag hinein, weil die festen
+          Breiten der Zahlenspalten nicht schmaler werden können; genau das war
+          zu sehen. Eine Seite, die nicht für eine Doppelseite reicht, wird
+          eine einfache. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-7 pt-[22px] min-[1220px]:flex-row min-[1220px]:gap-9">
         <div className="flex min-w-0 flex-1 flex-col">
           {liste}
           <div className="flex-1" />
           {blaettern}
         </div>
-        <div className="w-[304px] flex-none">{eintrag}</div>
+        <div className="w-full max-w-[304px] flex-none border-t border-line pt-4 min-[1220px]:w-[304px] min-[1220px]:border-t-0 min-[1220px]:pt-0">
+          {eintrag}
+        </div>
       </div>
     </div>
   );

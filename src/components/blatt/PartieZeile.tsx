@@ -176,12 +176,16 @@ export function PartieZeile({
       >
         <Farbfeld farbe={game.color} />
       </Angabe>
-      <Angabe onClick={filter?.onGegner} className="w-[168px] flex-none truncate text-ink">
+      {/* Gegner und Eröffnung geben nach, wenn das Fenster schmal wird · sie
+          tragen Namen, und ein Name verträgt die Kürzung. Die Zahlenspalten
+          daneben bleiben fest: Ein halbes Datum ist kein Datum. Beide behalten
+          eine Untergrenze, sonst schöbe sich die eine auf null. */}
+      <Angabe onClick={filter?.onGegner} className="w-[168px] min-w-20 shrink truncate text-ink">
         {game.opponent} <span className="blatt-zahl text-ink3">({game.oppElo})</span>
       </Angabe>
       <Angabe
         onClick={filter?.onEroeffnung}
-        className="buch min-w-0 flex-1 truncate text-[13.5px] italic text-ink2"
+        className="buch min-w-[72px] flex-1 truncate text-[13.5px] italic text-ink2"
       >
         {game.opening}
       </Angabe>

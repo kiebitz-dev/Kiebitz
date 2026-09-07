@@ -81,12 +81,17 @@ export function Formularkopf({ felder, spalten }: { felder: Feld[]; spalten?: st
       className="grid items-end"
       style={{ gridTemplateColumns: spalten ?? `repeat(${felder.length}, minmax(0, 1fr))` }}
     >
+      {/* `min-w-0` ist hier keine Feinheit, sondern das Ganze: Eine Rasterzelle
+          ist von Haus aus mindestens so breit wie ihr Inhalt. Ein langer
+          Eröffnungsname sprengt damit seine Spalte und schiebt sich über die
+          nächste — bei schmalem Fenster stand das Ergebnis im Namen. Erst mit
+          der Null greift das `truncate` darunter. */}
       {felder.map((feld, index) => (
         <div
           key={feld.label + index}
-          className={index ? "border-s border-line px-3" : "pe-3"}
+          className={`min-w-0 ${index ? "border-s border-line px-3" : "pe-3"}`}
         >
-          <div className="blatt-feld text-ink3">{feld.label}</div>
+          <div className="blatt-feld truncate text-ink3">{feld.label}</div>
           <div
             className={`mt-1.5 truncate border-b border-line2 pb-[5px] text-ink ${
               feld.gross ? "text-[14.5px]" : "text-[13px]"
@@ -199,10 +204,12 @@ export function ErledigenZeile({
         {zusatz != null && <span className="text-[13px] font-normal text-ink3">{zusatz}</span>}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] text-ink">{sache}</span>
+        <span className="block truncate text-[13.5px] text-ink">{sache}</span>
         <span className="block truncate text-[11.5px] text-ink3">{neben}</span>
       </span>
-      <span className="whitespace-nowrap text-[12.5px] text-accent">{weg} →</span>
+      {/* Der Weg gibt nicht nach · zusammengedrückt liefe er sonst in die
+          Sache links von ihm hinein, statt sie zu kürzen. */}
+      <span className="flex-none whitespace-nowrap text-[12.5px] text-accent">{weg} →</span>
     </button>
   );
 }
