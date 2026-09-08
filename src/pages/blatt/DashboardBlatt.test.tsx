@@ -7,7 +7,7 @@
  * führen.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import DashboardBlatt, { type Tagesquelle } from "./DashboardBlatt";
 import type { UiGame } from "../../lib/gameUi";
 
@@ -204,6 +204,23 @@ describe("Blatt des Starts", () => {
     // Sein Name steht auch im Formularkopf; gemeint ist der in der Liste.
     fireEvent.click(gegnerInDerListe());
     expect(onFilter).toHaveBeenLastCalledWith({ opponent: "DragonSlayer_88" });
+  });
+
+  /**
+   * Der Griff ist der Text, nicht die Spalte: Die Eröffnung nimmt den ganzen
+   * Rest der Zeile, und ein Klick weit rechts neben ihrem Namen soll die
+   * Analyse aufschlagen und nicht das Verzeichnis filtern.
+   */
+  it("leaves the empty part of a column to the row", () => {
+    const onFilter = vi.fn();
+    const handlers = show({ onFilter });
+    const zeile = screen.getByText(/91[.,]2/).closest("[role=button]")!;
+    const spalte = within(zeile as HTMLElement).getByText("Italienische Partie")
+      .parentElement!;
+    expect(spalte.tagName).toBe("SPAN");
+    fireEvent.click(spalte);
+    expect(onFilter).not.toHaveBeenCalled();
+    expect(handlers.onPartie).toHaveBeenCalled();
   });
 
   it("keeps the row a plain button on the phone, where there are no columns", () => {

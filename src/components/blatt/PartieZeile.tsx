@@ -65,6 +65,13 @@ export interface PartieZeileProps {
  *
  * Ohne `onClick` steht sie als Text da · so trägt dieselbe Zeile beide Fälle,
  * ohne dass der Satz sich unterscheidet.
+ *
+ * Der Griff ist der *Text*, nicht die Spalte. Eine Spalte ist breiter als das,
+ * was in ihr steht — die Eröffnung nimmt sogar den ganzen Rest der Zeile —,
+ * und lag der Griff auf der Spalte, dann filterte ein Klick weit rechts neben
+ * „Caro-Kann" das Verzeichnis, statt die Partie aufzuschlagen. Die Spalte hält
+ * deshalb nur noch das Maß; die Schaltfläche darin geht auf die Breite ihrer
+ * Schrift zusammen und lässt den Rest der Zeile.
  */
 function Angabe({
   onClick,
@@ -85,21 +92,41 @@ function Angabe({
   children: ReactNode;
 }) {
   if (!onClick) return <span className={className}>{children}</span>;
+  // Der Griff gilt der Spalte, nicht der Zeile · sonst öffnete er zugleich die
+  // Partie.
+  const fassen = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    onClick();
+  };
+  // Kästchen und Punkt tragen keine Schrift, auf die etwas zusammengehen
+  // könnte: Sie sind zehn bzw. achtzehn Bildpunkte breit und wären als
+  // schrumpfende Fläche gar nicht mehr zu treffen. Dort bleibt die Spalte der
+  // Griff — leer ist an ihr ohnehin nichts.
+  if (stumm) {
+    return (
+      <button
+        type="button"
+        title={beschriftung}
+        aria-label={beschriftung}
+        onClick={fassen}
+        className={`${className} text-start hover:opacity-60`}
+      >
+        {children}
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      title={beschriftung}
-      aria-label={beschriftung}
-      onClick={(event) => {
-        // Der Griff gilt der Spalte, nicht der Zeile · sonst öffnete er
-        // zugleich die Partie.
-        event.stopPropagation();
-        onClick();
-      }}
-      className={`${className} text-start ${stumm ? "hover:opacity-60" : "hover:text-accent"}`}
-    >
-      {children}
-    </button>
+    <span className={className}>
+      <button
+        type="button"
+        title={beschriftung}
+        aria-label={beschriftung}
+        onClick={fassen}
+        className="max-w-full truncate text-start hover:text-accent"
+      >
+        {children}
+      </button>
+    </span>
   );
 }
 

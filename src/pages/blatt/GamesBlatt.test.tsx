@@ -178,6 +178,21 @@ describe("Partienverzeichnis im Blatt", () => {
   });
 
   /**
+   * Der Griff ist der Text, nicht die Spalte: Die Eröffnung nimmt den ganzen
+   * Rest der Zeile, und ein Klick weit rechts neben ihrem Namen soll die
+   * Partie aufschlagen und nicht das Verzeichnis filtern.
+   */
+  it("leaves the empty part of a column to the row", () => {
+    const onFilter = vi.fn();
+    const handlers = show({ onFilter });
+    const spalte = screen.getByText("Italienische Partie").parentElement!;
+    expect(spalte.tagName).toBe("SPAN");
+    fireEvent.click(spalte);
+    expect(onFilter).not.toHaveBeenCalled();
+    expect(handlers.onWaehlen).toHaveBeenCalled();
+  });
+
+  /**
    * Die Beschriftung der Genauigkeit ist kürzer als ihre Zahlen · sie steht
    * deshalb linksbündig eingerückt und nicht rechtsbündig, sonst begänne sie
    * rechts vom ersten Zeichen der Prozentzahlen.
