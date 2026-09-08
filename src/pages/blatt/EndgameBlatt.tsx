@@ -87,8 +87,12 @@ export default function EndgameBlatt({
 }: EndgameBlattProps) {
   const { t } = useI18n();
 
+  // Das Brett ist so groß wie in der gewöhnlichen Fassung · `--board-edge`
+  // ist dasselbe Maß, das dort die Spalte deckelt. Ein eigenes, kleineres
+  // Maß hätte den Modus zu einer Ansicht gemacht, in der man schlechter
+  // sieht.
   const brettSpalte = (
-    <div className={mobile ? "flex flex-col" : "flex w-[452px] flex-none flex-col"}>
+    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
       <div className="flex items-center gap-[9px] pb-[9px]">
         <Farbfeld farbe={oben.farbe} kante={11} />
         <span className="truncate text-[14px] text-ink">{oben.name}</span>

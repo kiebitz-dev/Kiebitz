@@ -55,4 +55,23 @@ describe("Schlagliste", () => {
     const { container } = render(<CapturedPieces pieces={[]} color="white" advantage={0} />);
     expect(container.firstChild).toBeNull();
   });
+
+  /**
+   * Im Diagramm-Modus bleibt der Streifen \u2014 die Figuren brauchen ihr helles
+   * Feld \u2014, aber er wird eckig, und der Vorsprung steht in den Ziffern des
+   * Formulars. Auf einem Bogen ist nichts abgerundet.
+   */
+  it("setzt denselben Streifen im Blatt eckig", () => {
+    const { container, rerender } = render(
+      <CapturedPieces pieces={["p", "n"]} color="black" advantage={3} />
+    );
+    const streifen = () => container.querySelector("[data-captured] > span")!;
+    expect(streifen().className).toContain("rounded-");
+    expect(screen.getByText("+3").className).toContain("tabular-nums");
+
+    rerender(<CapturedPieces blatt pieces={["p", "n"]} color="black" advantage={3} />);
+    expect(streifen().className).toContain("bg-board-light");
+    expect(streifen().className).not.toContain("rounded-");
+    expect(screen.getByText("+3").className).toContain("blatt-zahl");
+  });
 });

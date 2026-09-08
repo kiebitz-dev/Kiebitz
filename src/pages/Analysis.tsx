@@ -97,6 +97,7 @@ import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
 import { LeereSeite } from "../components/blatt/LeereSeite";
+import { Laufzettel } from "../components/blatt/Laufzettel";
 const AnalysisBlatt = lazy(() => import("./blatt/AnalysisBlatt"));
 
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
@@ -1157,6 +1158,14 @@ export default function Analysis({
   const liveArrows: [string, string, string?][] = liveBestUci
     ? [[liveBestUci.slice(0, 2), liveBestUci.slice(2, 4), "rgba(34,192,138,0.78)"]]
     : [];
+  /**
+   * Eine Stellung der Partie anspringen · aus dem Zugtext, den Tasten unter
+   * dem Brett oder der Bewertungskurve.
+   *
+   * Der einzige Weg zu einem Halbzug; `setPly` allein bliebe hinter einer
+   * offenen Variante stehen und zeigte ein Brett, das nicht zum angeklickten
+   * Zug gehört.
+   */
   const goToPly = (next: number) => {
     setVariation(null);
     setScratchSelected(null);
@@ -1274,6 +1283,25 @@ export default function Analysis({
           />
         )}
       </div>
+    );
+  };
+
+  /**
+   * Die Schlagliste einer Brettseite im Satz des Blattes.
+   *
+   * Dieselbe Rechnung wie in `playerLine` und derselbe Baustein · das Blatt
+   * setzt ihn nur eckig und mit den Ziffern des Formulars. Ein zweiter Weg,
+   * geschlagene Figuren zu zählen, wäre der Anfang zweier Wahrheiten.
+   */
+  const blattGeschlagen = (top: boolean) => {
+    const white = top ? topIsWhite : !topIsWhite;
+    return (
+      <CapturedPieces
+        blatt
+        pieces={white ? captured.white : captured.black}
+        color={white ? "black" : "white"}
+        advantage={white ? captured.diff : -captured.diff}
+      />
     );
   };
 
@@ -1747,7 +1775,25 @@ export default function Analysis({
         </Button>
       </div>
 
-      {running ? (
+      {running && diagramMode ? (
+        /* Auf dem Bogen ist der Stand eines Laufs ein Zettel und keine Pille ·
+           siehe components/blatt/Laufzettel.tsx. Er nimmt die ganze Breite
+           unter der Partiewahl, weil er zwei Zeilen führt statt einer. */
+        <Laufzettel
+          stand={
+            progress
+              ? {
+                  partie: progress.game_index,
+                  partienGesamt: progress.games_total,
+                  opponent: progress.opponent,
+                  halbzug: progress.ply,
+                  halbzuege: progress.plies,
+                }
+              : null
+          }
+          onStopp={() => cancelAnalysis()}
+        />
+      ) : running ? (
         <>
           {/* Der Stand des Laufs · auf Telefonbreite eine eigene Zeile,
               in der Text und Balken übereinander stehen. Nebeneinander
@@ -1931,11 +1977,17 @@ export default function Analysis({
                   : "0 : 1"
               : "—"
           }
-          oben={{ name: topPlayer.name, elo: topPlayer.elo, farbe: topIsWhite ? "white" : "black" }}
+          oben={{
+            name: topPlayer.name,
+            elo: topPlayer.elo,
+            farbe: topIsWhite ? "white" : "black",
+            geschlagen: blattGeschlagen(true),
+          }}
           unten={{
             name: bottomPlayer.name,
             elo: bottomPlayer.elo,
             farbe: topIsWhite ? "black" : "white",
+            geschlagen: blattGeschlagen(false),
           }}
           brett={boardRow("blatt")}
           zuege={viewMoves.map((move, index) => ({
@@ -1945,7 +1997,7 @@ export default function Analysis({
             kommentar: blattKommentar(index),
           }))}
           ply={ply}
-          onPly={setPly}
+          onPly={goToPly}
           kurve={evalSeries.map((point) => point.eval)}
           bewertung={shownEval / 100}
           bilanz={(["brilliant", "great", "excellent", "inaccuracy", "mistake", "blunder"] as const)

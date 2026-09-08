@@ -49,12 +49,19 @@ export default function CapturedPieces({
   /** Materialvorsprung dieser Seite; nur ein echter Vorsprung wird gezeigt. */
   advantage,
   label,
+  blatt = false,
 }: {
   pieces: PieceKind[];
   color: "white" | "black";
   advantage: number;
   /** Vorgelesener Text, z. B. „Materialvorsprung 2". */
   label?: string;
+  /**
+   * Satz im Diagramm-Modus · derselbe Streifen, nur eckig und mit den Ziffern
+   * des Formulars. Auf einem Bogen ist nichts abgerundet, und der Vorsprung
+   * ist eine Zahl in einer Spalte wie jede andere.
+   */
+  blatt?: boolean;
 }) {
   const glyphs = usePieceGlyphs();
   if (pieces.length === 0 && advantage <= 0) return null;
@@ -72,7 +79,7 @@ export default function CapturedPieces({
       <span
         className={
           pieces.length > 0
-            ? "flex items-center rounded-[3px] bg-board-light px-[3px] py-px"
+            ? `flex items-center bg-board-light px-[3px] py-px ${blatt ? "" : "rounded-[3px]"}`
             : "flex items-center"
         }
       >
@@ -83,7 +90,13 @@ export default function CapturedPieces({
         ))}
       </span>
       {advantage > 0 && (
-        <span className="ml-0.5 text-[11px] font-medium tabular-nums text-ink3">+{advantage}</span>
+        <span
+          className={`ml-0.5 text-[11px] text-ink3 ${
+            blatt ? "blatt-zahl" : "font-medium tabular-nums"
+          }`}
+        >
+          +{advantage}
+        </span>
       )}
     </div>
   );

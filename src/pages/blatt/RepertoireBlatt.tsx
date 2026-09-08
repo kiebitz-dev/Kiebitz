@@ -118,9 +118,13 @@ export default function RepertoireBlatt({
     </div>
   );
 
+  // Der Abdruck ist so groß wie ein Brett in der gewöhnlichen Fassung ·
+  // `--board-edge` ist dasselbe Maß, das dort die Spalte deckelt. Ohne `size`
+  // nimmt das Diagramm die Breite, die es bekommt, und bleibt quadratisch;
+  // die Hülle gibt sie vor, und die Bildunterschrift folgt ihr.
   const diagrammBlock = (
-    <div className="flex-none">
-      <Diagramm fen={fen} size={mobile ? undefined : 360} orientation={amZug === "black" ? "white" : "white"} />
+    <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
+      <Diagramm fen={fen} orientation={amZug === "black" ? "white" : "white"} />
       <Bildunterschrift
         nummer={unterschrift[0]}
         zeilen={unterschrift.slice(1)}
@@ -128,7 +132,6 @@ export default function RepertoireBlatt({
           farbe: amZug,
           text: amZug === "white" ? t("sh.whiteToMove") : t("sh.blackToMove"),
         }}
-        breite={mobile ? undefined : 360}
       />
     </div>
   );
