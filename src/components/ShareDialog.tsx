@@ -17,6 +17,7 @@
  * wie hinter `hideTheme` im Trainer.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   ClipboardCopy,
@@ -28,6 +29,7 @@ import {
   Share2,
   X,
 } from "lucide-react";
+import { useBackDismiss } from "../lib/backDismiss";
 import { useBackendInfo } from "../lib/backend";
 import { errorMessage } from "../lib/errors";
 import { useI18n, type Key } from "../lib/i18n";
@@ -226,6 +228,12 @@ export default function ShareDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject, orientation, revealed, evaluation, settledHeading, locale, t]);
 
+  // Auf Android gibt es kein Escape · dort schließt die Zurück-Taste. Der
+  // Dialog meldet sich dafür als Schicht an, wie der Fokus und der Wochenbrief
+  // (siehe lib/backDismiss.ts). Ohne die Anmeldung blieb er nach einem Tipp auf
+  // Zurück über der Seite stehen, während der Fokus unter ihm wegging.
+  useBackDismiss(onClose);
+
   // Escape schließt · derselbe Griff wie in den übrigen Dialogen der App.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -272,9 +280,20 @@ export default function ShareDialog({
     </label>
   );
 
-  return (
+  // Am Dokument und nicht in der Seite · und über dem Fokus-Brett.
+  //
+  // „Teilen" steht auf jeder Brettseite auch in der Fokusleiste, und der Fokus
+  // hängt selbst am `document.body` (siehe components/FocusBoard.tsx). Blieb
+  // der Dialog im Baum der Seite, lag er unter dem Fokus: Er war da, er hörte
+  // auf Escape · zu sehen war er nicht. Aus dem Fokus heraus ließ sich das
+  // Bild deshalb gar nicht teilen.
+  //
+  // Die Stufe darüber löst es. 55 liegt über dem Fokus (50) und unter der
+  // Führung (60): Der Rundgang erklärt die Seite und muss auch einen offenen
+  // Dialog überdecken dürfen.
+  const dialog = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-dialog-title"
@@ -439,4 +458,6 @@ export default function ShareDialog({
       </div>
     </div>
   );
+
+  return typeof document === "undefined" ? dialog : createPortal(dialog, document.body);
 }

@@ -644,8 +644,19 @@ export default function GamesBlatt({
   const eintrag = gewaehlt && (
     <div className="flex flex-col">
       {!mobile && <Rubrik>{t("blatt.theEntry")}</Rubrik>}
+      {/* Aus der Sicht dessen, der gespielt hat · nicht aus der von Weiß.
+          Ein Diagramm ist ein Abdruck, aber es ist der Abdruck *seiner*
+          Partie: Wer mit Schwarz gespielt hat, hat die Stellung von unten
+          gesehen, und genau so soll er sie wiederfinden. Die gewöhnliche
+          Fassung dreht das Brett längst so (siehe `orientation` in
+          pages/Games.tsx) — hier stand bis eben immer Weiß unten. */}
       <div className={mobile ? "" : "mt-3.5"}>
-        <Diagramm fen={fen} size={mobile ? undefined : 262} gutter={13} />
+        <Diagramm
+          fen={fen}
+          orientation={gewaehlt.color}
+          size={mobile ? undefined : 262}
+          gutter={13}
+        />
         <Bildunterschrift
           nummer={unterschrift.nummer}
           zeilen={unterschrift.zeilen}

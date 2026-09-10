@@ -363,36 +363,52 @@ export function Stichwortzeile({
     setEntwurf("");
   };
 
+  // Solange nichts dasteht und geschrieben werden darf, ist das Feld die Zeile.
+  //
+  // „Noch keine Stichwörter" auf einer Linie und darunter „Stichwort
+  // eintragen …" auf der nächsten: Das waren zwei Zeilen für eine Sache, und
+  // die obere sagte nur, dass die untere noch nichts gebracht hat. Schlimmer,
+  // sie sah aus wie die Auskunft, die sie war — wer sie antippte, tippte ins
+  // Leere und suchte danach nicht weiter.
+  //
+  // Ohne Wörter bleibt deshalb nur das Feld stehen, und es steht da, wo vorher
+  // der Satz stand. Die Auskunft behält, wer nichts schreiben darf: Ohne
+  // Datenbank nimmt die Partie keine Stichwörter an, und dann ist die leere
+  // Zeile die ganze Wahrheit.
+  const zeile = Boolean(vorsatz) || woerter.length > 0 || !onSchreiben;
+
   return (
     <div>
-      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 border-b border-line pb-[5px] text-[12.5px]">
-        {vorsatz && <span className="text-ink2">{vorsatz}</span>}
-        {woerter.length === 0 && !vorsatz && (
-          <span className="text-ink3">{leer}</span>
-        )}
-        {woerter.map((wort) =>
-          onSchreiben ? (
-            <button
-              key={wort}
-              type="button"
-              onClick={() =>
-                onSchreiben(woerter.filter((value) => value !== wort))
-              }
-              title={entfernen}
-              className="py-0.5 text-ink hover:text-accent"
-            >
-              {wort}
-              <span aria-hidden className="text-ink3">
-                {" ×"}
+      {zeile && (
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 border-b border-line pb-[5px] text-[12.5px]">
+          {vorsatz && <span className="text-ink2">{vorsatz}</span>}
+          {woerter.length === 0 && !vorsatz && (
+            <span className="text-ink3">{leer}</span>
+          )}
+          {woerter.map((wort) =>
+            onSchreiben ? (
+              <button
+                key={wort}
+                type="button"
+                onClick={() =>
+                  onSchreiben(woerter.filter((value) => value !== wort))
+                }
+                title={entfernen}
+                className="py-0.5 text-ink hover:text-accent"
+              >
+                {wort}
+                <span aria-hidden className="text-ink3">
+                  {" ×"}
+                </span>
+              </button>
+            ) : (
+              <span key={wort} className="py-0.5 text-ink">
+                {wort}
               </span>
-            </button>
-          ) : (
-            <span key={wort} className="py-0.5 text-ink">
-              {wort}
-            </span>
-          ),
-        )}
-      </div>
+            ),
+          )}
+        </div>
+      )}
       {onSchreiben && (
         <input
           value={entwurf}

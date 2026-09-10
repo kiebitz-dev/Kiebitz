@@ -318,11 +318,47 @@ describe("Partienverzeichnis im Blatt", () => {
     expect(onStichwoerter).toHaveBeenLastCalledWith([]);
   });
 
+  /**
+   * Ohne Stichwörter stand die Auskunft „noch keine" auf der einen Linie und
+   * das Feld auf der nächsten · zwei Zeilen für eine Sache, und die obere sah
+   * aus wie die Stelle, an der man schreibt. Jetzt steht dort das Feld.
+   */
+  it("puts the keyword field where the empty notice stood", () => {
+    const onStichwoerter = vi.fn();
+    show({ stichwoerter: [], onStichwoerter });
+
+    expect(screen.queryByText("blatt.noKeywords")).toBeNull();
+    const feld = screen.getByLabelText("blatt.addKeyword");
+    fireEvent.change(feld, { target: { value: "Miniatur" } });
+    fireEvent.keyDown(feld, { key: "Enter" });
+    expect(onStichwoerter).toHaveBeenLastCalledWith(["Miniatur"]);
+  });
+
   it("keeps the entry readable where nothing can be written", () => {
     show({ stichwoerter: ["Italienisch"], notiz: "Springergabel" });
     expect(screen.queryByLabelText("blatt.addKeyword")).toBeNull();
     expect(screen.queryByLabelText("blatt.remarks")).toBeNull();
     expect(screen.getByText(/Springergabel/)).toBeTruthy();
+  });
+
+  /** Ohne Datenbank bleibt die Zeile Auskunft · dann sagt sie, dass nichts da ist. */
+  it("says so where keywords cannot be written", () => {
+    show({ stichwoerter: [] });
+    expect(screen.getByText("blatt.noKeywords")).toBeTruthy();
+  });
+
+  /**
+   * Das Diagramm steht aus der Sicht dessen, der gespielt hat · wie das Brett
+   * der gewöhnlichen Fassung. Bei Schwarz beginnt die Reihe der Felder
+   * deshalb bei h1 und nicht bei a8.
+   */
+  it("turns the diagram to the side that was played", () => {
+    show({ gewaehlt: partie({ color: "white" }) });
+    expect(document.querySelectorAll("[data-square]")[0].getAttribute("data-square")).toBe("a8");
+    cleanup();
+
+    show({ gewaehlt: partie({ color: "black" }) });
+    expect(document.querySelectorAll("[data-square]")[0].getAttribute("data-square")).toBe("h1");
   });
 
   /**

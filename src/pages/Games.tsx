@@ -1015,6 +1015,37 @@ export default function Games({
       : letzterZug
         ? t("blatt.captionAfter", { m: letzterZug, end: ausgang })
         : ausgang;
+    // Die Titelzeile der Bildunterschrift · Weiß vor Schwarz.
+    //
+    // So benennt jedes Turnierbuch eine Partie, und zwar unabhängig davon, wen
+    // man selbst gespielt hat: Der Gedankenstrich trennt die Farben, nicht die
+    // Personen. Hier stand bis eben immer der eigene Name vorn — bei einer
+    // Partie mit Schwarz las sich die Zeile deshalb gegen ihre eigene
+    // Beizeile („Weiß gewinnt") und gegen das Diagramm darüber, das jetzt aus
+    // der eigenen Sicht steht.
+    //
+    // Der Name des Gegners bleibt in beiden Reihenfolgen der Griff, der das
+    // Verzeichnis auf ihn einschränkt.
+    const gegnerGriff = selected && (
+      <button
+        type="button"
+        onClick={() => setOpponent(selected.opponent)}
+        className="hover:text-accent"
+      >
+        {selected.opponent}
+      </button>
+    );
+    const titelzeile = !selected ? (
+      ""
+    ) : selected.color === "white" ? (
+      <>
+        {ownName} – {gegnerGriff}
+      </>
+    ) : (
+      <>
+        {gegnerGriff} – {ownName}
+      </>
+    );
     // Die laufende Nummer der gewählten Partie im Bestand.
     const gewaehltNummer =
       selected != null && databaseLoaded
@@ -1146,23 +1177,7 @@ export default function Games({
               gewaehltNummer != null
                 ? `${t("blatt.entryNo", { n: String(gewaehltNummer) })} · ${t("blatt.finalPosition")}`
                 : t("blatt.finalPosition"),
-            zeilen: [
-              selected ? (
-                <>
-                  {ownName} –{" "}
-                  <button
-                    type="button"
-                    onClick={() => setOpponent(selected.opponent)}
-                    className="hover:text-accent"
-                  >
-                    {selected.opponent}
-                  </button>
-                </>
-              ) : (
-                ""
-              ),
-              beizeile,
-            ],
+            zeilen: [titelzeile, beizeile],
           }}
           angaben={
             selected

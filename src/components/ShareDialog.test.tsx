@@ -173,4 +173,19 @@ describe("ShareDialog", () => {
     expect(copiedPayload()?.title).toBe("Hier hänge ich fest");
     expect(copied[0]).toContain("Hier hänge ich fest");
   });
+
+  /**
+   * Der Griff „Teilen" steht auf jeder Brettseite auch in der Fokusleiste, und
+   * der Fokus hängt am `document.body` (siehe components/FocusBoard.tsx).
+   * Blieb der Dialog im Baum der Seite, lag er unter dem Fokus — aus dem Fokus
+   * heraus ließ sich deshalb gar nichts teilen. Er hängt jetzt selbst am
+   * Dokument und eine Stufe höher.
+   */
+  it("hangs on the document above the focus board", () => {
+    const { container } = render(<ShareDialog subject={PUZZLE} onClose={() => {}} />);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    const dialog = document.body.querySelector(':scope > [role="dialog"]');
+    expect(dialog).toBeTruthy();
+    expect(dialog?.className).toContain("z-[55]");
+  });
 });

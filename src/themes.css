@@ -445,22 +445,27 @@
   --color-board-dark: #4a6da7;
 }
 
-/* ── Das Brett des Blattes · Papier ──────────────────────────────────────────
-   Im Diagramm-Modus ist die ganze Seite ein Druckbogen, und „Papier" ist das
-   Thema, das ihn beim Wort nimmt: cremefarbener Grund, Haarlinien, Serife. Das
-   Brett des Themas kommt dort aus einer anderen Welt — gesättigtes Braun auf
-   Sandgelb, wie es auf einer Karte richtig ist und auf einem Bogen ein
-   aufgeklebtes Bild bleibt. Es steht unter Analyse, Puzzles und Endspielen.
+/* ── Das Brett des Blattes ───────────────────────────────────────────────────
+   Im Diagramm-Modus ist die ganze Seite ein Druckbogen, und darauf gibt es nur
+   eine Brettfarbe: die des Abdrucks. Das Diagramm auf dem Start und im
+   Repertoire steht längst in ihr (`*-muted`, siehe
+   components/blatt/Diagramm.tsx); die spielbaren Bretter unter Analyse,
+   Puzzles und Endspielen standen daneben in der Brettfarbe des Themas und
+   blieben dort ein aufgeklebtes Bild — auf dem Papierbogen ein gesättigtes
+   Braun auf Sandgelb.
 
-   Die beiden Werte setzen das *spielbare* Brett deshalb in die Töne, in denen
-   die Seite gesetzt ist: das helle Feld das Papier selbst, das dunkle ein
-   warmes Grau aus der Reihe zwischen `--color-line2` und `--color-ink3`.
+   Zuletzt war das eigens für „Papier" gedämpft, und es blieb zu warm: Zwei
+   Bretter auf derselben Seite, die fast gleich aussehen, sehen nicht nach
+   Absicht aus, sondern nach einem Versehen. Jetzt nimmt das spielbare Brett
+   genau die Töne des Abdrucks. Der Unterschied zwischen Lesen und Spielen
+   steht ohnehin überall sonst: Am einen zieht man, am anderen nicht, und auf
+   einem Bogen unterscheiden sich Diagramm und Partieformular auch nicht durch
+   die Farbe.
 
-   Der Unterschied zwischen Lesen und Spielen bleibt (siehe
-   `components/blatt/Diagramm.tsx`): Der Abdruck (`*-muted`) steht flacher und
-   kühler, das Brett zum Ziehen heller im Feld und dunkler in der Gegenfarbe.
-   Er wird leiser, nicht aufgehoben — auf einem Bogen unterscheiden sich
-   Diagramm und Partieformular auch nicht durch die Farbe.
+   Kein Farbwert steht hier · die Werte kommen aus dem Thema, das gerade gilt.
+   Deshalb gilt die Regel für jedes Thema und nicht nur für „Papier": Wer den
+   Modus in Wald oder Graphit benutzt, sieht dieselbe Seite, nur in den Tönen
+   seines Themas.
 
    Nur ohne ausdrückliche Brettwahl (`:not([data-board])`, also „Zum Thema") ·
    wer Wald, Sepia oder Eis gewählt hat, hat das Brett gewählt, und ein Modus
@@ -468,10 +473,10 @@
    gewöhnlichen Fassung steht das Brett auf einer Karte und darf Farbe haben.
 
    Die zweite Zeile gilt den Vorschaukästchen der Einstellungen: Sie stellen
-   sich mit einem eigenen `data-theme` in das Thema, das sie zeigen, und hätten
-   sonst ein braunes Brett neben dem papierenen der Seite. */
-html[data-theme="paper"][data-diagram="on"]:not([data-board]),
-html[data-diagram="on"] [data-theme="paper"]:not([data-board]) {
-  --color-board-light: #efe8d6;
-  --color-board-dark: #8a8270;
+   sich mit einem eigenen `data-theme` in das Thema, das sie zeigen, und
+   zeigten sonst ein Brett, das die Seite so gar nicht mehr hat. */
+html[data-diagram="on"]:not([data-board]),
+html[data-diagram="on"]:not([data-board]) [data-theme] {
+  --color-board-light: var(--color-board-light-muted);
+  --color-board-dark: var(--color-board-dark-muted);
 }
