@@ -1,4 +1,4 @@
-Stockfish 18
+Stockfish 19
 ============
 
 Kiebitz includes Stockfish, a free UCI chess engine developed by the Stockfish
@@ -13,9 +13,9 @@ of Stockfish is linked into the Kiebitz binary.
 Exact corresponding source
 --------------------------
 
-Release: Stockfish 18 (tag sf_18)
-Commit:  cb3d4ee9b47d0c5aae855b12379378ea1439675c
-Source:  https://github.com/official-stockfish/Stockfish/tree/cb3d4ee9b47d0c5aae855b12379378ea1439675c
+Release: Stockfish 19 (tag sf_19)
+Commit:  edb0d9db6731067ec50ce619ff372b463bc4dd5d
+Source:  https://github.com/official-stockfish/Stockfish/tree/edb0d9db6731067ec50ce619ff372b463bc4dd5d
 
 The source tree contains the build instructions, Makefile, authorship
 information, and NNUE network information needed for the official binaries.
@@ -26,11 +26,11 @@ Written offer for the corresponding source (GPL-3.0, section 6)
 The complete corresponding source code of the bundled Stockfish version is
 distributed alongside every Kiebitz release, at no charge, as the release asset
 
-  stockfish-18-source-cb3d4ee9b47d.tar.gz
+  stockfish-19-source-edb0d9db6731.tar.gz
 
 Permanent download link (always resolves to the current Kiebitz release):
 
-  https://github.com/kiebitz-dev/Kiebitz/releases/latest/download/stockfish-18-source-cb3d4ee9b47d.tar.gz
+  https://github.com/kiebitz-dev/Kiebitz/releases/latest/download/stockfish-19-source-edb0d9db6731.tar.gz
 
 The archive is generated directly from the Git commit named above, so its
 contents are verifiable against that commit.
@@ -52,12 +52,12 @@ Binary provenance
 The Android arm64 engine is compiled without source modifications from the
 exact commit above. Kiebitz uses Android NDK 28.2.13676358, the generic armv8
 target, and 16-KB ELF LOAD alignment. The reproducible build commands and
-checksum verification for both NNUE networks are in
+the checksum verification of the NNUE networks are in
 scripts/build-stockfish-android.ps1 and .github/workflows/release.yml.
 
-The Windows x86-64 AVX2 engine is taken from the unmodified official release
-archive. Kiebitz verifies this SHA-256 hash before packaging and aborts on a
-mismatch:
+The Windows x86-64 engine is taken from the unmodified official release
+archive named in the link below. Kiebitz verifies this SHA-256 hash before
+packaging and aborts on a mismatch:
 
-https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-windows-x86-64-avx2.zip
-SHA-256: 6f6c272ebd6ea594377715235c8a7326f75940ef4f4f856f45106028fe6ae900
+https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-windows-x86-64-universal.zip
+SHA-256: 3c8bf1f9ea66a09350a40df4f632288285ac206d99f33ab5842c408fc30b48a7

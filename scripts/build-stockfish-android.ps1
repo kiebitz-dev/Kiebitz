@@ -70,7 +70,11 @@ foreach ($network in $networks) {
     }
 }
 
+# Dieselbe Liste, die `src/Makefile` als SRCS führt. Sie steht hier von Hand,
+# weil dieser Build ohne make auskommt · nach einem Versionswechsel gehört sie
+# gegen den Makefile des gepinnten Commits geprüft.
 $sourceFiles = @(
+    "attacks.cpp",
     "benchmark.cpp",
     "bitboard.cpp",
     "evaluate.cpp",
@@ -92,6 +96,7 @@ $sourceFiles = @(
     "nnue/network.cpp",
     "nnue/features/half_ka_v2_hm.cpp",
     "nnue/features/full_threats.cpp",
+    "nnue/features/pp_3wide.cpp",
     "engine.cpp",
     "score.cpp",
     "memory.cpp"

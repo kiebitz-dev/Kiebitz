@@ -155,7 +155,7 @@ jobs:
       # Stockfish wird nicht mit eingecheckt (GPL, Größe) und muss vor dem
       # Bundle in src-tauri/binaries/ liegen. Release und Hash sind bewusst
       # gepinnt, damit der exakte GPL-Quellstand reproduzierbar bleibt.
-      - name: Stockfish holen (Windows, AVX2)
+      - name: Stockfish holen (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
@@ -322,7 +322,7 @@ jobs:
         if: steps.guard.outputs.has_keystore == 'true'
         run: npm ci
 
-      # Stockfish fuer Android reproduzierbar aus dem gepinnten sf_18-Commit
+      # Stockfish fuer Android reproduzierbar aus dem gepinnten Commit
       # bauen. NDK r28 und 16-KB-Linker-Alignment erfuellen die Play-Anforderung;
       # plain armv8 (kein -dotprod) bleibt breit kompatibel.
       - name: Stockfish bauen (Android, armv8, 16 KB)

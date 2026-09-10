@@ -81,7 +81,7 @@ jobs:
       # tauri.conf.json bundles this file, so Tauri's build script requires it
       # even for `cargo test`. Keep this pin in sync with release.yml and the
       # licensing metadata in src-tauri/resources/stockfish/NOTICE.txt.
-      - name: Stockfish holen (Windows, AVX2)
+      - name: Stockfish holen (Windows)
         shell: pwsh
         run: |
           $url = $env:STOCKFISH_WINDOWS_URL

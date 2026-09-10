@@ -85,7 +85,7 @@ export const zh: Record<Key, string> = {
   "dash.train": "训练",
   "dash.analysisQueue": "分析队列",
   "dash.gamesWithoutAnalysis": "局尚未分析",
-  "dash.stockfishNative": "Stockfish 18 · 原生",
+  "dash.stockfishNative": "Stockfish 19 · 原生",
   "dash.start": "开始",
   "dash.puzzleGoal": "每日战术目标",
   "dash.solve": "解题",

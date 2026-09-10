@@ -646,14 +646,16 @@ any completed artifacts for diagnosis, rather than publishing a partial release.
 
 ### What the workflow handles for you
 
-- **Engine**: on Windows it fetches the pinned official Stockfish AVX2
-  archive (hash-checked) into `src-tauri/binaries/stockfish.exe`; on macOS and
+- **Engine**: on Windows it fetches the pinned official Stockfish archive
+  (hash-checked) into `src-tauri/binaries/stockfish.exe`; on macOS and
   Linux it compiles the pinned Stockfish commit itself into
   `src-tauri/binaries/stockfish` (`ARCH=apple-silicon` / `x86-64-avx2`), the
   same way the Android job already does. Either way the binary is gitignored and
   never lives in the repo, and `bundle.resources` ships it inside the installer.
-  For older CPUs, change the asset pattern resp. the `ARCH` value in the
-  workflow.
+  Since Stockfish 19 the Windows archive is the *universal* one: it detects the
+  CPU's features at startup and picks the matching code path, so there is no
+  longer an AVX2 floor to work around there. macOS and Linux still build for one
+  target — change the `ARCH` value in the workflow for older CPUs.
 - **Signing**: passes `TAURI_SIGNING_PRIVATE_KEY`, so `.sig` files and
   `latest.json` are produced and uploaded automatically. This is the *updater*
   signature, not an OS code signature — see *Code signing & notarization*.

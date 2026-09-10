@@ -97,7 +97,7 @@ export const de = {
   "dash.train": "Trainieren",
   "dash.analysisQueue": "Analyse-Warteschlange",
   "dash.gamesWithoutAnalysis": "Partien ohne Analyse",
-  "dash.stockfishNative": "Stockfish 18 · nativ",
+  "dash.stockfishNative": "Stockfish 19 · nativ",
   "dash.start": "Starten",
   "dash.puzzleGoal": "Tagesziel Puzzles",
   "dash.solve": "Lösen",

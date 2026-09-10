@@ -1,21 +1,17 @@
 {
   "stockfish": {
-    "version": "18",
-    "commit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
-    "gitDate": "20260131",
+    "version": "19",
+    "commit": "edb0d9db6731067ec50ce619ff372b463bc4dd5d",
+    "gitDate": "20260905",
     "repository": "https://github.com/official-stockfish/Stockfish",
     "windowsArchive": {
-      "name": "stockfish-windows-x86-64-avx2.zip",
-      "sha256": "6f6c272ebd6ea594377715235c8a7326f75940ef4f4f856f45106028fe6ae900"
+      "name": "stockfish-windows-x86-64-universal.zip",
+      "sha256": "3c8bf1f9ea66a09350a40df4f632288285ac206d99f33ab5842c408fc30b48a7"
     },
     "networks": [
       {
-        "file": "nn-c288c895ea92.nnue",
-        "sha256": "c288c895ea924429ea9092e3f36b2b3c1f00f2a3a4c759ff7e57e79e3b43e4a7"
-      },
-      {
-        "file": "nn-37f18f62d772.nnue",
-        "sha256": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d"
+        "file": "nn-1a298aa575a0.nnue",
+        "sha256": "1a298aa575a085434d29027978dc36867fe9c5bcea9376654b7a8eba1e52dfc2"
       }
     ]
   },

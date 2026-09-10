@@ -93,6 +93,32 @@ pub fn normalize_fen(fen: &str) -> Result<String, String> {
     Ok(fen_key(&pos))
 }
 
+/// Prüft eine FEN, bevor sie als `position fen` an eine Engine geht.
+///
+/// Seit Stockfish 19 ist eine unmögliche Stellung kein Rechenfehler mehr,
+/// sondern das Ende des Prozesses: Die Engine schreibt
+/// `info string CRITICAL ERROR … King can be captured` und beendet sich sofort.
+/// Bis Stockfish 18 lieferte sie dafür einfach einen Zug.
+///
+/// Kiebitz reichte die FEN bis dahin ungeprüft durch, und sie kommt aus
+/// chess.js — das genau solche Stellungen annimmt
+/// (`4k3/8/8/8/8/8/4R3/4K3 w - - 0 1` etwa). Über einen geteilten Link ist sie
+/// damit von außen setzbar, und der Wiederanlauf in `live.rs` hätte dieselbe
+/// FEN erneut geschickt: Sterben im Kreis, während die Oberfläche auf eine
+/// Bewertung wartet.
+///
+/// Geprüft wird mit denselben Regeln, nach denen die App ohnehin rechnet ·
+/// owlchess weist unmögliche Stellungen zurück. Steuerzeichen fallen zusätzlich
+/// aus: Ein Zeilenumbruch in der FEN wäre für die Engine ein zweites Kommando.
+pub fn engine_fen(fen: &str) -> Result<&str, String> {
+    let trimmed = fen.trim();
+    if trimmed.contains(|c: char| c.is_control()) {
+        return Err("Ungültige FEN: Steuerzeichen".into());
+    }
+    Position::from_fen(trimmed).map_err(|e| format!("Ungültige FEN: {e}"))?;
+    Ok(trimmed)
+}
+
 /// Spielphase einer Stellung: Endspiel, sobald höchstens 6 Nicht-Bauern-
 /// Figuren (ohne Könige) auf dem Brett stehen; Eröffnung bis Halbzug 20.
 pub fn phase_of(pos: &Position, ply: u32) -> &'static str {
@@ -401,6 +427,25 @@ pub(crate) mod tests {
         assert_eq!(phase_of(&Position::initial(), 30), "middlegame");
         let endgame = Position::from_fen("4k3/8/8/8/8/8/4P3/4K3 w - - 12 45").unwrap();
         assert_eq!(phase_of(&endgame, 60), "endgame");
+    }
+
+    /// Was `engine_fen` abfängt, kostet sonst den Engine-Prozess.
+    ///
+    /// Die dritte Stellung ist der Fall, den es hier gibt: Weiß ist am Zug,
+    /// aber der schwarze König steht im Schach des Turms auf e2 — chess.js
+    /// nimmt das an, Stockfish 19 beendet sich daran. Die vierte ist der
+    /// Einwurf eines zweiten UCI-Kommandos über einen Zeilenumbruch.
+    #[test]
+    fn engine_fen_rejects_what_kills_the_engine() {
+        assert!(engine_fen(Position::initial().as_fen().as_str()).is_ok());
+        // Rundherum Leerraum ist kein Fehler · er fällt weg.
+        assert_eq!(
+            engine_fen("  4k3/8/8/8/8/8/8/4K3 w - - 0 1  ").unwrap(),
+            "4k3/8/8/8/8/8/8/4K3 w - - 0 1"
+        );
+        assert!(engine_fen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1").is_err());
+        assert!(engine_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1\ngo infinite").is_err());
+        assert!(engine_fen("keine fen").is_err());
     }
 
     /// Der Import darf nicht stillschweigend mitten in der Partie abbrechen.

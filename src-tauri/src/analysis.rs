@@ -96,6 +96,20 @@ type CachedEval = (Option<i32>, Option<i32>, String, String);
 /// Engine allein weiterrechnet, während die anderen zusehen.
 const EVAL_CHUNK: usize = 8;
 
+/// Unter welchen Bedingungen eine Bewertung entsteht — und damit, unter
+/// welchen eine gespeicherte noch gilt.
+///
+/// Die Suchtiefe stand schon immer im Cache. Der Name der Engine (ihr
+/// `id name`, etwa „Stockfish 19") kam dazu, weil eine andere Engine dieselbe
+/// Stellung anders bewertet: Ohne ihn bekäme ein Lauf mit Stockfish 19 auf
+/// ewig die Zahlen von Stockfish 18 serviert, und die Genauigkeitskurve der
+/// Insights liefe über zwei Engines, ohne es zu sagen.
+#[derive(Clone, Copy)]
+struct Lauf<'a> {
+    depth: u32,
+    engine: &'a str,
+}
+
 /// Bewertet alle Stellungen einer Partie und füllt dabei den Cache.
 ///
 /// Was schon bewertet ist, kommt aus der Datenbank; der Rest wird auf die
@@ -108,24 +122,25 @@ const EVAL_CHUNK: usize = 8;
 fn eval_game_positions(
     conn: &Connection,
     engines: &mut [UciEngine],
+    lauf: Lauf<'_>,
     cancel: &AtomicBool,
     fens: &[String],
     keys: &[String],
-    depth: u32,
     on_position: &(dyn Fn(usize) + Sync),
 ) -> Result<Option<Vec<CachedEval>>, String> {
+    let Lauf { depth, engine } = lauf;
     let count = fens.len();
     let mut evals: Vec<Option<CachedEval>> = Vec::with_capacity(count);
     {
         let mut stmt = conn
             .prepare_cached(
                 "SELECT eval_cp, mate_in, best_uci, pv FROM eval_cache
-                 WHERE fen_key = ?1 AND depth >= ?2",
+                 WHERE fen_key = ?1 AND depth >= ?2 AND engine = ?3",
             )
             .map_err(|e| e.to_string())?;
         for key in keys {
             evals.push(
-                stmt.query_row(params![key, depth], |r| {
+                stmt.query_row(params![key, depth, engine], |r| {
                     Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
                 })
                 .ok(),
@@ -193,13 +208,22 @@ fn eval_game_positions(
     {
         let mut stmt = conn
             .prepare_cached(
-                "INSERT OR REPLACE INTO eval_cache (fen_key, eval_cp, mate_in, best_uci, pv, depth)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT OR REPLACE INTO eval_cache
+                     (fen_key, eval_cp, mate_in, best_uci, pv, depth, engine)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )
             .map_err(|e| e.to_string())?;
         for (index, (eval_cp, mate_in, best_uci, pv)) in &searched {
-            stmt.execute(params![keys[*index], eval_cp, mate_in, best_uci, pv, depth])
-                .map_err(|e| e.to_string())?;
+            stmt.execute(params![
+                keys[*index],
+                eval_cp,
+                mate_in,
+                best_uci,
+                pv,
+                depth,
+                engine
+            ])
+            .map_err(|e| e.to_string())?;
         }
     }
     conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
@@ -451,6 +475,11 @@ fn run_worker(
         let _ = engine.set_option("Hash", &hash_mb.to_string());
         engines.push(engine);
     }
+    // Alle Arbeiter sind dieselbe Binärdatei · einmal fragen genügt.
+    let engine_name = engines
+        .first()
+        .map(|engine| engine.name().to_string())
+        .unwrap_or_default();
 
     let state = app.state::<AnalysisState>();
     let total = targets.len();
@@ -532,10 +561,13 @@ fn run_worker(
         let Some(raw) = eval_game_positions(
             &conn,
             &mut engines,
+            Lauf {
+                depth,
+                engine: &engine_name,
+            },
             &state.cancel,
             &fens,
             &keys,
-            depth,
             &on_position,
         )?
         else {
@@ -1404,10 +1436,21 @@ mod tests {
 
         let seen = Mutex::new(Vec::new());
         let record = |done: usize| seen.lock().unwrap().push(done);
-        let pooled =
-            eval_game_positions(&conn, &mut engines, &cancel, &fens, &keys, depth, &record)
-                .expect("Stapelbewertung")
-                .expect("nicht abgebrochen");
+        let name = engines[0].name().to_string();
+        let pooled = eval_game_positions(
+            &conn,
+            &mut engines,
+            Lauf {
+                depth,
+                engine: &name,
+            },
+            &cancel,
+            &fens,
+            &keys,
+            &record,
+        )
+        .expect("Stapelbewertung")
+        .expect("nicht abgebrochen");
 
         assert_eq!(pooled.len(), fens.len());
         for (index, (eval_cp, mate_in, best_uci, pv)) in pooled.iter().enumerate() {
@@ -1448,16 +1491,40 @@ mod tests {
         let cached = eval_game_positions(
             &conn,
             &mut Vec::new(),
+            Lauf {
+                depth,
+                engine: &name,
+            },
             &cancel,
             &fens,
             &keys,
-            depth,
             &record,
         )
         .expect("Cache-Lauf")
         .expect("nicht abgebrochen");
         assert_eq!(cached, pooled);
         assert_eq!(seen.into_inner().unwrap(), vec![fens.len()]);
+
+        // Dritter Lauf, andere Engine: Der Cache gilt für sie nicht. Ohne
+        // Arbeiter kann auch nichts nachgerechnet werden, also kommt nichts
+        // zurück — genau das soll er tun, statt fremde Zahlen auszugeben.
+        let andere = eval_game_positions(
+            &conn,
+            &mut Vec::new(),
+            Lauf {
+                depth,
+                engine: "Stockfish 1",
+            },
+            &cancel,
+            &fens,
+            &keys,
+            &|_| {},
+        )
+        .expect("Lauf mit fremder Engine");
+        assert!(
+            andere.is_none(),
+            "die Werte einer anderen Engine dürfen nicht durchgereicht werden"
+        );
     }
 
     /// Ein Abbruch liefert keine halbe Partie, aber auch keinen verlorenen
@@ -1474,8 +1541,20 @@ mod tests {
         let cancel = AtomicBool::new(true);
         let mut engines = vec![UciEngine::spawn(&exe.to_string_lossy()).expect("Engine-Start")];
 
-        let result = eval_game_positions(&conn, &mut engines, &cancel, &fens, &keys, 10, &|_| {})
-            .expect("Stapelbewertung");
+        let name = engines[0].name().to_string();
+        let result = eval_game_positions(
+            &conn,
+            &mut engines,
+            Lauf {
+                depth: 10,
+                engine: &name,
+            },
+            &cancel,
+            &fens,
+            &keys,
+            &|_| {},
+        )
+        .expect("Stapelbewertung");
         assert!(result.is_none(), "abgebrochener Lauf liefert keine Werte");
 
         let cached: i64 = conn

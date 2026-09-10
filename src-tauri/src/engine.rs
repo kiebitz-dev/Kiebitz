@@ -250,7 +250,12 @@ impl UciEngine {
 
     /// Analysiert eine Stellung bis zur angegebenen Tiefe und liefert
     /// besten Zug, Bewertung und Hauptvariante.
+    ///
+    /// Die Stellung wird vorher geprüft · eine unmögliche kostet seit
+    /// Stockfish 19 den Prozess (siehe `chess::engine_fen`). Sie kommt hier als
+    /// gewöhnlicher Fehler zurück, ohne dass die Engine sie je zu sehen bekommt.
     pub fn analyze(&mut self, fen: &str, depth: u32) -> Result<AnalysisResult, String> {
+        let fen = crate::chess::engine_fen(fen)?;
         self.send(&format!("position fen {fen}"))?;
         self.send(&format!("go depth {depth}"))?;
 

@@ -52,12 +52,12 @@ Binary provenance
 The Android arm64 engine is compiled without source modifications from the
 exact commit above. Kiebitz uses Android NDK {{ANDROID_NDK_VERSION}}, the generic armv8
 target, and {{ANDROID_PAGE_SIZE_KB}}-KB ELF LOAD alignment. The reproducible build commands and
-checksum verification for both NNUE networks are in
+the checksum verification of the NNUE networks are in
 scripts/build-stockfish-android.ps1 and .github/workflows/release.yml.
 
-The Windows x86-64 AVX2 engine is taken from the unmodified official release
-archive. Kiebitz verifies this SHA-256 hash before packaging and aborts on a
-mismatch:
+The Windows x86-64 engine is taken from the unmodified official release
+archive named in the link below. Kiebitz verifies this SHA-256 hash before
+packaging and aborts on a mismatch:
 
 {{STOCKFISH_WINDOWS_URL}}
 SHA-256: {{STOCKFISH_WINDOWS_SHA256}}

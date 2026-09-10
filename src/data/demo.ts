@@ -209,7 +209,7 @@ export const featuredGame = {
   black: "DragonSlayer_88 (1448)",
   event: "chess.com Rapid · 11.07.2026",
   result: "1–0",
-  engine: "Stockfish 17 · Tiefe 24 · 1,8 Mn/s",
+  engine: "Stockfish 19 · Tiefe 24 · 1,8 Mn/s",
   summary: { brilliant: 0, good: 1, inaccuracy: 1, mistake: 2, blunder: 1, acplWhite: 18, acplBlack: 64 },
   moves: [
     { san: "e4", eval: 30 }, { san: "e5", eval: 25 },

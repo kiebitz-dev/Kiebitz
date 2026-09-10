@@ -8,7 +8,7 @@ pub struct Db(pub Mutex<Connection>);
 
 /// Current SQLite schema version. It is stored only after the complete
 /// migration has committed successfully.
-const SCHEMA_VERSION: i64 = 20;
+const SCHEMA_VERSION: i64 = 21;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GameRecord {
@@ -480,7 +480,10 @@ fn migrate_to_current(conn: &Connection) -> Result<(), String> {
             eval_cp  INTEGER,                   -- aus Sicht des Spielers am Zug
             mate_in  INTEGER,
             best_uci TEXT NOT NULL DEFAULT '',
-            depth    INTEGER NOT NULL DEFAULT 0
+            depth    INTEGER NOT NULL DEFAULT 0,
+            -- v21: Wer diese Zahl gerechnet hat ('Stockfish 19'). Ohne sie
+            -- bekäme ein Lauf mit neuer Engine die Werte der alten serviert.
+            engine   TEXT NOT NULL DEFAULT ''
         );
 
         -- v3: Eröffnungs-Repertoire als Zugbaum mit FSRS-Lernzustand
@@ -623,6 +626,18 @@ fn migrate_to_current(conn: &Connection) -> Result<(), String> {
     // nicht — leer heißt „keine Linie", nicht „ungültig", damit ein großer
     // Cache nicht wegen einer Spalte verfällt.
     add_column_if_missing(conn, "eval_cache", "pv", "TEXT NOT NULL DEFAULT ''")?;
+    // Migration v21: Der Cache sagt jetzt, welche Engine seine Zahlen gerechnet
+    // hat, und wird nur noch für dieselbe gelesen (siehe analysis.rs).
+    //
+    // Hier ist das Gegenteil der Regel von oben richtig: Eine Bewertung ohne
+    // Herkunft ist nicht „keine Bewertung", sondern eine, deren Gültigkeit
+    // niemand mehr behaupten kann — sie stammt aus einer Stockfish-Fassung vor
+    // dieser Spalte. Stehen bleiben dürfte sie nur als toter Ballast, denn
+    // gelesen wird sie nie wieder. Der Cache ist reine Beschleunigung; die
+    // Ergebnisse der Partien liegen in `move_evals` und bleiben unberührt.
+    add_column_if_missing(conn, "eval_cache", "engine", "TEXT NOT NULL DEFAULT ''")?;
+    conn.execute("DELETE FROM eval_cache WHERE engine = ''", [])
+        .map_err(|e| format!("Alte Cache-Werte konnten nicht verworfen werden: {e}"))?;
     // Migration v7 (Sync-Grenzen): Repertoire-Löschungen propagieren über
     // Tombstones (Löschung gewinnt nur gegen ältere Knoten · created_ts
     // erlaubt das Wieder-Anlegen), und Puzzle-Versuche merken sich das
@@ -1647,6 +1662,57 @@ mod tests {
                 .unwrap();
             assert!(exists, "missing performance index {index}");
         }
+    }
+
+    /// Der Cache einer älteren Fassung verfällt beim Wechsel der Engine.
+    ///
+    /// Er ist reine Beschleunigung, und seine Zahlen stammen aus einer
+    /// Stockfish-Fassung, die niemand mehr benennen kann. Stehen zu bleiben
+    /// hieße, sie einem neuen Lauf unterzuschieben — die Wanderung wirft sie
+    /// deshalb weg. Was die Analyse selbst ergeben hat, steht in `move_evals`
+    /// und bleibt.
+    #[test]
+    fn migration_drops_evaluations_without_an_engine() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE eval_cache (
+                fen_key  TEXT PRIMARY KEY,
+                eval_cp  INTEGER,
+                mate_in  INTEGER,
+                best_uci TEXT NOT NULL DEFAULT '',
+                depth    INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO eval_cache (fen_key, eval_cp, best_uci, depth)
+             VALUES ('alt', 20, 'e2e4', 18);
+             CREATE TABLE move_evals (
+                game_id  INTEGER NOT NULL,
+                ply      INTEGER NOT NULL,
+                san      TEXT NOT NULL DEFAULT '',
+                eval_cp  INTEGER,
+                mate_in  INTEGER,
+                best_uci TEXT NOT NULL DEFAULT '',
+                judgment TEXT NOT NULL DEFAULT '',
+                phase    TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (game_id, ply)
+             );
+             INSERT INTO move_evals (game_id, ply, san, eval_cp)
+             VALUES (1, 1, 'e4', 20);
+             PRAGMA user_version = 20;",
+        )
+        .unwrap();
+
+        init(&conn).unwrap();
+
+        assert!(column_exists(&conn, "eval_cache", "engine").unwrap());
+        let cached: i64 = conn
+            .query_row("SELECT COUNT(*) FROM eval_cache", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cached, 0, "Werte ohne Herkunft bleiben nicht liegen");
+        // Die Ergebnisse der Partien sind kein Cache.
+        let moves: i64 = conn
+            .query_row("SELECT COUNT(*) FROM move_evals", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(moves, 1, "die Analyse selbst bleibt unberührt");
     }
 
     #[test]

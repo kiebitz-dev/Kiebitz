@@ -85,7 +85,7 @@ export const hi: Record<Key, string> = {
   "dash.train": "अभ्यास करें",
   "dash.analysisQueue": "विश्लेषण कतार",
   "dash.gamesWithoutAnalysis": "बाज़ियाँ बिना विश्लेषण",
-  "dash.stockfishNative": "Stockfish 18 · नेटिव",
+  "dash.stockfishNative": "Stockfish 19 · नेटिव",
   "dash.start": "शुरू करें",
   "dash.puzzleGoal": "दैनिक पहेली लक्ष्य",
   "dash.solve": "हल करें",

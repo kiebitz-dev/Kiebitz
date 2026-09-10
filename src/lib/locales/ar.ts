@@ -85,7 +85,7 @@ export const ar: Record<Key, string> = {
   "dash.train": "تدرّب",
   "dash.analysisQueue": "طابور التحليل",
   "dash.gamesWithoutAnalysis": "مباريات دون تحليل",
-  "dash.stockfishNative": "Stockfish 18 · أصلي",
+  "dash.stockfishNative": "Stockfish 19 · أصلي",
   "dash.start": "ابدأ",
   "dash.puzzleGoal": "هدف الألغاز اليومي",
   "dash.solve": "حلّ",

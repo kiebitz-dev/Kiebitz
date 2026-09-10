@@ -122,6 +122,12 @@ impl Default for LiveEngine {
 impl LiveEngine {
     /// Startet die Engine, falls nötig, und beginnt eine neue Analyse.
     /// Liefert die Generation, unter der die Events dieser Anfrage laufen.
+    ///
+    /// Die Stellung wird geprüft, bevor irgendetwas geschieht. Seit
+    /// Stockfish 19 beendet eine unmögliche Stellung den Prozess, und der
+    /// Wiederanlauf weiter unten schickt dieselbe Anfrage noch einmal — ohne
+    /// die Prüfung wäre das eine Schleife aus Sterben und Neustarten, während
+    /// die Oberfläche auf eine Bewertung wartet. Siehe `chess::engine_fen`.
     pub fn analyze(
         &self,
         app: &tauri::AppHandle,
@@ -129,6 +135,7 @@ impl LiveEngine {
         fen: &str,
         depth: u32,
     ) -> Result<u64, String> {
+        let fen = crate::chess::engine_fen(fen)?;
         let mut guard = self.inner.lock().map_err(|e| e.to_string())?;
         if guard.is_none() {
             *guard = Some(self.spawn(app, engine_path)?);
