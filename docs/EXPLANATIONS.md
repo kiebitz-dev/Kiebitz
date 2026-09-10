@@ -2,8 +2,8 @@
 
 Every analysed half-move carries a sentence saying *what happened*, not just
 how many centipawns it cost, and every analysed game carries a short verdict.
-Both are produced by the auto-analysis in the background; so far exactly one
-place in the interface shows them.
+Both are produced by the auto-analysis in the background; diagram mode shows
+them, on the dashboard and on the analysis board.
 
 ```
 AUS DER ANALYSE
@@ -117,13 +117,32 @@ a game that cannot produce one is not retried on every launch.
 
 ## In the interface
 
-`DashboardBlatt` only, for now, in both its layouts: a quote block
-`AUS DER ANALYSE` carrying the sentence for the diagram move — which
-`lib/blatt.ts` already chooses as the first blunder or mistake — its reason
-line under it, and one `FAZIT DER PARTIE` under that.
+Diagram mode, in two places.
 
-Everything else — the analysis board, the move list, Dashboard mode, an
-Insights aggregation over recurring motifs — comes later, deliberately.
+`DashboardBlatt`, in both its layouts: a quote block `AUS DER ANALYSE`
+carrying the sentence for the diagram move — which `lib/blatt.ts` already
+chooses as the first blunder or mistake — its reason line under it, and one
+`FAZIT DER PARTIE` under that.
+
+`AnalysisBlatt`, under the game text, as a section of the same name. It
+answers one question — *what happened here?* — and which "here" it means
+depends on where the reader is standing:
+
+- On a half-move the analysis found something about, that move's sentence
+  stands there, with its reason line under it. Clicking a move in the flowing
+  text is therefore also the question.
+- Anywhere else, the section lists the game's heaviest moments instead — at
+  most three, ranked by `loss_cp` and then read back in game order. Each line
+  is a way there: clicking it opens that half-move.
+
+Three and not all of them: the whole list would be the auto-annotation a
+second time, and that already stands indented in the text above. The
+selection happens in the variant (`AnalysisBlatt`), the sentences are built
+once per game in `pages/Analysis.tsx` and only when the mode is on — a
+Dashboard-mode reader never pays for eighty sentences nobody shows.
+
+Still to come, deliberately: Dashboard mode, and an Insights aggregation over
+recurring motifs.
 
 ## Adding a phrasing
 

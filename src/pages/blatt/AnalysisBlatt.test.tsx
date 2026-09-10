@@ -5,6 +5,11 @@
  * Bewertungskurve als Griff in die Partie — mit dem Zeiger wie mit der Tastatur
  * —, die Schlagliste unter dem Namen und die Brettspalte auf dem Maß der
  * gewöhnlichen Fassung.
+ *
+ * Dazu die beiden Stücke, die der Modus zuletzt bekommen hat: der Abschnitt
+ * „Aus der Analyse" unter dem Satz — der auf den angeklickten Zug umschaltet
+ * und sonst die schwersten Stellen führt — und der Apparat daneben, in dem
+ * jede Zeile ein Griff ist.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -113,5 +118,155 @@ describe("Blatt der Analyse", () => {
     show();
     const spalte = screen.getByTestId("brett").parentElement!;
     expect(spalte.className).toContain("w-[var(--board-col)]");
+  });
+
+  // ── Aus der Analyse ──────────────────────────────────────────────────────
+
+  /**
+   * Ohne gewählten Zug führt der Abschnitt die schwersten Stellen · höchstens
+   * drei, nach Gewicht ausgewählt und in der Reihenfolge der Partie gelesen.
+   */
+  it("führt die schwersten Erklärungen, solange kein Zug angeklickt ist", () => {
+    show({
+      ply: 0,
+      zuege: kurve.map((_, i) => ({
+        san: i % 2 === 0 ? "e4" : "e5",
+        erklaerung: `Satz ${i}`,
+        gewicht: i * 10,
+      })),
+    });
+    const saetze = screen
+      .getAllByRole("button")
+      .map((knopf) => knopf.textContent ?? "")
+      .filter((text) => text.includes("Satz "));
+    // Die drei größten Gewichte sind 7, 8 und 9 · und sie stehen in der
+    // Reihenfolge der Partie, nicht in der der Auswahl.
+    expect(saetze).toHaveLength(3);
+    expect(saetze[0]).toContain("Satz 7");
+    expect(saetze[1]).toContain("Satz 8");
+    expect(saetze[2]).toContain("Satz 9");
+  });
+
+  it("schlägt den Zug auf, dessen Erklärung man anklickt", () => {
+    const onPly = show({
+      ply: 0,
+      zuege: kurve.map((_, i) => ({
+        san: "e4",
+        erklaerung: `Satz ${i}`,
+        gewicht: i * 10,
+      })),
+    });
+    fireEvent.click(screen.getByText(/Satz 8/));
+    // Halbzüge zählen ab eins · Index 8 ist Halbzug 9.
+    expect(onPly).toHaveBeenLastCalledWith(9);
+  });
+
+  /**
+   * Ein Klick im Fließsatz ist zugleich die Frage „was war hier los?" · dann
+   * steht der Satz zu diesem Zug da, mit seiner Rechnung darunter, und die
+   * Liste der schwersten Stellen tritt zurück.
+   */
+  it("zeigt zum angeklickten Zug dessen Erklärung samt Rechnung", () => {
+    show({
+      ply: 3,
+      zuege: kurve.map((_, i) => ({
+        san: "e4",
+        erklaerung: `Satz ${i}`,
+        grund: i === 2 ? "Von −2,1 auf −5,2." : undefined,
+        gewicht: i * 10,
+      })),
+    });
+    expect(screen.getByText(/Satz 2/)).toBeTruthy();
+    expect(screen.getByText("Von −2,1 auf −5,2.")).toBeTruthy();
+    expect(screen.queryByText(/Satz 9/)).toBeNull();
+  });
+
+  /** Ohne Erklärungen bleibt der Abschnitt fort · eine leere Rubrik ist keine. */
+  it("lässt den Abschnitt fort, wenn es nichts zu erklären gibt", () => {
+    show();
+    expect(screen.queryByText("expl.source")).toBeNull();
+  });
+
+  // ── Der Apparat ──────────────────────────────────────────────────────────
+
+  /**
+   * Das Eröffnungsbuch ist im Blatt kein Abdruck, sondern dieselbe Bedienung:
+   * Die Reiter wechseln die Quelle, und jede Zugzeile legt ihren Zug aufs
+   * Brett. Ein Modus, der eine Funktion kostet, ist kein Modus.
+   */
+  it("bedient das Eröffnungsbuch wie die gewöhnliche Fassung", () => {
+    const onQuelle = vi.fn();
+    const onZug = vi.fn();
+    show({
+      buch: {
+        reiter: [
+          { id: "masters", name: "Meister", plus: true },
+          { id: "engine", name: "Engine", plus: false },
+        ],
+        quelle: "masters",
+        onQuelle,
+        stand: {
+          partien: 1200,
+          eroeffnung: "Sizilianisch",
+          zuege: [{ san: "e4", weiss: 600, remis: 300, schwarz: 300, elo: 2412 }],
+          musterpartien: [],
+          ausCache: false,
+        },
+        onZug,
+      },
+    });
+    expect(screen.getByText("an.book")).toBeTruthy();
+    expect(screen.getByText("Sizilianisch")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Engine"));
+    expect(onQuelle).toHaveBeenCalledWith("engine");
+
+    fireEvent.click(screen.getByText("e4"));
+    expect(onZug).toHaveBeenCalledWith("e4");
+  });
+
+  it("nennt beim Buch den einen Satz, wenn es nichts zu zeigen gibt", () => {
+    show({
+      buch: {
+        reiter: [{ id: "own", name: "Meine Datenbank", plus: false }],
+        quelle: "own",
+        onQuelle: vi.fn(),
+        hinweis: "Noch keine Referenzdatenbank.",
+        onZug: vi.fn(),
+      },
+    });
+    expect(screen.getByText("Noch keine Referenzdatenbank.")).toBeTruthy();
+  });
+
+  it("führt aus den eigenen Partien zurück in die Partie", () => {
+    const onOeffnen = vi.fn();
+    const onZug = vi.fn();
+    show({
+      stellungen: {
+        gesamt: 7,
+        zuege: [{ san: "Sf3", partien: 4, quote: 62.5 }],
+        treffer: [
+          {
+            id: 12,
+            ply: 18,
+            datum: "03.09.2026",
+            gegner: "karpov_fanboy",
+            ergebnis: "win",
+            onOeffnen,
+          },
+        ],
+        onZug,
+      },
+    });
+    fireEvent.click(screen.getByText("Sf3"));
+    expect(onZug).toHaveBeenCalledWith("Sf3");
+
+    fireEvent.click(screen.getByText("karpov_fanboy"));
+    expect(onOeffnen).toHaveBeenCalled();
+  });
+
+  it("sagt es, wenn die Stellung in keiner eigenen Partie vorkam", () => {
+    show({ stellungen: { gesamt: 0, zuege: [], treffer: [], onZug: vi.fn() } });
+    expect(screen.getByText("an.posNotFound")).toBeTruthy();
   });
 });

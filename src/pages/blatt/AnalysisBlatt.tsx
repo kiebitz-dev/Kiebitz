@@ -16,21 +16,34 @@
  * Auto-Annotation vergibt nur für Ungenauigkeit, Fehler und Patzer einen
  * Kommentar; das sind wenige, und eine Partie, in der es viele sind, ist genau
  * die, bei der man sie alle sehen will.
+ *
+ * Neben dem Satz steht der Apparat: das Eröffnungsbuch und die eigenen
+ * Partien, die durch diese Stellung gingen. Beides gibt es in der
+ * gewöhnlichen Fassung als Karte, und beides ist am freien Brett das, was den
+ * Tab überhaupt brauchbar macht — ein Modus, der eine Funktion kostet, ist
+ * kein Modus. Gerechnet wird hier nichts: Die Zahlen kommen fertig von der
+ * Seite, dieselben wie dort, nur anders gesetzt (siehe docs/design.md).
  */
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight, SkipBack, SkipForward } from "lucide-react";
+import { ChevronLeft, ChevronRight, SkipBack, SkipForward, Sparkles } from "lucide-react";
 import {
   Ergebniskasten,
   Farbfeld,
   Feldname,
   Formularkopf,
+  Fussnote,
   Kolumnentitel,
+  Punkt,
   Rubrik,
   type Feld,
 } from "../../components/blatt/Satz";
+// Die Sperre wird im Modus nicht neu gebaut, sondern neu gesetzt · dieselbe
+// Regel wie beim Einstellungsformular, siehe `.blatt-formular` in blatt.css.
+import { PlusLock } from "../../components/PlusLock";
+import type { PlusFeature } from "../../lib/plus/types";
 import { useI18n } from "../../lib/i18n";
 import { translateSan } from "../../lib/notation";
-import { de, deInt } from "../../lib/format";
+import { de, deInt, deShort } from "../../lib/format";
 import "../../components/blatt/blatt.css";
 
 /** Ein Zug, wie ihn der Fließsatz braucht. */
@@ -42,6 +55,106 @@ export interface SatzZug {
   farbe?: string;
   /** Die Anmerkung zu diesem Zug, falls die Analyse eine hat. */
   kommentar?: string | null;
+  /**
+   * Der Satz der Analyse zu diesem Zug · was passiert ist, nicht was es
+   * gekostet hat. Gebaut in `lib/erklaerung.ts`, siehe docs/EXPLANATIONS.md.
+   */
+  erklaerung?: string | null;
+  /** Die Zeile darunter: woher der Preis kommt. */
+  grund?: string | null;
+  /**
+   * Was der Zug gekostet hat, in Zentibauern.
+   *
+   * Nicht zum Anzeigen · daran hängt allein die Auswahl, welche Erklärungen
+   * „die wichtigsten" sind, wenn kein Zug angeklickt ist.
+   */
+  gewicht?: number | null;
+}
+
+/** Ein Zug im Eröffnungsbuch · dieselben Zahlen wie in der Karte von heute. */
+export interface BuchZug {
+  san: string;
+  weiss: number;
+  remis: number;
+  schwarz: number;
+  /** Schnitt-Elo der Partien · fehlt, wo die Quelle keines führt. */
+  elo: number | null;
+}
+
+/** Eine Musterpartie unter den Zügen · eine Zeile aus dem Turnierbuch. */
+export interface BuchPartie {
+  id: string;
+  /** Die Paarung, fertig gesetzt · „Carlsen 2882 – Caruana 2820". */
+  paarung: string;
+  jahr: string;
+  /** „1–0", „0–1", „½–½" · das Ergebnis dieser Partie, nicht das eigene. */
+  ergebnis: string;
+  onOeffnen: () => void;
+}
+
+/**
+ * Ein Zug aus ChessDB.
+ *
+ * Die vierte Quelle beantwortet eine andere Frage als die drei anderen: nicht
+ * „was wird hier gespielt?", sondern „was hält eine Engine davon?". Deshalb
+ * trägt sie eine Bewertung und keine Bilanz.
+ */
+export interface MotorZug {
+  san: string;
+  /** In Bauerneinheiten, aus Sicht der Seite am Zug. */
+  bewertung: number | null;
+  /** Gewinnquote, wie die Quelle sie schreibt. */
+  quote: string | null;
+}
+
+/** Was eine Häufigkeits-Quelle zur Stellung zu sagen hat. */
+export interface BuchStand {
+  partien: number;
+  eroeffnung: string | null;
+  zuege: BuchZug[];
+  musterpartien: BuchPartie[];
+  ausCache: boolean;
+}
+
+export interface BuchProps {
+  reiter: { id: string; name: string; plus: boolean }[];
+  quelle: string;
+  onQuelle: (id: string) => void;
+  /** Ein Satz statt einer Tabelle · warum hier gerade nichts steht. */
+  hinweis?: string;
+  /** Häufigkeiten · Meister, Online, eigene Datenbank. */
+  stand?: BuchStand;
+  /** ChessDB · steht anstelle der Häufigkeiten. */
+  motor?: { zuege: MotorZug[]; ausCache: boolean };
+  /** Gesperrt · `stand` ist dann die Vorschau, über der die Sperre liegt. */
+  sperre?: PlusFeature;
+  onZug: (san: string) => void;
+}
+
+/** Ein Fortsetzungszug aus den eigenen Partien. */
+export interface StellungZug {
+  san: string;
+  partien: number;
+  /** Punktequote in Prozent, aus eigener Sicht. */
+  quote: number;
+}
+
+/** Eine eigene Partie, die durch diese Stellung gegangen ist. */
+export interface StellungTreffer {
+  id: number;
+  ply: number;
+  datum: string;
+  gegner: string;
+  /** „win" · „draw" · „loss", aus eigener Sicht. */
+  ergebnis: string;
+  onOeffnen: () => void;
+}
+
+export interface StellungenProps {
+  gesamt: number;
+  zuege: StellungZug[];
+  treffer: StellungTreffer[];
+  onZug: (san: string) => void;
 }
 
 export interface BilanzZeile {
@@ -129,6 +242,14 @@ export interface AnalysisBlattProps {
   bilanz: BilanzZeile[];
   acpl: { white: number; black: number };
   genauigkeit: number | null;
+  /**
+   * Der Apparat neben dem Satz · Eröffnungsbuch und eigene Partien.
+   *
+   * Beides steht nur da, wo es etwas zu holen gibt (auf dem Desktop); im Web
+   * fehlt die Datenbank, und eine leere Rubrik ist kein Abschnitt.
+   */
+  buch?: BuchProps;
+  stellungen?: StellungenProps;
 }
 
 /**
@@ -267,6 +388,8 @@ export default function AnalysisBlatt({
   bilanz,
   acpl,
   genauigkeit,
+  buch,
+  stellungen,
 }: AnalysisBlattProps) {
   const { t, locale } = useI18n();
 
@@ -310,6 +433,83 @@ export default function AnalysisBlatt({
     </div>
   );
 
+  /**
+   * Aus der Analyse · was zu einem Zug gefunden wurde, nicht was er kostete.
+   *
+   * Zwei Fälle, ein Abschnitt. Steht man auf einem Zug, zu dem die Analyse
+   * etwas gefunden hat, dann steht dessen Satz hier — ein Klick im Fließsatz
+   * ist damit zugleich die Frage „was war hier los?". Steht man irgendwo
+   * sonst, führt der Abschnitt die schwersten Stellen der Partie und bleibt
+   * ein Weg dorthin: Jede Zeile schlägt ihren Zug auf.
+   *
+   * Höchstens drei · alle wären die Auto-Annotation ein zweites Mal, und die
+   * steht schon eingerückt im Satz darüber.
+   */
+  const zumZug = ply > 0 && zuege[ply - 1]?.erklaerung ? { zug: zuege[ply - 1], index: ply - 1 } : null;
+  const wichtigste = zuege
+    .map((zug, index) => ({ zug, index }))
+    .filter(({ zug }) => zug.erklaerung && (zug.gewicht ?? 0) > 0)
+    .sort((a, b) => (b.zug.gewicht ?? 0) - (a.zug.gewicht ?? 0))
+    .slice(0, 3)
+    // Zurück in die Reihenfolge der Partie · gelesen wird von vorn nach hinten,
+    // ausgewählt wurde nach Gewicht.
+    .sort((a, b) => a.index - b.index);
+
+  const analyse =
+    zumZug || wichtigste.length > 0 ? (
+      <div className="mt-4">
+        <Feldname>{t("expl.source")}</Feldname>
+        {zumZug ? (
+          <div
+            className="mt-1.5 border-s-2 ps-[11px]"
+            style={{ borderColor: zumZug.zug.farbe ?? "var(--color-line2)" }}
+          >
+            <span
+              className="buch notation text-[13px] font-semibold"
+              style={{ color: zumZug.zug.farbe }}
+            >
+              {zugLabel(zumZug.zug, zumZug.index)}
+              {zumZug.zug.nag}
+            </span>{" "}
+            <span className="buch text-[14px] leading-[1.5] text-ink2">
+              {`„${zumZug.zug.erklaerung}“`}
+            </span>
+            {/* Der Satz darüber nennt, was passiert ist; diese Zeile, woher
+                der Preis kommt. Ohne Anführungszeichen: Sie ist keine zweite
+                Anmerkung, sondern die Rechnung dahinter. */}
+            {zumZug.zug.grund && (
+              <div className="mt-1 text-[12px] leading-[1.5] text-ink3">{zumZug.zug.grund}</div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-1">
+            {wichtigste.map(({ zug, index }, i) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => onPly(index + 1)}
+                className={`flex w-full items-baseline gap-2.5 py-[7px] text-start ${
+                  i === wichtigste.length - 1 ? "" : "border-b border-line"
+                }`}
+              >
+                <span
+                  className="buch notation blatt-zahl w-[58px] flex-none truncate text-[12.5px] font-semibold"
+                  style={{ color: zug.farbe }}
+                >
+                  {zugLabel(zug, index)}
+                  {zug.nag}
+                </span>
+                <span className="buch min-w-0 flex-1 text-[13.5px] leading-[1.5] text-ink2">
+                  {`„${zug.erklaerung}“`}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <Fussnote>{t("blatt.explNote")}</Fussnote>
+      </div>
+    ) : null;
+
   const partietext = (
     <div>
       <Rubrik>{frei ? t("an.freeBoard") : t("blatt.theGame")}</Rubrik>
@@ -346,6 +546,7 @@ export default function AnalysisBlatt({
           )}
         </div>
       ))}
+      {analyse}
     </div>
   );
 
@@ -379,6 +580,320 @@ export default function AnalysisBlatt({
       </div>
     </div>
   );
+
+
+  // ── Der Apparat ───────────────────────────────────────────────────────────
+  //
+  // Was in der gewöhnlichen Fassung zwei Karten sind, sind hier zwei Rubriken:
+  // Überschrift, Linie, Tabelle. Kein Kasten, keine Pille, keine Fläche.
+
+  /** Anteil eines Wertes an der Summe · als Prozentbreite für die Bahn. */
+  const anteil = (wert: number, von: number) =>
+    von > 0 ? `${((wert / von) * 100).toFixed(1)}%` : "0%";
+
+  /** Der Kopf einer Zugtabelle · dieselben Spalten wie die Zeilen darunter. */
+  const spaltenkopf = (spalten: { label: ReactNode; breite?: number; rechts?: boolean }[]) => (
+    <div className="mt-2 flex items-baseline gap-[11px] border-b border-line pb-[5px]">
+      {spalten.map((spalte, index) => (
+        <span
+          key={index}
+          className={`blatt-feld truncate text-ink3 ${
+            spalte.breite ? "flex-none" : "min-w-0 flex-1"
+          } ${spalte.rechts ? "text-end" : ""}`}
+          style={spalte.breite ? { width: spalte.breite } : undefined}
+        >
+          {spalte.label}
+        </span>
+      ))}
+    </div>
+  );
+
+  /**
+   * Eine Zugzeile des Buches · Zug, Bilanzbahn, Zahl der Partien, Elo-Schnitt.
+   *
+   * Die Bahn ist die eigentliche Auskunft: drei Abschnitte in den Farben, die
+   * die App überall für Sieg, Remis und Niederlage benutzt, aus Sicht von Weiß
+   * gelesen. Der Kopf darüber sagt in denselben Farben, welcher welcher ist —
+   * so braucht die Reihe keine Legende unter sich.
+   */
+  const buchzeile = (zug: BuchZug, letzte: boolean, onZug: (san: string) => void) => {
+    const partien = zug.weiss + zug.remis + zug.schwarz;
+    return (
+      <button
+        key={zug.san}
+        type="button"
+        onClick={() => onZug(zug.san)}
+        title={t("an.bookPlay", { san: translateSan(zug.san, locale) })}
+        className={`flex h-[30px] w-full items-center gap-[11px] text-start ${
+          letzte ? "" : "border-b border-line"
+        }`}
+      >
+        <span className="notation blatt-zahl w-11 flex-none truncate text-[12.5px] text-ink">
+          {translateSan(zug.san, locale)}
+        </span>
+        <span className="relative h-[11px] min-w-0 flex-1 border-b border-line2">
+          <span className="absolute bottom-0 start-0 flex h-[9px] w-full">
+            <span style={{ width: anteil(zug.weiss, partien), background: "var(--color-win)" }} />
+            <span style={{ width: anteil(zug.remis, partien), background: "var(--color-draw)" }} />
+            <span style={{ width: anteil(zug.schwarz, partien), background: "var(--color-loss)" }} />
+          </span>
+        </span>
+        {/* Der Online-Bestand zählt in Milliarden · ausgeschrieben liefe die
+            Zahl über die Spalte daneben. Genau steht sie im Tooltip. */}
+        <span
+          title={deInt(partien)}
+          className="blatt-zahl w-[66px] flex-none truncate text-end text-[12px] text-ink"
+        >
+          {deShort(partien)}
+        </span>
+        <span className="blatt-zahl w-10 flex-none truncate text-end text-[11px] text-ink3">
+          {zug.elo ?? "—"}
+        </span>
+      </button>
+    );
+  };
+
+  /** Die Häufigkeits-Auskunft einer Quelle · Kopfzeile, Bahnen, Musterpartien. */
+  const buchstand = (stand: BuchStand, onZug: (san: string) => void) => (
+    <>
+      <div className="mt-2.5 flex items-baseline justify-between gap-3">
+        <span className="blatt-zahl flex-none text-[12px] text-ink2" title={deInt(stand.partien)}>
+          {t(stand.partien === 1 ? "an.bookGames.one" : "an.bookGames.many", {
+            n: deShort(stand.partien),
+          })}
+        </span>
+        {stand.eroeffnung && (
+          <span className="buch min-w-0 truncate text-[13px] italic text-ink2">
+            {stand.eroeffnung}
+          </span>
+        )}
+      </div>
+      {spaltenkopf([
+        { label: t("common.moves.one"), breite: 44 },
+        {
+          label: (
+            <>
+              <span style={{ color: "var(--color-win)" }}>{t("common.white")}</span>
+              {" · "}
+              <span style={{ color: "var(--color-draw)" }}>{t("common.draw")}</span>
+              {" · "}
+              <span style={{ color: "var(--color-loss)" }}>{t("common.black")}</span>
+            </>
+          ),
+        },
+        { label: t("ins.games"), breite: 66, rechts: true },
+        { label: t("blatt.bookElo"), breite: 40, rechts: true },
+      ])}
+      {stand.zuege.map((zug, index) => buchzeile(zug, index === stand.zuege.length - 1, onZug))}
+      {stand.musterpartien.length > 0 && (
+        <div className="mt-3.5">
+          <Feldname>{t("an.bookTopGames")}</Feldname>
+          <div className="mt-1">
+            {stand.musterpartien.map((partie, index) => (
+              <button
+                key={partie.id}
+                type="button"
+                onClick={partie.onOeffnen}
+                className={`flex w-full items-baseline gap-2.5 py-[6px] text-start ${
+                  index === stand.musterpartien.length - 1 ? "" : "border-b border-line"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate text-[12px] text-ink2">
+                  {partie.paarung}
+                </span>
+                <span className="blatt-zahl flex-none text-[11px] text-ink3">{partie.jahr}</span>
+                <span className="blatt-zahl w-10 flex-none text-end text-[11.5px] text-ink">
+                  {partie.ergebnis}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const buchTeil = buch ? (
+    <div>
+      <Rubrik>{t("an.book")}</Rubrik>
+      {/* Vier Quellen, vier Fragen · als Register mit Marke an der Kante, wie
+          die Tiefenreiter der Insights. Die Reiter stehen auch dann da, wenn
+          eine Quelle gesperrt ist: Was es gibt, soll man sehen können, bevor
+          man es kauft. */}
+      <div className="flex border-b border-line">
+        {buch.reiter.map((reiter) => {
+          const an = reiter.id === buch.quelle;
+          return (
+            <button
+              key={reiter.id}
+              type="button"
+              onClick={() => buch.onQuelle(reiter.id)}
+              aria-current={an ? "page" : undefined}
+              className={`relative flex min-h-11 flex-1 items-center justify-center gap-1 px-1 text-[12px] ${
+                an ? "font-semibold text-ink" : "text-ink3 hover:text-ink2"
+              }`}
+            >
+              {an && <span aria-hidden className="absolute inset-x-2 -bottom-px h-[2px] bg-ink" />}
+              <span className="truncate">{reiter.name}</span>
+              {!an && reiter.plus && <Sparkles size={10} className="shrink-0 text-accent" />}
+            </button>
+          );
+        })}
+      </div>
+      {buch.hinweis ? (
+        <div className="mt-3 text-[12.5px] leading-[1.6] text-ink3">{buch.hinweis}</div>
+      ) : buch.motor ? (
+        <>
+          {spaltenkopf([
+            { label: t("common.moves.one"), breite: 44 },
+            { label: t("blatt.bookEval") },
+            { label: t("blatt.bookWinrate"), breite: 68, rechts: true },
+          ])}
+          {buch.motor.zuege.map((zug, index) => (
+            <button
+              key={zug.san}
+              type="button"
+              onClick={() => buch.onZug(zug.san)}
+              title={t("an.bookPlay", { san: translateSan(zug.san, locale) })}
+              className={`flex h-[30px] w-full items-center gap-[11px] text-start ${
+                index === (buch.motor?.zuege.length ?? 0) - 1 ? "" : "border-b border-line"
+              }`}
+            >
+              <span className="notation blatt-zahl w-11 flex-none truncate text-[12.5px] text-ink">
+                {translateSan(zug.san, locale)}
+              </span>
+              <span className="blatt-zahl min-w-0 flex-1 truncate text-[12.5px] text-ink2">
+                {zug.bewertung == null
+                  ? "—"
+                  : `${zug.bewertung >= 0 ? "+" : "−"}${de(Math.abs(zug.bewertung), 2)}`}
+              </span>
+              <span className="blatt-zahl w-[68px] flex-none truncate text-end text-[11.5px] text-ink3">
+                {zug.quote != null ? `${zug.quote} %` : ""}
+              </span>
+            </button>
+          ))}
+        </>
+      ) : buch.stand && buch.sperre ? (
+        // Gesperrt steht dieselbe Form da, nur unscharf · gefragt wird nichts.
+        // `blatt-formular` nimmt der Sperrfläche ihre runden Ecken.
+        <div className="blatt-formular">
+          <PlusLock feature={buch.sperre}>{buchstand(buch.stand, buch.onZug)}</PlusLock>
+        </div>
+      ) : buch.stand ? (
+        buchstand(buch.stand, buch.onZug)
+      ) : null}
+      {(buch.stand || buch.motor) && (
+        <Fussnote linie>
+          {buch.motor ? t("set.chessdbNote") : t("blatt.bookNote")}
+          {(buch.stand?.ausCache || buch.motor?.ausCache) && ` · ${t("an.bookCached")}`}
+        </Fussnote>
+      )}
+    </div>
+  ) : null;
+
+  /**
+   * Diese Stellung in den eigenen Partien.
+   *
+   * Zwei Auskünfte, beide zugleich Griffe: was man von hier aus gespielt hat
+   * und wie es ausging, und welche Partien durch diese Stellung gingen. Die
+   * Bahn trägt den Strich bei fünfzig Prozent — ohne ihn sähen 47 % nach viel
+   * aus.
+   */
+  const stellungenTeil = stellungen ? (
+    <div>
+      <Rubrik>{t("an.posInGames")}</Rubrik>
+      {stellungen.gesamt > 0 ? (
+        <>
+          <div className="mt-2.5 text-[12.5px] text-ink2">
+            {t(stellungen.gesamt === 1 ? "an.reachedIn.one" : "an.reachedIn.many", {
+              n: deInt(stellungen.gesamt),
+            })}
+          </div>
+          {stellungen.zuege.length > 0 && (
+            <>
+              {spaltenkopf([
+                { label: t("common.moves.one"), breite: 44 },
+                { label: t("blatt.scored") },
+                { label: t("ins.games"), breite: 62, rechts: true },
+              ])}
+              {stellungen.zuege.map((zug, index) => (
+                <button
+                  key={zug.san}
+                  type="button"
+                  onClick={() => stellungen.onZug(zug.san)}
+                  title={t("an.bookPlay", { san: translateSan(zug.san, locale) })}
+                  className={`flex h-[30px] w-full items-center gap-[11px] text-start ${
+                    index === stellungen.zuege.length - 1 ? "" : "border-b border-line"
+                  }`}
+                >
+                  <span className="notation blatt-zahl w-11 flex-none truncate text-[12.5px] text-ink">
+                    {translateSan(zug.san, locale)}
+                  </span>
+                  <span className="relative h-[11px] min-w-0 flex-1 border-b border-line2">
+                    <span
+                      className="absolute bottom-0 start-0 h-[9px]"
+                      style={{
+                        width: anteil(Math.max(0, Math.min(100, zug.quote)), 100),
+                        background: zug.quote >= 50 ? "var(--color-win)" : "var(--color-loss)",
+                      }}
+                    />
+                    <span
+                      aria-hidden
+                      className="absolute -bottom-[3px] h-[17px] w-px"
+                      style={{ insetInlineStart: "50%", background: "var(--color-ink3)" }}
+                    />
+                  </span>
+                  <span className="blatt-zahl w-[62px] flex-none truncate text-end text-[12px] text-ink">
+                    {deInt(zug.partien)}
+                    {" · "}
+                    {de(zug.quote)} %
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+          {stellungen.treffer.length > 0 && (
+            <div className="mt-3.5">
+              <Feldname>{t("nav.games")}</Feldname>
+              <div className="mt-1">
+                {stellungen.treffer.map((treffer, index) => (
+                  <button
+                    key={`${treffer.id}-${treffer.ply}`}
+                    type="button"
+                    onClick={treffer.onOeffnen}
+                    className={`flex w-full items-baseline gap-2.5 py-[6px] text-start ${
+                      index === stellungen.treffer.length - 1 ? "" : "border-b border-line"
+                    }`}
+                  >
+                    <span className="blatt-zahl w-[72px] flex-none truncate text-[11.5px] text-ink3">
+                      {treffer.datum}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink2">
+                      {treffer.gegner}
+                    </span>
+                    <span className="flex-none">
+                      <Punkt ergebnis={treffer.ergebnis} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <Fussnote linie>{t("blatt.posNote")}</Fussnote>
+        </>
+      ) : (
+        <div className="mt-3 text-[12.5px] leading-[1.6] text-ink3">{t("an.posNotFound")}</div>
+      )}
+    </div>
+  ) : null;
+
+  const apparat =
+    buchTeil || stellungenTeil ? (
+      <div className="flex min-w-0 flex-col gap-6">
+        {buchTeil}
+        {stellungenTeil}
+      </div>
+    ) : null;
 
   /**
    * Der Kopf einer Brettseite · Farbfeld, Name, Wertung — und darunter, was
@@ -523,6 +1038,7 @@ export default function AnalysisBlatt({
         <div className="mt-3.5">{brettSpalte}</div>
         <div className="mt-4">{partietext}</div>
         {neben && <div className="mt-4">{neben}</div>}
+        {apparat && <div className="mt-6">{apparat}</div>}
       </div>
     );
   }
@@ -530,18 +1046,37 @@ export default function AnalysisBlatt({
   return (
     <div className="mx-auto flex min-h-full max-w-[1560px] flex-col px-10 pb-[22px] pt-6">
       {kopf}
-      <div className="flex min-h-0 flex-1 gap-9 pt-5">
+      {/* Ein Raster und keine Reihe, weil der Apparat eine dritte Spalte ist,
+          sobald das Fenster sie hergibt · dieselbe Schwelle wie in der
+          gewöhnlichen Fassung. Darunter steht er unter dem Satz und nicht
+          unter dem Brett: Er gehört zur Stellung, nicht zur Partie. Zweimal
+          gesetzt wird er nie — die Spalte wechselt, das Stück bleibt. */}
+      <div
+        className={`grid min-h-0 min-w-0 flex-1 gap-x-9 gap-y-8 pt-5 ${
+          // Die Textspalte darf bis auf null schrumpfen · sonst nähme sie in
+          // einem schmalen Fenster dem Brett die Breite, und ausgerechnet das
+          // Brett ist das, wofür man die Analyse öffnet.
+          apparat
+            ? "grid-cols-[minmax(0,var(--board-col))_minmax(0,1fr)] min-[1660px]:grid-cols-[minmax(0,var(--board-col))_minmax(0,1fr)_320px]"
+            : "grid-cols-[minmax(0,var(--board-col))_minmax(0,1fr)]"
+        }`}
+      >
         {brettSpalte}
         {/* Mit Partie stehen Text und Bilanz an den beiden Enden der Spalte,
             wie Satz und Fußnote auf einer Buchseite. Am freien Brett wächst
             der Zugtext von oben nach; dann rückt die Engine dicht darunter
             und nicht an den Fuß einer leeren Spalte. */}
         <div
-          className={`flex min-w-0 flex-1 flex-col gap-6 ${frei ? "" : "justify-between"}`}
+          className={`flex min-w-0 flex-col gap-6 ${frei ? "" : "justify-between"}`}
         >
           {partietext}
           {neben}
         </div>
+        {apparat && (
+          <div className="col-start-2 min-w-0 min-[1660px]:col-start-3 min-[1660px]:row-start-1">
+            {apparat}
+          </div>
+        )}
       </div>
     </div>
   );

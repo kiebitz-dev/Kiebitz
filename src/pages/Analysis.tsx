@@ -48,6 +48,7 @@ import {
   refdbStatus,
   type BookResult,
   type BookSource,
+  type ChessDbMove,
   type ChessDbResult,
 } from "../lib/settings";
 import {
@@ -78,6 +79,7 @@ import FocusBoard, { FocusButton, FocusMenuItem } from "../components/FocusBoard
 import { PlusBadge, PlusLock } from "../components/PlusLock";
 import { openPlusDialog } from "../lib/plus/dialog";
 import { usePlusGate } from "../lib/plus/usePlus";
+import type { PlusFeature } from "../lib/plus/types";
 import { de, deInt, deShort } from "../lib/format";
 import { openExternal } from "../lib/ext";
 import { evalLabel, winProb } from "../lib/evaluation";
@@ -93,6 +95,7 @@ import {
 } from "../lib/clocks";
 import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
+import { begruendeZug, erklaereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
@@ -103,6 +106,10 @@ const AnalysisBlatt = lazy(() => import("./blatt/AnalysisBlatt"));
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
     davon abhängigen useMemo-Ketten bei jedem Durchlauf neu rechnen. */
 const NO_MOVES: string[] = [];
+
+/** Dasselbe für die Sätze der Analyse · siehe `blattAnalysen`. */
+const NO_ANALYSEN: { erklaerung?: string | null; grund?: string | null; gewicht?: number | null }[] =
+  [];
 
 /** Einheitliche Zug-Sicht für Demo- und DB-Partien. */
 interface ViewMove {
@@ -422,6 +429,23 @@ const BOOK_PREVIEW: BookResult = {
   opening: null,
   cached: true,
 };
+
+/**
+ * Was das Eröffnungsbuch gerade zu sagen hat.
+ *
+ * Laden, Fehler, Sperre, leerer Bestand, Auskunft · diese Kette ist die
+ * eigentliche Arbeit der Karte, und sie ist in beiden Modi dieselbe. Sie
+ * steht deshalb einmal da und wird zweimal gesetzt: als Karte in der
+ * gewöhnlichen Fassung, als Rubrik im Blatt. Gerechnet wird sie nie zweimal ·
+ * das ist die Regel des Modus (siehe docs/design.md).
+ */
+type BookView =
+  /** Ein Satz statt einer Tabelle · warum hier gerade nichts steht. */
+  | { kind: "note"; text: string }
+  /** ChessDB · Bewertungen einer Engine, keine Häufigkeiten. */
+  | { kind: "engine"; moves: ChessDbMove[]; cached: boolean }
+  /** Häufigkeiten · gesperrt steht hier die Vorschau. */
+  | { kind: "stats"; data: BookResult; locked: PlusFeature | null };
 
 export default function Analysis({
   targetGameId,
@@ -1004,6 +1028,66 @@ export default function Analysis({
     return commentFor(t, sans.slice(0, index), move, prevEval);
   };
 
+  /**
+   * Was die Analyse zu jedem Zug gefunden hat · Satz, Begründung, Preis.
+   *
+   * Dieselbe Satzmaschine wie auf dem Blatt des Dashboards, siehe
+   * docs/EXPLANATIONS.md: Rust erkennt die Motive, `lib/erklaerung.ts` macht
+   * Sätze daraus, und zwar in der Sprache, die gerade eingestellt ist. Der
+   * Same hängt an Partie und Halbzug — derselbe Zug liest sich in jeder
+   * Sitzung gleich, zwei Züge nebeneinander lesen sich verschieden.
+   *
+   * Nur im Diagramm-Modus: Die gewöhnliche Fassung zeigt die Sätze nicht, und
+   * eine Partie mit 80 Halbzügen soll sie dann auch nicht bauen.
+   */
+  const blattAnalysen = useMemo(() => {
+    if (!diagramMode) return NO_ANALYSEN;
+    // Web-Vorschau · die Demo-Partie bringt die Daten selbst mit, und auch sie
+    // gehen durch die Satzmaschine statt als fertiger Text im Datensatz zu
+    // stehen.
+    if (!desktop) {
+      return featuredGame.moves.map((move, index) => {
+        if (!move.motif) return {};
+        const zeile = {
+          ply: index + 1,
+          san: move.san,
+          judgment: move.nag === "??" ? "blunder" : "inaccuracy",
+          motif: move.motif,
+          motif_detail: move.motifDetail,
+          loss_cp: move.lossCp,
+        };
+        return {
+          erklaerung: erklaereZug(zeile, { t, locale, seed: `demo:${index + 1}` }),
+          grund: begruendeZug(zeile, {
+            t,
+            locale,
+            evalDavor: index > 0 ? featuredGame.moves[index - 1].eval : undefined,
+            evalDanach: move.eval,
+          }),
+          gewicht: move.lossCp ?? null,
+        };
+      });
+    }
+    if (!live || !rows || rows.length === 0) return NO_ANALYSEN;
+    const byPly = new Map(rows.map((row) => [row.ply, row]));
+    return sans.map((_, index) => {
+      const row = byPly.get(index + 1);
+      if (!row) return {};
+      return {
+        erklaerung: erklaereZug(row, { t, locale, seed: `${game.id}:${row.ply}` }),
+        // Die Bewertung *vor* dem Zug ist die *nach* dem vorigen · beim ersten
+        // Halbzug gibt es keine, und dann bleibt der Satz bei der Widerlegung.
+        grund: begruendeZug(row, {
+          t,
+          locale,
+          evalDavor: index > 0 ? byPly.get(index)?.eval_cp : undefined,
+          evalDanach: row.eval_cp,
+        }),
+        gewicht: row.loss_cp ?? null,
+      };
+    });
+  }, [diagramMode, desktop, live, game?.id, rows, sans, t, locale]);
+
   const evalSeries = viewMoves
     .map((m, i) => ({ ply: i + 1, eval: Math.max(-600, Math.min(600, evalNum(m.evalCp, m.mateIn))) / 100 }))
     .filter((_, i) => !live || (rows ?? []).length > i);
@@ -1383,6 +1467,35 @@ export default function Analysis({
     bookSource === "own" ? !refdbGate.unlocked && !refdbGate.pending
     : bookSource === "engine" ? false
     : !explorerGate.unlocked && !explorerGate.pending;
+
+  /** Die Auskunft der gewählten Quelle · siehe BookView oben. */
+  const bookView: BookView = (() => {
+    if (bookSource === "engine") {
+      if (bookState === "loading" && !book) return { kind: "note", text: t("an.bookLoading") };
+      if (bookState === "error") return { kind: "note", text: t("an.bookError") };
+      if (book && book.status === "ok" && book.moves.length > 0) {
+        return { kind: "engine", moves: book.moves.slice(0, 5), cached: book.cached };
+      }
+      return { kind: "note", text: t("an.bookUnknown") };
+    }
+    // Gesperrt wird nichts abgefragt · die Vorschau zeigt die Form, die Sperre
+    // legt die Unschärfe darüber.
+    if (bookLocked) {
+      return {
+        kind: "stats",
+        data: BOOK_PREVIEW,
+        locked: bookSource === "own" ? "reference_database" : "opening_explorer",
+      };
+    }
+    if (bookSource === "own" && refGames === 0) return { kind: "note", text: t("an.refdbEmpty") };
+    if (bookSource !== "own" && !explorerOn) return { kind: "note", text: t("an.explorerOff") };
+    if (statsState === "loading" && !stats) return { kind: "note", text: t("an.bookLoading") };
+    if (statsState === "error") return { kind: "note", text: statsError ?? t("an.bookError") };
+    if (stats && stats.status === "ok" && stats.moves.length > 0) {
+      return { kind: "stats", data: stats, locked: null };
+    }
+    return { kind: "note", text: t("an.bookUnknown") };
+  })();
 
   /**
    * Eine Zeile je Zug: wie oft er gespielt wurde, wie es ausging, von wem.
@@ -2012,6 +2125,12 @@ export default function Analysis({
             nag: move.judgment && MARKED_IN_LIST.includes(move.judgment) ? NAG[move.judgment] : undefined,
             farbe: move.judgment ? JUDGMENT_COLOR[move.judgment] : undefined,
             kommentar: blattKommentar(index),
+            // Was die Analyse gefunden hat · das Blatt zeigt es unter dem
+            // Satz, zum angeklickten Zug oder sonst zu den schwersten
+            // Stellen der Partie.
+            erklaerung: blattAnalysen[index]?.erklaerung,
+            grund: blattAnalysen[index]?.grund,
+            gewicht: blattAnalysen[index]?.gewicht,
           }))}
           ply={ply}
           onPly={goToPly}
@@ -2026,6 +2145,98 @@ export default function Analysis({
             }))}
           acpl={summary.acpl}
           genauigkeit={live ? (game.accuracy ?? derivedAccuracies?.mine.overall ?? null) : null}
+          /* Der Apparat · dieselben Daten wie in den beiden Karten der
+             gewöhnlichen Fassung, gesetzt als zwei Rubriken. Im Web gibt es
+             weder Referenzdatenbank noch eigene Partien; dort steht er nicht. */
+          buch={
+            desktop && bookTabs.length > 0
+              ? {
+                  reiter: bookTabs.map((tab) => ({
+                    id: tab.id,
+                    name: tab.label,
+                    plus: tab.locked,
+                  })),
+                  quelle: bookSource,
+                  onQuelle: (id) => setBookSource(id as BookTab),
+                  hinweis: bookView.kind === "note" ? bookView.text : undefined,
+                  motor:
+                    bookView.kind === "engine"
+                      ? {
+                          zuege: bookView.moves.map((move) => ({
+                            san: move.san || move.uci,
+                            bewertung: move.score == null ? null : move.score / 100,
+                            quote: move.winrate,
+                          })),
+                          ausCache: bookView.cached,
+                        }
+                      : undefined,
+                  stand:
+                    bookView.kind === "stats"
+                      ? {
+                          partien: bookView.data.white + bookView.data.draws + bookView.data.black,
+                          eroeffnung: bookView.data.opening,
+                          zuege: bookView.data.moves.slice(0, 8).map((move) => ({
+                            san: move.san,
+                            weiss: move.white,
+                            remis: move.draws,
+                            schwarz: move.black,
+                            elo: move.average_rating,
+                          })),
+                          musterpartien: bookView.data.top_games.slice(0, 4).map((game_) => ({
+                            id: game_.id,
+                            paarung: `${game_.white}${game_.white_elo ? ` ${game_.white_elo}` : ""} – ${
+                              game_.black
+                            }${game_.black_elo ? ` ${game_.black_elo}` : ""}`,
+                            jahr: game_.year == null ? "" : String(game_.year),
+                            ergebnis:
+                              game_.winner === "white"
+                                ? "1–0"
+                                : game_.winner === "black"
+                                  ? "0–1"
+                                  : "½–½",
+                            // Die eigene Datenbank hat die Partie im Haus · sie
+                            // kommt aufs Brett. Bei Lichess liegt sie dort und
+                            // wird dort geöffnet.
+                            onOeffnen: () =>
+                              bookView.data.source === "own"
+                                ? void openRefGame(game_.id)
+                                : openExternal(`https://lichess.org/${game_.id}`),
+                          })),
+                          ausCache: bookView.data.cached && bookView.data.source !== "own",
+                        }
+                      : undefined,
+                  sperre: bookView.kind === "stats" ? (bookView.locked ?? undefined) : undefined,
+                  onZug: playBookMove,
+                }
+              : undefined
+          }
+          stellungen={
+            desktop
+              ? {
+                  gesamt: posSearch?.total_games ?? 0,
+                  zuege: (posSearch?.next_moves ?? []).slice(0, 4).map((move) => ({
+                    san: move.san,
+                    partien: move.games,
+                    quote: move.score_pct,
+                  })),
+                  treffer: (posSearch?.sample ?? [])
+                    .filter((hit) => hit.game_id !== selectedId)
+                    .slice(0, 4)
+                    .map((hit) => ({
+                      id: hit.game_id,
+                      ply: hit.ply,
+                      datum: hit.played_at,
+                      gegner: hit.opponent,
+                      ergebnis: hit.result,
+                      onOeffnen: () => {
+                        setSelectedId(hit.game_id);
+                        setTimeout(() => setPly(hit.ply), 0);
+                      },
+                    })),
+                  onZug: playBookMove,
+                }
+              : undefined
+          }
         />
         {/* Fokus und Teilen gehören zum Brett und nicht zum Layout · beide
             Fassungen setzen dieselbe Stellung, und wer sie im Blatt groß sehen
@@ -2204,6 +2415,11 @@ export default function Analysis({
             </div>
           </Card>
 
+          {/* Der Verlauf gehört zu einer gerechneten Partie. Am freien Brett
+              gibt es keinen, und die Karte stand dort seit jeher leer unter
+              der Zugliste — ein Kasten, der nur sagt, dass er nichts sagt.
+              Ohne sie füllt die Zugliste die Spalte, die das Brett vorgibt. */}
+          {!scratch && (
           <Card title={t("an.evalChart")} pad={false}>
             <div className="px-2 pb-1 pt-2">
               {evalSeries.length >= 2 ? (
@@ -2260,6 +2476,7 @@ export default function Analysis({
               )}
             </div>
           </Card>
+          )}
         </div>
         </div>
 
@@ -2273,6 +2490,9 @@ export default function Analysis({
             onMove={(uci) => playBoardMove(uci.slice(0, 2), uci.slice(2, 4), uci[4] ?? "q")}
           />
 
+          {/* Dieselbe Begründung wie beim Verlauf: Ohne Partie gibt es keine
+              Urteile, und eine Bilanz aus neun Nullen ist keine Auskunft. */}
+          {!scratch && (
           <Card title={live ? t("an.myMoves") : t("an.autoAnnotation")}>
             <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
               {(["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder"] as MoveJudgment[]).map((quality) => (
@@ -2290,6 +2510,7 @@ export default function Analysis({
               <span className="text-ink2">{t("common.black")} {desktop ? summary.acpl.black : featuredGame.summary.acplBlack}</span>
             </div>
           </Card>
+          )}
 
           {live && (
             <Card title={t("an.phaseAccuracy")}>
@@ -2365,59 +2586,39 @@ export default function Analysis({
                   </button>
                 ))}
               </div>
-              {bookSource === "engine" ? (
-                bookState === "loading" && !book ? (
-                  <div className="text-[12px] text-ink3">{t("an.bookLoading")}</div>
-                ) : bookState === "error" ? (
-                  <div className="text-[12px] text-ink3">{t("an.bookError")}</div>
-                ) : book && book.status === "ok" && book.moves.length > 0 ? (
-                  <div className="flex flex-col gap-1.5">
-                    {book.moves.slice(0, 5).map((m) => (
-                      <button
-                        key={m.uci}
-                        onClick={() => playBookMove(m.san || m.uci)}
-                        className="flex items-center justify-between rounded-md px-1 py-0.5 text-left text-[12.5px] transition-colors hover:bg-panel2"
-                      >
-                        <span className="w-14 font-medium">{m.san || m.uci}</span>
-                        <span className="tabular-nums text-ink2">
-                          {m.score != null
-                            ? `${m.score >= 0 ? "+" : "−"}${de(Math.abs(m.score) / 100, 2)}`
-                            : "—"}
-                        </span>
-                        <span className="w-16 text-right text-[11.5px] text-ink3">
-                          {m.winrate != null ? `${m.winrate} %` : ""}
-                        </span>
-                      </button>
-                    ))}
-                    {book.cached && (
-                      <div className="mt-1 border-t border-line pt-1.5 text-[11px] text-ink3">
-                        {t("an.bookCached")}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-[12px] text-ink3">{t("an.bookUnknown")}</div>
-                )
-              ) : bookLocked ? (
-                /* Gesperrt wird nichts abgefragt · die Vorschau zeigt die Form,
-                   die Sperre legt die Unschärfe darüber. */
-                <PlusLock feature={bookSource === "own" ? "reference_database" : "opening_explorer"}>
-                  {statsRows(BOOK_PREVIEW)}
-                </PlusLock>
-              ) : bookSource === "own" && refGames === 0 ? (
-                <div className="text-[12px] leading-relaxed text-ink3">{t("an.refdbEmpty")}</div>
-              ) : bookSource !== "own" && !explorerOn ? (
-                <div className="text-[12px] leading-relaxed text-ink3">{t("an.explorerOff")}</div>
-              ) : statsState === "loading" && !stats ? (
-                <div className="text-[12px] text-ink3">{t("an.bookLoading")}</div>
-              ) : statsState === "error" ? (
-                <div className="text-[12px] leading-relaxed text-ink3">
-                  {statsError ?? t("an.bookError")}
+              {/* Welche der fünf Auskunftslagen gilt, steht in `bookView` und
+                  nicht hier · dieselbe Rechnung trägt das Blatt. */}
+              {bookView.kind === "note" ? (
+                <div className="text-[12px] leading-relaxed text-ink3">{bookView.text}</div>
+              ) : bookView.kind === "engine" ? (
+                <div className="flex flex-col gap-1.5">
+                  {bookView.moves.map((m) => (
+                    <button
+                      key={m.uci}
+                      onClick={() => playBookMove(m.san || m.uci)}
+                      className="flex items-center justify-between rounded-md px-1 py-0.5 text-left text-[12.5px] transition-colors hover:bg-panel2"
+                    >
+                      <span className="w-14 font-medium">{m.san || m.uci}</span>
+                      <span className="tabular-nums text-ink2">
+                        {m.score != null
+                          ? `${m.score >= 0 ? "+" : "−"}${de(Math.abs(m.score) / 100, 2)}`
+                          : "—"}
+                      </span>
+                      <span className="w-16 text-right text-[11.5px] text-ink3">
+                        {m.winrate != null ? `${m.winrate} %` : ""}
+                      </span>
+                    </button>
+                  ))}
+                  {bookView.cached && (
+                    <div className="mt-1 border-t border-line pt-1.5 text-[11px] text-ink3">
+                      {t("an.bookCached")}
+                    </div>
+                  )}
                 </div>
-              ) : stats && stats.status === "ok" && stats.moves.length > 0 ? (
-                statsRows(stats)
+              ) : bookView.locked ? (
+                <PlusLock feature={bookView.locked}>{statsRows(bookView.data)}</PlusLock>
               ) : (
-                <div className="text-[12px] text-ink3">{t("an.bookUnknown")}</div>
+                statsRows(bookView.data)
               )}
             </Card>
           )}
