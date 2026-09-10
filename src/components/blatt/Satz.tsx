@@ -7,7 +7,12 @@
  *
  * Kein Farbwert: alles über die Tokens aus src/themes.css.
  */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Check } from "lucide-react";
 // Wie eine Eingabe in mehrere Stichwörter zerfällt, ist eine Regel und keine
 // Darstellung · sie steht deshalb weiter beim Tag-Editor der gewöhnlichen
@@ -456,6 +461,12 @@ export function Feldname({ children }: { children: ReactNode }) {
  * Inhaltsverzeichnis eines Repertoires, die Aufgabenliste der Endspiele. Die
  * Zahl rechts steht kräftig, wenn sie etwas offenes meint, und blass, wenn sie
  * nur ein Wert ist.
+ *
+ * `griffe` sind die Handgriffe am Zeilenende — verschieben, ändern, wegnehmen.
+ * Sie stehen neben der Zahl und nicht in ihr: Ein Verzeichnis bleibt lesbar,
+ * auch wenn an seinen Zeilen etwas zu tun ist. Weil eine Schaltfläche keine
+ * zweite enthalten darf, wird die Zeile mit Griffen zur Reihe aus Zeile und
+ * Griffen; ohne sie bleibt sie die eine Schaltfläche, die sie immer war.
  */
 export function Verzeichniszeile({
   name,
@@ -464,6 +475,9 @@ export function Verzeichniszeile({
   tief = 0,
   hoehe = 44,
   onClick,
+  onKeyDown,
+  griffe,
+  knopfRef,
 }: {
   name: ReactNode;
   zahl?: ReactNode;
@@ -472,6 +486,11 @@ export function Verzeichniszeile({
   tief?: number;
   hoehe?: number;
   onClick?: () => void;
+  /** Tastatur an der Zeile · das Blättern durch die Züge hängt daran. */
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+  /** Handgriffe am Zeilenende · stehen rechts neben der Zahl. */
+  griffe?: ReactNode;
+  knopfRef?: (element: HTMLButtonElement | null) => void;
 }) {
   const inhalt = (
     <>
@@ -499,10 +518,12 @@ export function Verzeichniszeile({
     </>
   );
   const klasse = "relative flex w-full items-baseline gap-2 text-start";
-  return onClick ? (
+  const zeile = onClick ? (
     <button
       type="button"
+      ref={knopfRef}
       onClick={onClick}
+      onKeyDown={onKeyDown}
       aria-current={aktiv ? "true" : undefined}
       className={klasse}
       style={{ minHeight: hoehe, paddingInlineStart: tief * 16 }}
@@ -515,6 +536,13 @@ export function Verzeichniszeile({
       style={{ minHeight: hoehe, paddingInlineStart: tief * 16 }}
     >
       {inhalt}
+    </div>
+  );
+  if (!griffe) return zeile;
+  return (
+    <div className="group flex items-stretch">
+      <span className="flex min-w-0 flex-1 items-center">{zeile}</span>
+      {griffe}
     </div>
   );
 }

@@ -10,8 +10,39 @@
  * In der Mitte die Buchstellung als gedrucktes Diagramm — nicht als Brett,
  * denn hier wird gelesen, nicht gezogen. Erst im Training wird daraus ein
  * Brett mit den Feldfarben des Themas.
+ *
+ * ── Was am Verzeichnis zu tun ist ──────────────────────────────────────────
+ *
+ * Ein Inhaltsverzeichnis ist zuerst zum Lesen da, und deshalb standen die drei
+ * Handgriffe der gewöhnlichen Fassung — verschieben, ändern, wegnehmen — hier
+ * lange nicht. Das war kein Satz, sondern ein Verlust: Wer den Modus
+ * einschaltete, konnte eine Variante nur noch ansehen. Sie stehen jetzt am
+ * Zeilenende, aber nicht als drei Knöpfe an jeder Zeile: sichtbar werden sie
+ * an der aufgeschlagenen Zeile und unter dem Zeiger, ihr Platz bleibt immer
+ * stehen, damit die Punktlinie beim Überfahren nicht springt.
+ *
+ * Verschoben wird mit demselben Griff wie drüben — ziehen oder ↑/↓. Die Zeilen
+ * eines Teils sind alle gleich hoch, und darum braucht das Ziehen hier keine
+ * gemessenen Zeilenhöhen: Der Weg des Zeigers geteilt durch die Zeilenhöhe ist
+ * die Zahl der Plätze.
+ *
+ * ── Blättern in der Linie ──────────────────────────────────────────────────
+ *
+ * ←/→ gehen durch die Züge der gewählten Variante, ↑/↓ zur nächsten. Die Seite
+ * rechnet dafür nichts Eigenes: Ein Halbzug weiter ist derselbe `onZug`, den
+ * auch der Klick auslöst, und der Abdruck in der Mitte folgt ihm, weil er die
+ * Stellung des gewählten Knotens zeigt. Damit blättert man eine Variante durch
+ * wie eine Seite im Buch, statt sie nur als Ganzes anzusehen.
  */
-import type { ReactNode } from "react";
+import {
+  Fragment,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
+import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import {
   Balken,
@@ -33,10 +64,14 @@ export interface BuchZeile {
   name: string;
   /** Was an dieser Variante heute fällig ist · nicht ihre Länge. */
   faellig: number;
+  /** Halbzüge der Linie · die Grenze, bis zu der ←/→ blättern. */
+  zuege: number;
 }
 
 export interface BuchTeil {
   titel: string;
+  /** Für welche Farbe der Teil geführt wird · die Reihenfolge gilt je Seite. */
+  seite: "white" | "black";
   zeilen: BuchZeile[];
 }
 
@@ -69,9 +104,29 @@ export interface RepertoireBlattProps {
   abdeckungNote: string;
   abdeckungUnter: string;
   luecken: ReactNode;
+  /** Halbzug, der gerade aufgeschlagen ist · −1 ist die Grundstellung. */
+  aktivZug: number;
   onWaehlen: (key: string) => void;
+  /** Eine Variante an einem bestimmten Halbzug aufschlagen. */
+  onZug: (key: string, zug: number) => void;
+  /**
+   * Neue Reihenfolge eines Teils · dieselben Schlüssel, anders sortiert. Ohne
+   * den Handler gibt es keine Griffe (die Web-Vorschau ist fest).
+   */
+  onVerschieben?: (seite: "white" | "black", keys: string[]) => void;
+  onBearbeiten?: (key: string) => void;
+  onLoeschen?: (key: string) => void;
   onHinzufuegen: () => void;
   onTraining: () => void;
+}
+
+/** Was gerade am Zeiger hängt · Teil, Herkunft, Ziel und der Weg dorthin. */
+interface Ziehen {
+  seite: "white" | "black";
+  von: number;
+  nach: number;
+  dy: number;
+  startY: number;
 }
 
 export default function RepertoireBlatt({
@@ -93,35 +148,211 @@ export default function RepertoireBlatt({
   abdeckungNote,
   abdeckungUnter,
   luecken,
+  aktivZug,
   onWaehlen,
+  onZug,
+  onVerschieben,
+  onBearbeiten,
+  onLoeschen,
   onHinzufuegen,
   onTraining,
 }: RepertoireBlattProps) {
   const { t } = useI18n();
+  const knopfRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [ziehen, setZiehen] = useState<Ziehen | null>(null);
+  const zeilenHoehe = mobile ? 46 : 44;
+
+  /** Alle Varianten in der Reihenfolge, in der sie im Verzeichnis stehen. */
+  const alle = teile.flatMap((teil) =>
+    teil.zeilen.map((zeile) => ({ ...zeile, seite: teil.seite }))
+  );
+
+  const verschieben = (seite: "white" | "black", von: number, nach: number) => {
+    const teil = teile.find((eintrag) => eintrag.seite === seite);
+    if (!onVerschieben || !teil) return;
+    if (von === nach || nach < 0 || nach >= teil.zeilen.length) return;
+    const keys = teil.zeilen.map((zeile) => zeile.key);
+    keys.splice(nach, 0, ...keys.splice(von, 1));
+    onVerschieben(seite, keys);
+  };
+
+  const beginnZiehen = (
+    event: PointerEvent<HTMLButtonElement>,
+    seite: "white" | "black",
+    index: number
+  ) => {
+    if (!onVerschieben || ziehen || (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    // Der Zeiger bleibt am Griff, auch wenn der Finger die Zeile verlässt ·
+    // fehlt die Methode (Testumgebung), zieht die Zeile eben ohne Fang.
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      /* ohne Zeigerfang weiterziehen */
+    }
+    setZiehen({ seite, von: index, nach: index, dy: 0, startY: event.clientY });
+  };
+
+  const beimZiehen = (event: PointerEvent<HTMLButtonElement>) => {
+    const y = event.clientY;
+    setZiehen((stand) => {
+      if (!stand) return stand;
+      const teil = teile.find((eintrag) => eintrag.seite === stand.seite);
+      const anzahl = teil?.zeilen.length ?? 0;
+      // Alle Zeilen eines Teils sind gleich hoch · der Weg des Zeigers geteilt
+      // durch die Zeilenhöhe ist die Zahl der Plätze, um die es geht.
+      const dy = Math.max(
+        -stand.von * zeilenHoehe,
+        Math.min((anzahl - 1 - stand.von) * zeilenHoehe, y - stand.startY)
+      );
+      const nach = Math.max(
+        0,
+        Math.min(anzahl - 1, stand.von + Math.round(dy / zeilenHoehe))
+      );
+      return { ...stand, dy, nach };
+    });
+  };
+
+  const endeZiehen = () => {
+    if (!ziehen) return;
+    verschieben(ziehen.seite, ziehen.von, ziehen.nach);
+    setZiehen(null);
+  };
+
+  const tasten = (event: KeyboardEvent<HTMLButtonElement>, zeile: BuchZeile) => {
+    const index = alle.findIndex((eintrag) => eintrag.key === zeile.key);
+    const jetzt = aktiv === zeile.key ? aktivZug : zeile.zuege - 1;
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const schritt = event.key === "ArrowUp" ? -1 : 1;
+      const ziel = alle[Math.max(0, Math.min(alle.length - 1, index + schritt))];
+      if (!ziel) return;
+      onZug(ziel.key, ziel.zuege - 1);
+      knopfRefs.current.get(ziel.key)?.focus();
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const schritt = event.key === "ArrowLeft" ? -1 : 1;
+      onZug(zeile.key, Math.max(-1, Math.min(zeile.zuege - 1, jetzt + schritt)));
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      onZug(zeile.key, event.key === "Home" ? -1 : zeile.zuege - 1);
+    }
+  };
+
+  /**
+   * Die Handgriffe am Zeilenende.
+   *
+   * Ihr Platz steht immer, sichtbar sind sie an der aufgeschlagenen Zeile und
+   * unter dem Zeiger · sonst spränge die Punktlinie beim Überfahren.
+   */
+  const griffe = (teil: BuchTeil, zeile: BuchZeile, index: number) => {
+    if (!onVerschieben && !onBearbeiten && !onLoeschen) return undefined;
+    const gehalten = ziehen?.seite === teil.seite && ziehen.von === index;
+    const sicht =
+      zeile.key === aktiv || gehalten
+        ? ""
+        : "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100";
+    const knopf = "flex w-[26px] flex-none items-center justify-center border-s border-line";
+    return (
+      <span className={`flex flex-none items-stretch ${sicht}`}>
+        {onVerschieben && (
+          <button
+            type="button"
+            aria-label={t("rep.reorderHandle", { name: zeile.name })}
+            title={t("rep.reorderHandle", { name: zeile.name })}
+            onPointerDown={(event) => beginnZiehen(event, teil.seite, index)}
+            onPointerMove={beimZiehen}
+            onPointerUp={endeZiehen}
+            onPointerCancel={endeZiehen}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+              event.preventDefault();
+              verschieben(teil.seite, index, index + (event.key === "ArrowUp" ? -1 : 1));
+            }}
+            className={`${knopf} touch-none ${gehalten ? "text-ink" : "text-ink3 hover:text-ink"}`}
+          >
+            <GripVertical aria-hidden size={13} />
+          </button>
+        )}
+        {onBearbeiten && (
+          <button
+            type="button"
+            aria-label={t("rep.editLine", { name: zeile.name })}
+            title={t("rep.editVariant")}
+            onClick={() => onBearbeiten(zeile.key)}
+            className={`${knopf} text-ink3 hover:text-ink`}
+          >
+            <Pencil aria-hidden size={13} />
+          </button>
+        )}
+        {onLoeschen && (
+          <button
+            type="button"
+            aria-label={t("rep.deleteLine", { name: zeile.name })}
+            title={t("rep.deleteVariant")}
+            onClick={() => onLoeschen(zeile.key)}
+            className={`${knopf} text-ink3 hover:text-loss`}
+          >
+            <Trash2 aria-hidden size={13} />
+          </button>
+        )}
+      </span>
+    );
+  };
+
+  /** Der Strich, der zeigt, wo die gegriffene Variante landet. */
+  const marke = (teil: BuchTeil, platz: number) => {
+    if (!ziehen || ziehen.seite !== teil.seite || ziehen.nach === ziehen.von) return null;
+    const ziel = ziehen.nach > ziehen.von ? ziehen.nach + 1 : ziehen.nach;
+    if (ziel !== platz) return null;
+    return <div aria-hidden className="h-px bg-ink" />;
+  };
 
   const buch = (
-    <div className={mobile ? "flex flex-col" : "flex w-[290px] flex-none flex-col"}>
+    <div className={mobile ? "flex flex-col" : "flex w-[330px] flex-none flex-col"}>
       <Rubrik weg={t("rep.addLine")} onWeg={onHinzufuegen}>
         {t("blatt.theBook")}
       </Rubrik>
       {teile.map((teil) => (
-        <div key={teil.titel}>
+        <div key={teil.titel} className={ziehen?.seite === teil.seite ? "select-none" : ""}>
           <Verzeichnisteil>{teil.titel}</Verzeichnisteil>
-          {teil.zeilen.map((zeile) => (
-            <Verzeichniszeile
-              key={zeile.key}
-              name={zeile.name}
-              zahl={zeile.faellig > 0 ? deInt(zeile.faellig) : ""}
-              aktiv={zeile.key === aktiv}
-              hoehe={mobile ? 46 : 44}
-              onClick={() => onWaehlen(zeile.key)}
-            />
-          ))}
+          {teil.zeilen.map((zeile, index) => {
+            const gehalten = ziehen?.seite === teil.seite && ziehen.von === index;
+            return (
+              <Fragment key={zeile.key}>
+                {marke(teil, index)}
+                <div
+                  className={gehalten ? "relative z-10" : ""}
+                  style={gehalten ? { transform: `translateY(${ziehen.dy}px)` } : undefined}
+                >
+                  <Verzeichniszeile
+                    name={zeile.name}
+                    zahl={zeile.faellig > 0 ? deInt(zeile.faellig) : ""}
+                    aktiv={zeile.key === aktiv}
+                    hoehe={zeilenHoehe}
+                    onClick={() => onWaehlen(zeile.key)}
+                    onKeyDown={(event) => tasten(event, zeile)}
+                    knopfRef={(element) => {
+                      if (element) knopfRefs.current.set(zeile.key, element);
+                      else knopfRefs.current.delete(zeile.key);
+                    }}
+                    griffe={griffe(teil, zeile, index)}
+                  />
+                </div>
+              </Fragment>
+            );
+          })}
+          {marke(teil, teil.zeilen.length)}
         </div>
       ))}
       <div className="flex-1" />
       <div className="mt-3 border-t border-line pt-2.5 text-[10.5px] leading-[1.6] text-ink3">
         {t("blatt.bookNumberNote")}
+        <span className="mt-1 block">{t("rep.variationKeys")}</span>
       </div>
     </div>
   );

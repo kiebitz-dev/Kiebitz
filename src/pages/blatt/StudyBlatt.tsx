@@ -14,7 +14,19 @@
  * Die fünf Bereichsfarben sind nicht neu erfunden: Es sind `AREA_COLOR` aus
  * lib/study.ts, in derselben festen Reihenfolge — und damit Tokens wie alles
  * andere.
+ *
+ * Unter den beiden Hälften steht, was die Seite sonst noch trägt und im Modus
+ * lange gefehlt hat: der Plan der nächsten sieben Tage (`Plantafel.tsx`) und
+ * die Spielhygiene. Beides ist keine Zugabe der gewöhnlichen Fassung, sondern
+ * gehört zum Reiter — ein Layoutmodus darf die Aufteilung ändern und keine
+ * Funktion kosten (siehe docs/design.md).
+ *
+ * Die Spielhygiene ist im Satz kein Kachelfeld, sondern das, was sie ist: ein
+ * paar Sätze über das eigene Spielen, nummeriert und auf Linien. Ein Rat ist
+ * kein Messwert und bekommt deshalb auch keine Zahl, die einer wäre — die
+ * Ziffer davor zählt nur mit.
  */
+import type { Area } from "../../lib/study";
 import type { ReactNode } from "react";
 import {
   Ergebniskasten,
@@ -25,6 +37,7 @@ import {
   Rubrik,
   type Feld,
 } from "../../components/blatt/Satz";
+import Plantafel from "./Plantafel";
 import { useI18n } from "../../lib/i18n";
 import { deInt } from "../../lib/format";
 
@@ -58,6 +71,8 @@ export interface StudyAufgabe {
 
 export interface StudyBlattProps {
   mobile: boolean;
+  /** Läuft die App als Desktop-Fassung · nur dort ist der Plan dauerhaft. */
+  desktop: boolean;
   kopfRechts: ReactNode;
   felder: Feld[];
   /** Die Serie im Kasten rechts. */
@@ -68,11 +83,20 @@ export interface StudyBlattProps {
   wocheIst: number;
   wocheSoll: number;
   aufgaben: StudyAufgabe[];
+  /** Sätze über das eigene Spielen · schon übersetzt. */
+  hygiene: string[];
+  /** Der Satz, der dasteht, solange die Sitzungen keine Muster hergeben. */
+  hygieneLeer: string;
+  /** Der Wochenvorschlag und der Griff, der ihn anfordert. */
+  vorschlag?: ReactNode;
+  vorschlagAktion?: ReactNode;
+  suggestMinutes?: (areas: Area[]) => number;
   onInsights: () => void;
 }
 
 export default function StudyBlatt({
   mobile,
+  desktop,
   kopfRechts,
   felder,
   serie,
@@ -82,6 +106,11 @@ export default function StudyBlatt({
   wocheIst,
   wocheSoll,
   aufgaben,
+  hygiene,
+  hygieneLeer,
+  vorschlag,
+  vorschlagAktion,
+  suggestMinutes,
   onInsights,
 }: StudyBlattProps) {
   const { t } = useI18n();
@@ -246,6 +275,46 @@ export default function StudyBlatt({
     </div>
   );
 
+  const plan = (
+    <Plantafel
+      mobile={mobile}
+      desktop={desktop}
+      vorschlag={vorschlag}
+      vorschlagAktion={vorschlagAktion}
+      suggestMinutes={suggestMinutes}
+    />
+  );
+
+  /**
+   * Wie du spielen solltest.
+   *
+   * Kein Kachelfeld, sondern eine nummerierte Liste auf Linien · in zwei
+   * Spalten, wo Platz ist. Die Ziffer zählt mit und benotet nichts: Anders als
+   * beim Befund gibt es unter diesen Sätzen keine Rangordnung.
+   */
+  const spielhygiene = (
+    <div className="pt-4">
+      <Rubrik>{t("plan.hygieneTitle")}</Rubrik>
+      {hygiene.length > 0 ? (
+        <div className={mobile ? "" : "grid grid-cols-2 gap-x-9"}>
+          {hygiene.map((satz, index) => (
+            <div
+              key={satz}
+              className="flex items-baseline gap-2.5 border-b border-line py-2 text-[12.5px] leading-[1.55] text-ink2"
+            >
+              <span aria-hidden className="blatt-zahl w-[17px] flex-none text-[11px] text-ink3">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="min-w-0 flex-1">{satz}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-2.5 text-[12.5px] leading-[1.6] text-ink3">{hygieneLeer}</div>
+      )}
+    </div>
+  );
+
   const kopf = (
     <>
       <Kolumnentitel links={t("blatt.studyTitle")} rechts={kopfRechts} />
@@ -275,6 +344,8 @@ export default function StudyBlatt({
         {heute}
         <div className="mt-4">{coach}</div>
         <div className="mt-6">{woche}</div>
+        {plan}
+        {spielhygiene}
       </div>
     );
   }
@@ -282,11 +353,13 @@ export default function StudyBlatt({
   return (
     <div className="mx-auto flex min-h-full max-w-[1280px] flex-col px-10 pb-[22px] pt-6">
       {kopf}
-      <div className="flex min-h-0 flex-1 gap-9 pt-5">
+      <div className="flex min-h-0 gap-9 pt-5">
         {coach}
         {woche}
       </div>
       {heute}
+      {plan}
+      {spielhygiene}
     </div>
   );
 }

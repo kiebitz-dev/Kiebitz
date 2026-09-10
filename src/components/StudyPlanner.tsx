@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CalendarDays,
   Check,
@@ -12,72 +12,40 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button, Card } from "./ui";
-import { useI18n, type Key } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
 import {
-  completeStudyUnit,
-  deleteStudyTemplate,
-  deleteStudyUnit,
   eventMinutes,
-  getStudyCalendar,
-  moveStudyUnit,
-  repeatStudyUnit,
-  saveStudyTemplate,
-  scheduleStudyUnit,
   templateAreas,
   templateText,
   AREAS,
   AREA_COLOR,
   AREA_KEY,
   REPEAT_RULES,
-  REPEAT_STEP_DAYS,
   type Area,
   type RepeatRule,
-  type StudyCalendar,
-  type StudyEvent,
-  type StudyTemplate,
-  type StudyTemplateInput,
 } from "../lib/study";
+import {
+  dayStart,
+  defaultUntil,
+  useStudyPlanner,
+  DAY_MS,
+  EMPTY_TEMPLATE,
+  REPEAT_LABEL,
+} from "./plantafel";
 import { useMobileShell } from "./MobileShell";
-import { onDataChange } from "../lib/changes";
-import { isoDay } from "../lib/dates";
 import { deInt } from "../lib/format";
 import { isStoreCapture } from "../lib/storeCapture";
-
-const DAY_MS = 86_400_000;
-const EMPTY_TEMPLATE: StudyTemplateInput = {
-  title: "",
-  tool: "",
-  description: "",
-  areas: [],
-};
-
-/** UTC-Mitternacht des Tages, in dem `date` liegt. */
-function dayStart(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-const REPEAT_LABEL: Record<Exclude<RepeatRule, "">, Key> = {
-  daily: "st.repeatDaily",
-  weekly: "st.repeatWeekly",
-  biweekly: "st.repeatBiweekly",
-};
-
-/** Vorschlag fürs Enddatum: zwölf Termine im gewählten Raster. */
-function defaultUntil(day: string, rule: Exclude<RepeatRule, "">): string {
-  const start = Date.parse(`${day}T00:00:00Z`);
-  if (Number.isNaN(start)) return day;
-  return isoDay(new Date(start + 11 * REPEAT_STEP_DAYS[rule] * DAY_MS));
-}
 
 /**
  * Serie einstellen: Raster plus Enddatum. Eine Serie ist im Kalender eine Reihe
  * echter Termine · deshalb steht hier auch das Ende, statt eine Regel offen zu
  * lassen, die irgendwann Termine erfindet, die niemand geplant hat.
  */
-function RepeatForm({
+export function RepeatForm({
   day,
   current,
   busy,
+  blatt = false,
   onApply,
   onCancel,
   onDeleteSeries,
@@ -85,6 +53,8 @@ function RepeatForm({
   day: string;
   current: RepeatRule;
   busy: boolean;
+  /** Im Diagramm-Modus ist der Rahmen eine Kante und keine Karte. */
+  blatt?: boolean;
   onApply: (rule: Exclude<RepeatRule, "">, until: string) => void;
   onCancel: () => void;
   /** Nur bei einem Termin, der schon zu einer Serie gehört. */
@@ -95,7 +65,9 @@ function RepeatForm({
   const [until, setUntil] = useState(() => defaultUntil(day, current === "" ? "weekly" : current));
 
   return (
-    <div className="mt-2 rounded-lg border border-accent-dim bg-panel2 p-2">
+    <div
+      className={`mt-2 border border-accent-dim p-2 ${blatt ? "" : "rounded-lg bg-panel2"}`}
+    >
       <div className="text-[10.5px] uppercase tracking-wide text-ink3">{t("st.repeatTitle")}</div>
       <div className="mt-1.5 flex flex-wrap gap-1">
         {REPEAT_RULES.map((value) => (
@@ -157,27 +129,6 @@ function RepeatForm({
   );
 }
 
-/** Was gerade am Zeiger hängt: eine Vorlage oder eine bereits geplante Einheit. */
-interface DragPayload {
-  kind: "template" | "event";
-  id: number;
-  label: string;
-}
-
-interface DragState extends DragPayload {
-  x: number;
-  y: number;
-  /** Tag unter dem Zeiger (ISO), sonst null. */
-  over: string | null;
-}
-
-/** Tag-Zelle unter einem Bildschirmpunkt · die Zellen tragen `data-study-day`. */
-function dayAtPoint(x: number, y: number): string | null {
-  const element = document.elementFromPoint(x, y);
-  const cell = element?.closest("[data-study-day]") as HTMLElement | null;
-  return cell?.dataset.studyDay ?? null;
-}
-
 /**
  * Die Plantafel: sieben Tage ab heute.
  *
@@ -218,129 +169,40 @@ export default function StudyPlanner({
    */
   const libraryRef = useRef<HTMLDivElement | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
-  const [windowStart, setWindowStart] = useState(() => dayStart(new Date()));
-  const [calendar, setCalendar] = useState<StudyCalendar>({ templates: [], events: [], days: [] });
-  const [planningDay, setPlanningDay] = useState(() => isoDay(new Date()));
-  const [editing, setEditing] = useState<StudyTemplateInput | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [drag, setDrag] = useState<DragState | null>(null);
-  /** Termin, für den gerade das Wiederholungsraster eingestellt wird. */
-  const [repeating, setRepeating] = useState<number | null>(null);
-  /** Raster für die nächste Planung aus der Einheiten-Liste. */
-  const [planRepeat, setPlanRepeat] = useState<RepeatRule>("");
-  const today = isoDay(new Date());
-  /** Der Tag, dessen Einheiten unter der Woche stehen · heute zuerst. */
-  const [selected, setSelected] = useState(today);
 
-  const days = useMemo(
-    () => [...Array(7)].map((_, index) => new Date(windowStart.getTime() + index * DAY_MS)),
-    [windowStart]
-  );
-  // Beim Blättern in eine andere Woche muss der gewählte Tag mitwandern ·
-  // sonst zeigt die Detailzeile einen Tag, der in der Leiste fehlt.
-  useEffect(() => {
-    const window = days.map((date) => isoDay(date));
-    if (window.includes(selected)) return;
-    setSelected(window.includes(today) ? today : window[0]);
-  }, [days, selected, today]);
-
-  const previewCalendar = useMemo<StudyCalendar>(() => {
-    // Die Vorschau zeigt dieselben Standardeinheiten wie eine frische
-    // Installation · über i18n_key stehen sie in der Sprache der Oberfläche.
-    const seed = (
-      id: number,
-      title: string,
-      tool: string,
-      description: string,
-      area: Area,
-      key: string
-    ): StudyTemplate => ({
-      id,
-      title,
-      duration_min: 0,
-      tool,
-      description,
-      area,
-      areas: [area],
-      builtin: area,
-      i18n_key: key,
-    });
-    const templates: StudyTemplate[] = [
-      seed(1, "Opening training", "Kiebitz Repertoire", "Reinforce the first 8–10 moves and the ideas behind them.", "openings", "st.seed.openings"),
-      seed(2, "Endgame training", "Kiebitz Endgames", "Train queen, rook, and fundamental pawn endings.", "endgames", "st.seed.endgames"),
-      seed(3, "Tactics", "Kiebitz Puzzles", "15–20 puzzles: forks, pins, skewers, and discovered attacks.", "tactics", "st.seed.tactics"),
-      seed(4, "Playing", "Lichess / chess.com", "Play deliberately, not on the side.", "play", "st.seed.play"),
-      seed(5, "Game review", "Kiebitz Analysis", "Review yourself first, then the three biggest engine mistakes.", "analysis", "st.seed.analysis"),
-    ];
-    const demoMinutes = [24, 0, 16, 40, 10, 19, 0];
-    const demoPlanned: [number, number, number][] = [
-      [0, 3, 15],
-      [1, 1, 20],
-      [2, 4, 40],
-      [2, 5, 25],
-      [4, 3, 15],
-      [5, 1, 20],
-      [6, 2, 20],
-    ];
-    return {
-      templates,
-      events: demoPlanned.map(([index, templateId, minutes], position) => ({
-        id: position + 1,
-        template_id: templateId,
-        day: isoDay(days[index]),
-        position,
-        completed: index === 0,
-        completed_ts: index === 0 ? 1 : 0,
-        auto_done: false,
-        repeat_rule: "" as RepeatRule,
-        series_key: "",
-        planned_min: minutes,
-        source: "plan" as const,
-        template: templates[templateId - 1],
-      })),
-      days: days.map((date, index) => {
-        const day = isoDay(date);
-        const past = day <= today;
-        return {
-          day,
-          puzzle_attempts: past ? demoMinutes[index] / 2 : 0,
-          puzzle_solved: past ? Math.round(demoMinutes[index] / 3) : 0,
-          endgame_attempts: 0,
-          rep_reviews: 0,
-          game_reviews: past && index === 3 ? 1 : 0,
-          actual_minutes: past ? demoMinutes[index] : 0,
-          due_reviews: day >= today ? [14, 6, 9, 4, 11, 3, 7][index] : 0,
-        };
-      }),
-    };
-  }, [days, today]);
-  const visibleCalendar = desktop ? calendar : previewCalendar;
-
-  const refreshRef = useRef<{ key: string; request: Promise<void> } | null>(null);
-  const refresh = useCallback(() => {
-    if (!desktop) return Promise.resolve();
-    const from = isoDay(days[0]);
-    const to = isoDay(days[6]);
-    const key = `${from}:${to}`;
-    if (refreshRef.current?.key === key) return refreshRef.current.request;
-    const request = getStudyCalendar(from, to)
-      .then(setCalendar)
-      .finally(() => {
-        if (refreshRef.current?.request === request) refreshRef.current = null;
-      });
-    refreshRef.current = { key, request };
-    return request;
-  }, [days, desktop]);
-
-  useEffect(() => {
-    if (!desktop) return;
-    refresh().catch((reason) => setError(String(reason)));
-    const unsubscribe = onDataChange(() => {
-      refresh().catch((reason) => setError(String(reason)));
-    }, ["study", "database"]);
-    return unsubscribe;
-  }, [desktop, refresh]);
+  // Alles, was nicht Erscheinung ist, steht in `plantafel.ts` · die
+  // Plantafel des Diagramm-Modus benutzt denselben Haken.
+  const {
+    today,
+    days,
+    windowStart,
+    setWindowStart,
+    visibleCalendar,
+    rows,
+    scale,
+    selected,
+    setSelected,
+    selectedRow,
+    planningDay,
+    setPlanningDay,
+    planRepeat,
+    setPlanRepeat,
+    editing,
+    setEditing,
+    busy,
+    error,
+    drag,
+    repeating,
+    setRepeating,
+    startDrag,
+    removeUnit,
+    toggleUnit,
+    applyRepeat,
+    deleteSeries,
+    removeTemplate,
+    planTemplate,
+    saveTemplate,
+  } = useStudyPlanner({ desktop, suggestMinutes });
 
   // Erst nach dem Aufklappen scrollen · vorher ist die Liste noch leer und
   // stünde nach dem Ausklappen wieder halb außerhalb des Bildes.
@@ -350,116 +212,6 @@ export default function StudyPlanner({
     const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     libraryRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
   }, [showLibrary]);
-
-  const mutate = async (operation: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await operation();
-      await refresh();
-      return true;
-    } catch (reason) {
-      setError(String(reason));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /**
-   * Der Papierkorb löscht immer genau diesen Termin · eine ganze Serie geht nur
-   * über das Wiederholungs-Menü verloren, damit ein Fehlklick nicht Wochen an
-   * geplanten Einheiten mitnimmt.
-   */
-  const removeUnit = (event: StudyEvent) => mutate(() => deleteStudyUnit(event.id));
-
-  /** Länge einer neu geplanten Einheit · aus dem Budget, nicht aus einer Eingabe. */
-  const minutesFor = useCallback(
-    (template: StudyTemplate) => suggestMinutes?.(templateAreas(template)) ?? 0,
-    [suggestMinutes]
-  );
-
-  const dropOnDay = (day: string, payload: DragPayload) => {
-    if (!desktop) return;
-    if (payload.kind === "template") {
-      const template = visibleCalendar.templates.find((entry) => entry.id === payload.id);
-      void mutate(() =>
-        scheduleStudyUnit(payload.id, day, "", undefined, template ? minutesFor(template) : 0)
-      );
-    }
-    if (payload.kind === "event") {
-      const position = visibleCalendar.events.filter((event) => event.day === day).length;
-      void mutate(() => moveStudyUnit(payload.id, day, position));
-    }
-  };
-
-  /**
-   * Drag-and-drop über Pointer-Events statt der HTML5-API: die Windows-WebView
-   * liefert für `dragstart`/`drop` keine brauchbaren Events (gleiche Ursache wie
-   * beim Analyse-Brett), Pointer-Events funktionieren dort und auf Touch.
-   */
-  const startDrag = (event: React.PointerEvent, payload: DragPayload) => {
-    if (!desktop || (event.pointerType === "mouse" && event.button !== 0)) return;
-    event.preventDefault();
-    const origin = { x: event.clientX, y: event.clientY };
-    let moved = false;
-    const move = (pointer: PointerEvent) => {
-      if (!moved && Math.hypot(pointer.clientX - origin.x, pointer.clientY - origin.y) < 5) return;
-      moved = true;
-      setDrag({
-        ...payload,
-        x: pointer.clientX,
-        y: pointer.clientY,
-        over: dayAtPoint(pointer.clientX, pointer.clientY),
-      });
-    };
-    const stop = (pointer: PointerEvent | null) => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", cancel);
-      setDrag(null);
-      if (!moved || !pointer) return;
-      const day = dayAtPoint(pointer.clientX, pointer.clientY);
-      if (day) dropOnDay(day, payload);
-    };
-    const finish = (pointer: PointerEvent) => stop(pointer);
-    const cancel = () => stop(null);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish);
-    window.addEventListener("pointercancel", cancel);
-  };
-
-  const saveTemplate = async () => {
-    if (!editing) return;
-    if (await mutate(() => saveStudyTemplate(editing))) setEditing(null);
-  };
-
-  // Gemeinsame Skala aller sieben Zeilen · sonst sähe ein 20-Minuten-Tag neben
-  // einem 90-Minuten-Tag genauso voll aus.
-  const rows = useMemo(
-    () =>
-      days.map((date) => {
-        const day = isoDay(date);
-        const events = visibleCalendar.events.filter((event) => event.day === day);
-        const metrics = (visibleCalendar.days ?? []).find((entry) => entry.day === day);
-        return {
-          date,
-          day,
-          events,
-          planned: events.reduce((sum, event) => sum + eventMinutes(event), 0),
-          measured: metrics?.actual_minutes ?? 0,
-          due:
-            (metrics?.due_reviews ?? 0) +
-            events.filter((event) => !event.completed && !event.auto_done).length,
-        };
-      }),
-    [days, visibleCalendar]
-  );
-  const scale = Math.max(30, ...rows.map((row) => Math.max(row.planned, row.measured)));
-  // Der gewählte Tag muss immer einer der sieben sein: beim Blättern in eine
-  // andere Woche zeigt sonst die Detailzeile auf einen Tag, der nicht mehr
-  // in der Leiste steht.
-  const selectedRow = rows.find((row) => row.day === selected) ?? rows[0];
 
   return (
     <Card
@@ -776,9 +528,7 @@ export default function StudyPlanner({
                     <div className="mt-2 flex justify-end gap-1">
                       <button
                         type="button"
-                        onClick={() =>
-                          void mutate(() => completeStudyUnit(event.id, !event.completed))
-                        }
+                        onClick={() => void toggleUnit(event)}
                         disabled={!desktop}
                         className={`rounded-md p-1 ${event.completed ? "bg-accent-soft text-accent" : "text-ink3 hover:bg-panel2 hover:text-accent"}`}
                         aria-label={event.completed ? t("st.markOpen") : t("st.markDone")}
@@ -820,19 +570,9 @@ export default function StudyPlanner({
                         current={event.repeat_rule}
                         busy={busy}
                         onCancel={() => setRepeating(null)}
-                        onApply={async (rule, until) => {
-                          if (await mutate(() => repeatStudyUnit(event.id, rule, until))) {
-                            setRepeating(null);
-                          }
-                        }}
+                        onApply={(rule, until) => void applyRepeat(event, rule, until)}
                         onDeleteSeries={
-                          event.series_key
-                            ? async () => {
-                                if (await mutate(() => deleteStudyUnit(event.id, "series"))) {
-                                  setRepeating(null);
-                                }
-                              }
-                            : undefined
+                          event.series_key ? () => void deleteSeries(event) : undefined
                         }
                       />
                     )}
@@ -993,7 +733,7 @@ export default function StudyPlanner({
                       {!template.builtin && (
                         <button
                           type="button"
-                          onClick={() => void mutate(() => deleteStudyTemplate(template.id))}
+                          onClick={() => void removeTemplate(template)}
                           disabled={!desktop}
                           className="rounded-md p-1.5 text-ink3 hover:bg-panel2 hover:text-loss disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label={t("common.delete")}
@@ -1003,17 +743,7 @@ export default function StudyPlanner({
                       )}
                       <Button
                         disabled={busy || !desktop || !planningDay}
-                        onClick={() =>
-                          void mutate(() =>
-                            scheduleStudyUnit(
-                              template.id,
-                              planningDay,
-                              planRepeat,
-                              planRepeat ? defaultUntil(planningDay, planRepeat) : undefined,
-                              minutesFor(template)
-                            )
-                          )
-                        }
+                        onClick={() => void planTemplate(template)}
                         className="ml-1 !px-2.5 !py-1.5 !text-[11.5px]"
                       >
                         {planRepeat ? <Repeat size={12} /> : <Plus size={12} />} {t("st.plan")}

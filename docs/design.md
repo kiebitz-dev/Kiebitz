@@ -67,6 +67,26 @@ Its rules:
   head of the apparatus, where the other two answers about *this position*
   stand; the accuracy as a table of two columns rather than four tiles; the
   notes as the ordinary field, re-set.
+
+  Two more were caught the same way. The training tab had the coach and the
+  week but neither the plan for the next seven days nor the play hygiene: it
+  said what the week had brought and not what was meant for it. Both are on
+  the sheet now — the plan as the counterpart of the week bar (planned minutes
+  stacked above the baseline, measured time as a rule below it,
+  `pages/blatt/Plantafel.tsx`), the hygiene as what it is, a few numbered
+  sentences on rules rather than a field of tiles. And the repertoire's index
+  could only be read: moving, editing and deleting a variation existed only in
+  the ordinary list. The three handles sit at the end of a line now, visible on
+  the open line and under the pointer, their space always reserved so the dotted
+  leader does not jump; ←/→ page through the moves of the open variation, ↑/↓
+  go to the next one.
+
+  Where a shared piece is a whole machine rather than a control — the planner
+  is a window of seven days, a calendar, drag-and-drop, series and a template
+  library — neither copying it nor handing it back works. Its state moves out
+  instead: `components/plantafel.ts` holds the hook both settings call, and
+  `StudyPlanner.tsx` and `Plantafel.tsx` are two ways of drawing the same one.
+  One data path, one set of mutations, two sheets.
 - **Book type.** Source Serif 4, and only where `.buch` is set — the interface
   stays on Inter. `blatt.css` also holds the four typographic rules the mode
   uses: `.blatt-kolumne` (running heads and section rules), `.blatt-feld` (form
@@ -93,6 +113,7 @@ German, like the design vocabulary they carry: `Kolumnentitel`, `Rubrik`,
 | Mode flag, cache, `data-diagram` | `src/lib/theme.ts`, `src/lib/diagramMode.ts` |
 | Rules that can be computed | `src/lib/blatt.ts` |
 | Composition pieces, type | `src/components/blatt/`, `blatt.css` |
+| State shared by both settings | `src/components/plantafel.ts` |
 | Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx`, the five Insights tabs in `src/pages/blatt/insights/` |
 
 Each page renders its regular version and lazy-loads its `*Blatt.tsx` variant

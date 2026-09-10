@@ -684,9 +684,9 @@ export default function Study({
           }
           proposePlan();
         }}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-line2 px-3 py-1.5 text-[12.5px] text-ink3 transition-colors hover:border-accent-dim hover:text-accent ${
-          mobile ? "w-full py-2.5" : ""
-        }`}
+        className={`inline-flex items-center justify-center gap-2 border border-dashed border-line2 px-3 py-1.5 text-[12.5px] text-ink3 transition-colors hover:border-accent-dim hover:text-accent ${
+          diagramMode ? "" : "rounded-lg"
+        } ${mobile ? "w-full py-2.5" : ""}`}
       >
         <CalendarPlus size={15} /> {t("plan.proposeWeek")}
         {!planGate.unlocked && !planGate.pending && <PlusBadge />}
@@ -695,7 +695,11 @@ export default function Study({
 
   const proposalBox =
     desktop && plan && planning != null ? (
-      <div className="rounded-xl border border-accent-dim bg-panel2 p-3">
+      <div
+        className={`border border-accent-dim p-3 ${
+          diagramMode ? "" : "rounded-xl bg-panel2"
+        }`}
+      >
         <div className="mb-2 text-[13px] font-medium text-ink">{t("plan.proposalTitle")}</div>
         {planning.length === 0 ? (
           <p className="text-[12.5px] leading-relaxed text-ink3">{t("plan.proposalEmpty")}</p>
@@ -708,7 +712,9 @@ export default function Study({
               {planning.map((unit, index) => (
                 <li
                   key={`${unit.day}-${unit.templateId}-${index}`}
-                  className="flex items-baseline justify-between gap-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12.5px]"
+                  className={`flex items-baseline justify-between gap-3 border border-line px-3 py-2 text-[12.5px] ${
+                    diagramMode ? "" : "rounded-lg bg-panel"
+                  }`}
                   style={{ borderLeftColor: AREA_COLOR[unit.area], borderLeftWidth: 3 }}
                 >
                   <span className="tabular-nums text-ink3">{unit.day}</span>
@@ -730,7 +736,9 @@ export default function Study({
           <button
             type="button"
             onClick={() => setPlanning(null)}
-            className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] text-ink3 transition-colors hover:text-ink"
+            className={`border border-line px-3 py-1.5 text-[12.5px] text-ink3 transition-colors hover:text-ink ${
+              diagramMode ? "" : "rounded-lg"
+            }`}
           >
             {t("common.cancel")}
           </button>
@@ -938,6 +946,7 @@ export default function Study({
       <Suspense fallback={<LeereSeite />}>
         <StudyBlatt
           mobile={mobile}
+          desktop={desktop}
           kopfRechts={t("st.weekBudgetValue", { a: deInt(week.minutes), m: deInt(week.target) })}
           felder={[
             {
@@ -1013,6 +1022,15 @@ export default function Study({
             erledigt: false,
             onWeg: area.onClick,
           }))}
+          hygiene={(plan?.hygiene ?? []).map((tip) =>
+            // Derselbe Satz wie in der gewöhnlichen Fassung · der Formattipp
+            // trägt Zeitformate als Rohwerte und wird wie ein Befund übersetzt.
+            t(tip.key, localizeFindingParams(tip.params, t, locale))
+          )}
+          hygieneLeer={t("plan.hygieneEmpty")}
+          vorschlag={proposalBox}
+          vorschlagAktion={proposalAction}
+          suggestMinutes={suggestMinutes}
           onInsights={() => go("insights")}
         />
       </Suspense>

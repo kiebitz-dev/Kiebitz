@@ -1237,9 +1237,15 @@ function LiveRepertoire() {
             faellig={dueTotal}
             teile={(["white", "black"] as const).map((side) => ({
               titel: t(side === "white" ? "common.white" : "common.black"),
+              seite: side,
               zeilen: variationLines
                 .filter((line) => line.side === side)
-                .map((line) => ({ key: line.key, name: line.name, faellig: line.due })),
+                .map((line) => ({
+                  key: line.key,
+                  name: line.name,
+                  faellig: line.due,
+                  zuege: line.sans.length,
+                })),
             }))}
             aktiv={selectedLineKey}
             fen={fen}
@@ -1284,9 +1290,31 @@ function LiveRepertoire() {
                   ? t("rep.gapsNone")
                   : t("rep.gapsCollapsed", { n: deInt(gaps.length) })
             }
+            aktivZug={selectedPly}
             onWaehlen={(key) => {
               const line = variationLines.find((value) => value.key === key);
               if (line) selectVariation(line, (line.nodeIds?.length ?? 0) - 1);
+            }}
+            // Blättern ist Auswählen mit einem Halbzug daran · derselbe Weg,
+            // den auch die Liste der gewöhnlichen Fassung geht.
+            onZug={(key, zug) => {
+              const line = variationLines.find((value) => value.key === key);
+              if (line) selectVariation(line, zug);
+            }}
+            onVerschieben={reorderLines}
+            onBearbeiten={(key) => {
+              const line = variationLines.find((value) => value.key === key);
+              if (!line) return;
+              setEditing(line);
+              setSeedSans([]);
+              setSeedFocused(false);
+              setMode("add");
+            }}
+            onLoeschen={(key) => {
+              const line = variationLines.find((value) => value.key === key);
+              if (line && typeof line.targetId === "number") {
+                setPendingDelete({ id: exclusiveRoot(line.targetId), name: line.name });
+              }
             }}
             onHinzufuegen={() => {
               setEditing(null);
@@ -1320,9 +1348,20 @@ function LiveRepertoire() {
             if (event.target === event.currentTarget) setPendingDelete(null);
           }}
         >
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50">
+          {/* Die Rückfrage ist ein Bedienteil und nichts sonst · im
+              Diagramm-Modus setzt `blatt-formular` sie um, statt sie ein
+              zweites Mal zu bauen (siehe blatt.css). */}
+          <div
+            className={`w-full max-w-md overflow-hidden border border-line2 bg-panel ${
+              diagramMode ? "blatt-formular" : "rounded-2xl shadow-2xl shadow-black/50"
+            }`}
+          >
             <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-loss-soft text-loss">
+              <div
+                className={`flex size-9 shrink-0 items-center justify-center bg-loss-soft text-loss ${
+                  diagramMode ? "" : "rounded-xl"
+                }`}
+              >
                 <AlertTriangle size={18} />
               </div>
               <div>
