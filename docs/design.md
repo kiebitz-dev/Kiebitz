@@ -56,8 +56,17 @@ Its rules:
   mode changes the layout and must not cost a function. Where a control is a
   control and nothing else, the variant hands the ordinary one back and only
   re-sets it: `.blatt-formular` in `blatt.css` squares the corners and turns
-  filled surfaces into edges, which is how the settings and the PGN import
-  live in the mode without being built a second time.
+  filled surfaces into edges, which is how the settings, the PGN import and
+  the analysis notes live in the mode without being built a second time.
+
+  The rule cuts the other way too, and that is the harder half: three pieces
+  of the analysis tab used to exist only in the ordinary version — the engine
+  next to a game, the accuracy per phase, and notes and tags. Each of them was
+  a function the mode cost, which is the one thing a second layout must not
+  do. They are in it since 1.3, set as the mode sets things: the engine at the
+  head of the apparatus, where the other two answers about *this position*
+  stand; the accuracy as a table of two columns rather than four tiles; the
+  notes as the ordinary field, re-set.
 - **Book type.** Source Serif 4, and only where `.buch` is set — the interface
   stays on Inter. `blatt.css` also holds the four typographic rules the mode
   uses: `.blatt-kolumne` (running heads and section rules), `.blatt-feld` (form

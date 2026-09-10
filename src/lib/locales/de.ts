@@ -1943,6 +1943,19 @@ export const de = {
   "expl.why.replyEval": "Widerlegt wird der Zug durch {reply}: die Bewertung fällt dabei von {before} auf {after}.",
   "expl.why.reply": "Widerlegt wird der Zug durch {reply}.",
   "expl.why.eval": "Die Bewertung fällt dabei von {before} auf {after}.",
+  // Woher die Zahl kommt und was besser war · die beiden Sätze, die aus
+  // einer Anmerkung eine Erklärung machen (siehe `kommentiereZug`).
+  "expl.replyLine": "Die Zahl kommt aus der Fortsetzung {line}.",
+  "expl.betterLine": "Besser war {san}: {line} hält die Bewertung bei {eval}.",
+  "expl.mainLine": "Die Engine rechnet weiter mit {line}.",
+  // Was die Zahl bedeutet · vier Bänder und der Satz, der zwei davon
+  // gegenüberstellt. Ohne ihn nennt eine Anmerkung nur Zahlen.
+  "expl.swing": "Vorher {before}, jetzt {after}.",
+  "expl.band.equal": "ausgeglichen",
+  "expl.band.slight": "leichter Vorteil für {side}",
+  "expl.band.clear": "klarer Vorteil für {side}",
+  "expl.band.winning": "Gewinnstellung für {side}",
+  "expl.band.mate": "Matt für {side}",
   "expl.motif.mate": "Matt",
   "expl.motif.missed_mate": "übersehenes Matt",
   "expl.motif.allowed_mate": "zugelassenes Matt",

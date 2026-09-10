@@ -34,8 +34,19 @@ const limits = {
   // Entscheidend für die Ladezeit ist `initialGzip`; Fließtext komprimiert gut.
   initialJs: 400 * 1024,
   initialGzip: 132 * 1024,
-  startupRouteJs: 450 * 1024,
-  startupRouteGzip: 150 * 1024,
+  // Die beiden Grenzen der Startroute standen zuletzt so dicht am Gemessenen,
+  // dass sie nichts mehr prüften, sondern nur noch abwarteten: 445,4 von 450
+  // KiB und 149,2 von 150 KiB gzip. Über fünf Veröffentlichungen hinweg wuchs
+  // die Route um 0,1 bis 0,2 KiB gzip je Commit — die Grenze wäre also nicht
+  // an einem Fehler gerissen, sondern an der nächsten Handvoll Zeilen, und
+  // eine Grenze, die das tut, sagt nichts über den Aufwand aus.
+  //
+  // Jetzt: gemessene 447,2 KiB und 149,9 KiB gzip, dazu je rund zwei Prozent
+  // Luft. Dasselbe Verhältnis tragen die vier Grenzen darüber und darunter
+  // auch — zwei Prozent sind eng genug, dass ein versehentlich mitgezogenes
+  // Paket auffällt, und weit genug, dass ein Absatz Text es nicht tut.
+  startupRouteJs: 456 * 1024,
+  startupRouteGzip: 153 * 1024,
   singleJs: 450 * 1024,
   // Sieben Farbwelten kosten rund 6 KiB CSS (src/themes.css) · das ist der
   // Preis dafür, dass der Themenwechsel ein Attributwechsel bleibt und kein

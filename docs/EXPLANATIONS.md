@@ -29,6 +29,59 @@ The price itself is stated in **points of evaluation**, not in pawns. "5.3
 pawns" is correct engine speech and reads as a claim about material, which it
 is not.
 
+## The annotation
+
+The sentence above answers *what happened*. The **annotation** — the indented
+paragraph under a move in the game text, and the coloured callout on the
+dashboard — answers the question a player actually has while replaying:
+*why was that bad, and why was the other move better?*
+
+Until 1.3 it was one sentence and answered neither:
+
+```
+4.d3?! Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1. Besser war Se2.
+```
+
+Both answers were already in the database and were simply not being set.
+`move_evals.pv` is the engine's best line **before** the move — it begins with
+the better move and therefore shows what it would have achieved. The same
+column of the **next** row is the best line *after* the played move: exactly
+what the opponent now does with it, and the origin of the number the reader is
+puzzled by. `kommentiereZug` in `lib/erklaerung.ts` builds up to five sentences
+from that, each with a condition under which it stays out:
+
+| | Sentence | Stays out when |
+| --- | --- | --- |
+| 1 | judgment and the evaluation jump | never |
+| 2 | what the two numbers mean, in words | both fall in the same band |
+| 3 | the motif — what happened | no motif was detected |
+| 4 | where the number comes from — the opponent's continuation | no line stored |
+| 5 | what was better — the move, its line, the evaluation it holds | no line, or the line starts with the move that was played |
+
+```
+4.d3?! Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1.
+       Vorher ausgeglichen, jetzt leichter Vorteil für Schwarz.
+       Die Zahl kommt aus der Fortsetzung 4…Lg4 5.Le2 Sd4.
+       Besser war Se2: 4.Se2 Lg4 5.0–0 hält die Bewertung bei −0,1.
+```
+
+Three rules:
+
+- **Five half-moves of a line, no more.** Two and a half moves show the intent;
+  from the sixth on it is engine prose, and whoever reads that far is not
+  reading an annotation any more. `LINIE`, same file.
+- **White's point of view throughout.** The first sentence has always counted
+  that way, and two directions in one paragraph would make the reader convert.
+  (`begruendeZug` flips to the mover instead — it stands next to "costs 5.3"
+  and has to make that same sum visible.)
+- **A move that was approved gets no "better was".** There was nothing better.
+  It gets sentences 1 and 3, and the continuation of the main line where the
+  move played *is* its first half-move.
+
+**Games analysed before the `pv` column** have `best_uci` and no line. They
+keep the short form — sentences 1, 2, 3 and " Besser war {san}." Nothing is
+invented for them; re-analysing the game fills the lines in.
+
 ## The shape of it
 
 Rust detects and stores **facts**; TypeScript turns them into **sentences**.
@@ -117,7 +170,10 @@ a game that cannot produce one is not retried on every launch.
 
 ## In the interface
 
-Diagram mode, in two places.
+Both modes. The annotation goes wherever a move is commented — the indented
+paragraph in the game text of `AnalysisBlatt`, and the coloured callout under
+the move list on the dashboard, whose border keeps saying which judgment it
+carries. The sentences below are the ones that belong to diagram mode alone.
 
 `DashboardBlatt`, in both its layouts: a quote block `AUS DER ANALYSE`
 carrying the sentence for the diagram move — which `lib/blatt.ts` already
@@ -130,7 +186,10 @@ depends on where the reader is standing:
 
 - On a half-move the analysis found something about, that move's sentence
   stands there, with its reason line under it. Clicking a move in the flowing
-  text is therefore also the question.
+  text is therefore also the question. Not on a move that carries an
+  annotation, though: since the annotation brings the motif sentence itself,
+  it would otherwise stand twice, three lines apart. There the section stays
+  with the list below and leads on from it instead of repeating.
 - Anywhere else, the section lists the game's heaviest moments instead — at
   most three, ranked by `loss_cp` and then read back in game order. Each line
   is a way there: clicking it opens that half-move.
@@ -141,8 +200,7 @@ selection happens in the variant (`AnalysisBlatt`), the sentences are built
 once per game in `pages/Analysis.tsx` and only when the mode is on — a
 Dashboard-mode reader never pays for eighty sentences nobody shows.
 
-Still to come, deliberately: Dashboard mode, and an Insights aggregation over
-recurring motifs.
+Still to come, deliberately: an Insights aggregation over recurring motifs.
 
 ## Adding a phrasing
 

@@ -11,14 +11,19 @@
  * und sonst die schwersten Stellen führt — und der Apparat daneben, in dem
  * jede Zeile ein Griff ist.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import AnalysisBlatt, { type AnalysisBlattProps } from "./AnalysisBlatt";
+import { setFormatLocale } from "../../lib/format";
 
 vi.mock("../../lib/i18n", () => ({
   useI18n: () => ({ locale: "de", t: (key: string) => key }),
   useT: () => (key: string) => key,
 }));
+
+// Zahlen stehen in der Schreibweise der Oberfläche · „91.2 %" wäre auf
+// einem deutschen Blatt falsch.
+beforeAll(() => setFormatLocale("de-DE"));
 
 afterEach(cleanup);
 
@@ -268,5 +273,73 @@ describe("Blatt der Analyse", () => {
   it("sagt es, wenn die Stellung in keiner eigenen Partie vorkam", () => {
     show({ stellungen: { gesamt: 0, zuege: [], treffer: [], onZug: vi.fn() } });
     expect(screen.getByText("an.posNotFound")).toBeTruthy();
+  });
+
+  // ── Was der Modus zuletzt nachgeholt hat ─────────────────────────────────
+  //
+  // Drei Stücke standen nur in der gewöhnlichen Fassung, und damit kostete
+  // der Modus drei Funktionen: die Engine zu einer Partie, die Genauigkeit
+  // nach Phase und das Notizfeld.
+
+  it("stellt die Genauigkeit nach Phase als Tabelle", () => {
+    show({
+      genauigkeiten: {
+        ich: "Torim98",
+        gegner: "DragonSlayer_88",
+        zeilen: [
+          { name: "Gesamt", ich: 88.5, gegner: 76.8 },
+          { name: "Eröffnung", ich: 95, gegner: 88 },
+          { name: "Endspiel", ich: null, gegner: null },
+        ],
+      },
+    });
+    expect(screen.getByText("an.phaseAccuracy")).toBeTruthy();
+    expect(screen.getByText("88,5 %")).toBeTruthy();
+    expect(screen.getByText("76,8 %")).toBeTruthy();
+    // Ohne gerechnete Phase steht ein Gedankenstrich · keine Null. Eine
+    // Partie ohne Endspiel hat keine Endspielgenauigkeit von 0 %.
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("setzt das Notizfeld neu, statt es ein zweites Mal zu bauen", () => {
+    show({ notizen: <textarea defaultValue="Zu passiv gespielt." /> });
+    expect(screen.getByText("an.notesAndTags")).toBeTruthy();
+    const feld = screen.getByDisplayValue("Zu passiv gespielt.");
+    // Es ist genau das Feld der gewöhnlichen Fassung, nur im Satz des
+    // Blattes · siehe `.blatt-formular` in blatt.css.
+    expect(feld.closest(".blatt-formular")).toBeTruthy();
+  });
+
+  it("stellt die Engine zu einer Partie in den Apparat", () => {
+    show({ motor: <div data-testid="motor" />, stellungen: undefined });
+    expect(screen.getByTestId("motor")).toBeTruthy();
+  });
+
+  it("lässt die Engine am freien Brett in der rechten Spalte", () => {
+    // Dort gibt es keine Anmerkungen · ihre Linien sind das, was auf einer
+    // Buchseite die Varianten sind. Zweimal darf sie nicht dastehen.
+    show({ frei: true, motor: <div data-testid="motor" /> });
+    expect(screen.getAllByTestId("motor")).toHaveLength(1);
+  });
+
+  /**
+   * Die Anmerkung im Fließsatz bringt den Motivsatz seit 1.3 selbst mit ·
+   * dann darf er drei Zeilen darunter nicht noch einmal stehen.
+   */
+  it("wiederholt unter dem Satz nicht, was im Satz schon steht", () => {
+    show({
+      ply: 3,
+      zuege: kurve.map((_, i) => ({
+        san: "e4",
+        erklaerung: `Satz ${i}`,
+        kommentar: i === 2 ? "Ungenauigkeit. Satz 2" : null,
+        gewicht: i * 10,
+      })),
+    });
+    // Einmal im Satz, kein zweites Mal darunter.
+    expect(screen.getAllByText(/Satz 2/)).toHaveLength(1);
+    // Der Abschnitt bleibt bei den schwersten Stellen und führt von dort
+    // weiter, statt zu wiederholen.
+    expect(screen.getByText(/Satz 9/)).toBeTruthy();
   });
 });

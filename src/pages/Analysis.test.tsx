@@ -900,8 +900,10 @@ describe("Analysis page", () => {
       await screen.findByText("Kiebitz · Analyse");
       // Mit Partie steht der Ergebniskasten da · das freie Brett hat keinen.
       expect(await screen.findByText("1 : 0")).toBeTruthy();
-      // Und die Bilanz statt der Engine.
-      expect(screen.queryByTestId("live-engine")).toBeNull();
+      // Und die Engine rechnet auch hier mit · sie steht dann im Apparat und
+      // nicht in der rechten Spalte. Bis 1.3 fehlte sie mit Partie ganz, und
+      // damit kostete der Modus eine Funktion.
+      expect(screen.getByTestId("live-engine")).toBeTruthy();
     });
   });
 });

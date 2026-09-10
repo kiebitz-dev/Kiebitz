@@ -7,7 +7,13 @@
  * nicht ungeprüft auf die Seite kommt.
  */
 import { beforeAll, describe, expect, it } from "vitest";
-import { begruendeZug, erklaereFazit, erklaereZug, type Zugzeile } from "./erklaerung";
+import {
+  begruendeZug,
+  erklaereFazit,
+  erklaereZug,
+  kommentiereZug,
+  type Zugzeile,
+} from "./erklaerung";
 import { loadLocale, translator } from "./locales/registry";
 import { setFormatLocale } from "./format";
 
@@ -163,6 +169,132 @@ describe("Begründung eines Zuges", () => {
     );
     expect(satz).toContain("Sxe4");
     expect(satz).not.toContain("+0,4");
+  });
+});
+
+describe("Anmerkung zu einem Zug", () => {
+  /** Die Umstände eines bemängelten Zuges · Halbzug 7, also zieht Weiß. */
+  const umstand = (over: Record<string, unknown> = {}) => ({
+    t: de(),
+    locale: "de" as const,
+    urteil: "Ungenauigkeit",
+    bemaengelt: true,
+    evalDavor: -10,
+    evalDanach: -110,
+    ...over,
+  });
+
+  it("sagt, woher die Zahl kommt, und was der bessere Zug gehalten hätte", () => {
+    setFormatLocale("de-DE");
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
+      umstand({
+        linieDavor: ["Ne2", "Bg4", "O-O"],
+        linieDanach: ["Bg4", "Be2", "Nd4"],
+      })
+    );
+    // Das Urteil und der Sprung · der Satz, der schon immer dastand.
+    expect(text).toContain("Ungenauigkeit");
+    expect(text).toContain("−0,1");
+    expect(text).toContain("−1,1");
+    // Die Fortsetzung des Gegners, mit Zugzahlen und in deutscher Notation.
+    expect(text).toContain("4...Lg4 5.Le2 Sd4");
+    // Und die Linie, die es besser gemacht hätte, samt gehaltener Bewertung.
+    expect(text).toContain("4.Se2 Lg4 5.0–0");
+    expect(text).toContain("Se2");
+  });
+
+  it("kürzt eine lange Variante auf ein lesbares Maß", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
+      umstand({ linieDanach: ["Bg4", "Be2", "Nd4", "Nxd4", "Bxe2", "Qxe2", "exd4"] })
+    );
+    // Fünf Halbzüge stehen da, der sechste nicht mehr.
+    expect(text).toContain("Sxd4");
+    expect(text).not.toContain("Dxe2");
+  });
+
+  it("bleibt beim kurzen Satz, solange keine Linie gespeichert ist", () => {
+    // Partien aus der Zeit vor der Hauptvarianten-Spalte · sie haben den
+    // besseren Zug und sonst nichts.
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
+      umstand({ besser: "Ne2" })
+    );
+    expect(text).toContain("Besser war Se2");
+    expect(text).not.toContain("4.");
+  });
+
+  it("nennt das Motiv, wo eines erkannt wurde", () => {
+    const text = kommentiereZug(
+      zeile({
+        ply: 7,
+        san: "d3",
+        judgment: "blunder",
+        motif: "hanging_piece",
+        motif_detail: JSON.stringify({ piece: "N", square: "f3", reply: "Bxf3" }),
+      }),
+      umstand({ urteil: "Patzer" })
+    );
+    expect(text).toContain("Springer");
+    expect(text).toContain("f3");
+  });
+
+  it("wiederholt zu einem Zug ohne Motiv nicht den ersten Satz", () => {
+    // `erklaereZug` fällt ohne Motiv auf den Satz über den Preis zurück. In
+    // einer Anmerkung stünde er neben dem Urteilssatz, der dasselbe sagt.
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none", loss_cp: 100 }),
+      umstand()
+    );
+    expect(text).toBe(
+      "Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1. " +
+        "Vorher ausgeglichen, jetzt leichter Vorteil für Schwarz."
+    );
+  });
+
+  it("sagt in Worten, was aus der Stellung geworden ist", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "blunder", motif: "" }),
+      umstand({ urteil: "Patzer", evalDavor: -150, evalDanach: 420 })
+    );
+    expect(text).toContain("Vorher klarer Vorteil für Schwarz");
+    expect(text).toContain("jetzt Gewinnstellung für Weiß");
+  });
+
+  it("lässt den Satz über die Bänder fort, wo beide dasselbe sagen", () => {
+    // „Vorher klarer Vorteil, jetzt klarer Vorteil" ist keine Auskunft.
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "" }),
+      umstand({ evalDavor: -200, evalDanach: -300 })
+    );
+    expect(text).not.toContain("Vorher");
+  });
+
+  it("führt zu einem gutgeheißenen Zug die Hauptvariante weiter", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 25, san: "h3", judgment: "", motif: "best_move" }),
+      umstand({
+        urteil: "Großartig",
+        bemaengelt: false,
+        linieDavor: ["h3", "Nd5", "Ne4"],
+      })
+    );
+    expect(text).toContain("Großartig.");
+    // Der Motivsatz zum besten Zug · er nennt den Zug selbst.
+    expect(text).toContain("h3");
+    // Und die Linie, in der er steht.
+    expect(text).toContain("13.h3 Sd5 14.Se4");
+    // „Besser war" gibt es hier nicht · es gab nichts Besseres.
+    expect(text).not.toContain("Besser");
+  });
+
+  it("bietet keinen besseren Zug an, der der gespielte ist", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "Ne2", judgment: "inaccuracy", motif: "none" }),
+      umstand({ linieDavor: ["Ne2", "Bg4"], besser: "Ne2" })
+    );
+    expect(text).not.toContain("Besser");
   });
 });
 

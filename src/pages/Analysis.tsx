@@ -95,7 +95,7 @@ import {
 } from "../lib/clocks";
 import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
-import { begruendeZug, erklaereZug } from "../lib/erklaerung";
+import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
@@ -330,14 +330,34 @@ function acpl(moves: ViewMove[]): { white: number; black: number } {
   return { white: avg(losses.white), black: avg(losses.black) };
 }
 
-/** Kommentar zu einem annotierten Zug: Bewertungssprung + bessere Alternative. */
-function commentFor(t: TFunc, sansBefore: string[], m: ViewMove, prevEval: number): string | null {
+/**
+ * Die Anmerkung zu einem Zug · Urteil, Motiv, Fortsetzung, Alternative.
+ *
+ * Gesetzt wird sie in `lib/erklaerung.ts`; hier steht nur, was diese Seite
+ * beisteuern kann. Das ist im Wesentlichen die Zeile der Auto-Analyse (Motiv
+ * und Hauptvariante) und die Zeile danach, deren Hauptvariante die Fortsetzung
+ * nach dem gespielten Zug ist — siehe docs/EXPLANATIONS.md.
+ *
+ * Der Rückfall mit chess.js bleibt für Partien, die vor der
+ * Hauptvarianten-Spalte analysiert wurden: Sie haben `best_uci` und keine
+ * Linie, und dann steht wenigstens der bessere Zug da. Nachgespielt wird dafür
+ * die halbe Partie, deshalb nur, wenn die Linie wirklich fehlt.
+ */
+function commentFor(
+  t: TFunc,
+  locale: Locale,
+  sansBefore: string[],
+  m: ViewMove,
+  prevEval: number,
+  ply: number,
+  seed: string,
+  row?: MoveEvalRow,
+  next?: MoveEvalRow
+): string | null {
   if (!m.judgment) return null;
-  if (!(["inaccuracy", "mistake", "blunder"] as MoveJudgment[]).includes(m.judgment)) {
-    return t("an.qualityComment", { judgment: judgmentLabel(t, m.judgment) });
-  }
-  let best = "";
-  if (m.bestUci) {
+  const bemaengelt = istBemaengelt(m.judgment);
+  let besser = row?.pv?.[0] ?? "";
+  if (!besser && bemaengelt && m.bestUci) {
     try {
       const chess = new Chess();
       for (const s of sansBefore) chess.move(s);
@@ -346,15 +366,34 @@ function commentFor(t: TFunc, sansBefore: string[], m: ViewMove, prevEval: numbe
         to: m.bestUci.slice(2, 4),
         promotion: m.bestUci.length > 4 ? m.bestUci[4] : undefined,
       });
-      best = move.san;
+      besser = move.san;
     } catch {
       /* Zug nicht rekonstruierbar · Kommentar ohne Alternative */
     }
   }
-  const from = evalLabel(prevEval);
-  const to = m.mateIn != null ? `#${m.mateIn}` : evalLabel(m.evalCp ?? 0);
-  const base = t("an.comment", { judgment: judgmentLabel(t, m.judgment), from, to });
-  return best ? base + t("an.commentBetter", { san: best }) : base;
+  return kommentiereZug(
+    {
+      ply,
+      san: m.san,
+      judgment: row?.judgment ?? "",
+      motif: row?.motif,
+      motif_detail: row?.motif_detail,
+      loss_cp: row?.loss_cp,
+    },
+    {
+      t,
+      locale,
+      seed,
+      urteil: judgmentLabel(t, m.judgment),
+      bemaengelt,
+      evalDavor: prevEval,
+      evalDanach: m.evalCp,
+      mattDanach: m.mateIn,
+      besser,
+      linieDavor: row?.pv,
+      linieDanach: next?.pv,
+    }
+  );
 }
 
 /**
@@ -999,13 +1038,34 @@ export default function Analysis({
   const shownEval = liveEval ? evalNum(liveEval.cp, liveEval.mate) : storedEval;
   const whitePct = winProb(shownEval);
   const currentMove = !variation && ply > 0 ? viewMoves[ply - 1] : null;
+  /**
+   * Die Zeilen der Auto-Analyse nach Halbzug.
+   *
+   * Gebraucht wird nicht nur die Zeile zum Zug, sondern auch die danach: Ihre
+   * Hauptvariante ist die Fortsetzung *nach* dem gespielten Zug und damit die
+   * Herkunft der Zahl, die die Anmerkung nennt (docs/EXPLANATIONS.md).
+   */
+  const rowsByPly = useMemo(
+    () => new Map((rows ?? []).map((row) => [row.ply, row])),
+    [rows]
+  );
   const currentComment = useMemo(() => {
     if (!currentMove) return null;
     if (scratch || variation) return null;
     if (!live) return featuredGame.moves[ply - 1]?.comment ?? null;
     const prevEval = ply <= 1 ? 20 : evalNum(viewMoves[ply - 2]?.evalCp ?? null, viewMoves[ply - 2]?.mateIn ?? null);
-    return commentFor(t, sans.slice(0, ply - 1), currentMove, prevEval);
-  }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t]);
+    return commentFor(
+      t,
+      locale,
+      sans.slice(0, ply - 1),
+      currentMove,
+      prevEval,
+      ply,
+      `${game?.id}:${ply}`,
+      rowsByPly.get(ply),
+      rowsByPly.get(ply + 1)
+    );
+  }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t, locale, game?.id, rowsByPly]);
 
   /**
    * Die Anmerkung zu einem beliebigen Zug · dieselbe Regel wie für den
@@ -1022,10 +1082,20 @@ export default function Analysis({
     if (!desktop) return featuredGame.moves[index]?.comment ?? null;
     if (!live) return null;
     if (!move.judgment) return null;
-    if (!(["inaccuracy", "mistake", "blunder"] as MoveJudgment[]).includes(move.judgment)) return null;
+    if (!istBemaengelt(move.judgment)) return null;
     const prevEval =
       index === 0 ? 20 : evalNum(viewMoves[index - 1]?.evalCp ?? null, viewMoves[index - 1]?.mateIn ?? null);
-    return commentFor(t, sans.slice(0, index), move, prevEval);
+    return commentFor(
+      t,
+      locale,
+      sans.slice(0, index),
+      move,
+      prevEval,
+      index + 1,
+      `${game?.id}:${index + 1}`,
+      rowsByPly.get(index + 1),
+      rowsByPly.get(index + 2)
+    );
   };
 
   /**
@@ -1069,9 +1139,8 @@ export default function Analysis({
       });
     }
     if (!live || !rows || rows.length === 0) return NO_ANALYSEN;
-    const byPly = new Map(rows.map((row) => [row.ply, row]));
     return sans.map((_, index) => {
-      const row = byPly.get(index + 1);
+      const row = rowsByPly.get(index + 1);
       if (!row) return {};
       return {
         erklaerung: erklaereZug(row, { t, locale, seed: `${game.id}:${row.ply}` }),
@@ -1080,13 +1149,13 @@ export default function Analysis({
         grund: begruendeZug(row, {
           t,
           locale,
-          evalDavor: index > 0 ? byPly.get(index)?.eval_cp : undefined,
+          evalDavor: index > 0 ? rowsByPly.get(index)?.eval_cp : undefined,
           evalDanach: row.eval_cp,
         }),
         gewicht: row.loss_cp ?? null,
       };
     });
-  }, [diagramMode, desktop, live, game?.id, rows, sans, t, locale]);
+  }, [diagramMode, desktop, live, game?.id, rows, rowsByPly, sans, t, locale]);
 
   const evalSeries = viewMoves
     .map((m, i) => ({ ply: i + 1, eval: Math.max(-600, Math.min(600, evalNum(m.evalCp, m.mateIn))) / 100 }))
@@ -1993,6 +2062,38 @@ export default function Analysis({
     </div>
   ) : null;
 
+  /**
+   * Notizen und Stichwörter · einmal gebaut, in beiden Fassungen gesetzt.
+   *
+   * Eine Eingabe ist hier eine Eingabe und sonst nichts; das Blatt baut sie
+   * deshalb nicht nach, sondern setzt sie neu (`.blatt-formular`, siehe
+   * docs/design.md). Bis 1.3 stand sie nur in der gewöhnlichen Fassung — im
+   * Modus fehlte damit eine Funktion, und das ist der eine Fehler, den ein
+   * zweites Layout nicht machen darf.
+   */
+  const notizenFormular = live ? (
+    <>
+      <TagEditor key={game.id} tags={game.tags ?? []} onChange={saveTags} />
+      <textarea
+        value={noteDraft}
+        onChange={(e) => setNoteDraft(e.target.value)}
+        placeholder={t("games.notesPlaceholder")}
+        rows={4}
+        className="mt-3 w-full resize-y rounded-lg border border-line bg-panel2 p-2.5 text-[12.5px] leading-relaxed text-ink placeholder:text-ink3 focus:border-accent-dim focus:outline-none"
+      />
+      <div className="mt-2 flex justify-end">
+        <Button primary onClick={saveNote} disabled={noteDraft === (game.note ?? "")}>
+          <Save size={14} /> {noteSaved ? t("games.noteSaved") : t("games.saveNote")}
+        </Button>
+      </div>
+      {notesError && (
+        <div className="mt-2 rounded-lg border border-loss-dim bg-loss-soft px-3 py-2 text-[12px] text-loss">
+          {notesError}
+        </div>
+      )}
+    </>
+  ) : null;
+
   /** Meldung eines Laufs · dieselbe Auskunft, im Blatt ohne Kasten. */
   const meldung = notice ? (
     <div
@@ -2026,17 +2127,19 @@ export default function Analysis({
           frei={scratch}
           laufleiste={laufleiste}
           meldung={meldung}
+          /* Die Engine rechnet in beiden Lagen mit · am freien Brett trägt
+             sie die rechte Spalte, mit Partie steht sie im Apparat über Buch
+             und Stellungssuche. Sie war dort bis 1.3 nicht zu sehen, und
+             damit fehlte dem Modus eine Funktion der gewöhnlichen Fassung. */
           motor={
-            scratch ? (
-              <LiveEngine
-                blatt
-                fen={fen}
-                demoLines={[]}
-                onEval={(cp, mate) => setLiveEval({ cp, mate })}
-                onBestMove={setLiveBestUci}
-                onMove={(uci) => playBoardMove(uci.slice(0, 2), uci.slice(2, 4), uci[4] ?? "q")}
-              />
-            ) : null
+            <LiveEngine
+              blatt
+              fen={fen}
+              demoLines={scratch || loadingGame ? [] : featuredGame.pvLines}
+              onEval={(cp, mate) => setLiveEval({ cp, mate })}
+              onBestMove={setLiveBestUci}
+              onMove={(uci) => playBoardMove(uci.slice(0, 2), uci.slice(2, 4), uci[4] ?? "q")}
+            />
           }
           vorlauf={opened?.history ?? null}
           kopfRechts={
@@ -2210,6 +2313,27 @@ export default function Analysis({
                 }
               : undefined
           }
+          /* Dieselben acht Zahlen wie in der Karte der gewöhnlichen Fassung,
+             gesetzt als Tabelle statt als vier Kacheln. */
+          genauigkeiten={
+            live && accuracyCells.length > 0
+              ? {
+                  ich: ownPlayerName,
+                  gegner: game.opponent,
+                  zeilen: accuracyCells.map((zelle) => ({
+                    name: zelle.label,
+                    ich: zelle.mine,
+                    gegner: zelle.opponent,
+                  })),
+                  hinweis: accuracyCells
+                    .slice(1)
+                    .every((zelle) => zelle.mine == null && zelle.opponent == null)
+                    ? t("an.phaseAccuracyMissing")
+                    : undefined,
+                }
+              : undefined
+          }
+          notizen={notizenFormular}
           stellungen={
             desktop
               ? {
@@ -2542,26 +2666,7 @@ export default function Analysis({
           )}
 
           {live && (
-            <Card title={t("an.notesAndTags")}>
-              <TagEditor key={game.id} tags={game.tags ?? []} onChange={saveTags} />
-              <textarea
-                value={noteDraft}
-                onChange={(e) => setNoteDraft(e.target.value)}
-                placeholder={t("games.notesPlaceholder")}
-                rows={4}
-                className="mt-3 w-full resize-y rounded-lg border border-line bg-panel2 p-2.5 text-[12.5px] leading-relaxed text-ink placeholder:text-ink3 focus:border-accent-dim focus:outline-none"
-              />
-              <div className="mt-2 flex justify-end">
-                <Button primary onClick={saveNote} disabled={noteDraft === (game.note ?? "")}>
-                  <Save size={14} /> {noteSaved ? t("games.noteSaved") : t("games.saveNote")}
-                </Button>
-              </div>
-              {notesError && (
-                <div className="mt-2 rounded-lg border border-loss-dim bg-loss-soft px-3 py-2 text-[12px] text-loss">
-                  {notesError}
-                </div>
-              )}
-            </Card>
+            <Card title={t("an.notesAndTags")}>{notizenFormular}</Card>
           )}
 
           {desktop && bookTabs.length > 0 && (

@@ -163,6 +163,30 @@ export interface BilanzZeile {
   farbe: string;
 }
 
+/** Eine Phase der Partie mit den Genauigkeiten beider Seiten, in Prozent. */
+export interface GenauigkeitZeile {
+  name: string;
+  ich: number | null;
+  gegner: number | null;
+}
+
+/**
+ * Genauigkeit nach Partiephase · dieselben acht Zahlen wie in der Karte.
+ *
+ * Vier Kacheln sind es dort, hier ist es eine Tabelle: vier Zeilen, zwei
+ * Spalten, die Namen der Spieler im Kopf. Das ist die Form, in der ein
+ * Turnierbuch zwei Reihen von Zahlen nebeneinander stellt — und sie trägt die
+ * Frage, um die es geht („wer war wo besser?"), ohne dass man zwischen
+ * Kästchen hin und her springen muss.
+ */
+export interface GenauigkeitProps {
+  ich: string;
+  gegner: string;
+  zeilen: GenauigkeitZeile[];
+  /** Steht unter der Tabelle, wo nur die Gesamtzahl gerechnet wurde. */
+  hinweis?: string;
+}
+
 /** Eine Seite des Bretts · der Kopf über bzw. unter der Spielfläche. */
 export interface Brettseite {
   name: string;
@@ -198,7 +222,19 @@ export interface AnalysisBlattProps {
   laufleiste?: ReactNode;
   /** Meldung eines Laufs, falls eine ansteht. */
   meldung?: ReactNode;
-  /** Die Engine · nur am freien Brett, wo sie die rechte Spalte trägt. */
+  /**
+   * Die Engine · fertig von der Seite, in beiden Lagen dieselbe.
+   *
+   * Am freien Brett trägt sie die rechte Spalte: Dort gibt es keine
+   * Anmerkungen, und ihre Linien sind das, was auf einer Buchseite die
+   * Varianten sind. Mit Partie steht sie im Apparat, über Buch und
+   * Stellungssuche — die drei beantworten dieselbe Frage, jede aus einer
+   * anderen Quelle: was ist in *dieser* Stellung zu holen?
+   *
+   * Dass sie mit Partie überhaupt dasteht, ist der Nachtrag zu einer Lücke:
+   * Die gewöhnliche Fassung rechnet auf jedem Brett mit, das Blatt tat es nur
+   * auf dem freien. Ein Modus, der eine Funktion kostet, ist kein Modus.
+   */
   motor?: ReactNode;
   /** Züge aus einer geteilten Stellung · sie stehen vor den eigenen. */
   vorlauf?: string | null;
@@ -250,6 +286,17 @@ export interface AnalysisBlattProps {
    */
   buch?: BuchProps;
   stellungen?: StellungenProps;
+  /** Genauigkeit je Phase · nur zu einer gerechneten Partie. */
+  genauigkeiten?: GenauigkeitProps;
+  /**
+   * Notizen und Stichwörter · das Formular kommt fertig von der Seite.
+   *
+   * Hier ist eine Eingabe eine Eingabe und sonst nichts. Sie ein zweites Mal
+   * zu bauen, hieße dieselbe Bedienung zweimal zu pflegen; der Modus setzt sie
+   * deshalb nur neu (`.blatt-formular` in blatt.css) — dieselbe Regel wie beim
+   * Einstellungsblatt und beim PGN-Einlesen, siehe docs/design.md.
+   */
+  notizen?: ReactNode;
 }
 
 /**
@@ -354,13 +401,55 @@ function Kurve({
         viewBox={`0 0 ${breite} ${hoehe}`}
         width="100%"
         height={hoehe}
+        // Gestreckt und nicht eingepasst · daran hing der Griff.
+        //
+        // Die viewBox ist 470 breit, die Spalte ist es nicht: Auf dem Desktop
+        // misst sie `--board-col`, also bis zu 560 Bildpunkte. Mit dem
+        // voreingestellten `xMidYMid meet` zeichnet der Browser die Kurve dann
+        // in 470 Punkten mittig in den Kasten — links und rechts blieben
+        // 45 Punkte leer, während `zumPunkt` über die volle Kastenbreite
+        // rechnete. Die Marke landete dadurch bis zu einen halben Zentimeter
+        // neben dem Zeiger, und zwar zur Mitte hin. Auf dem Telefon fiel es
+        // nicht auf: Dort ist die Spalte schmaler als 470, die Zeichnung füllt
+        // sie also ohnehin — nur senkrecht stand sie gestaucht in der Mitte.
+        //
+        // `none` streckt die Zeichnung auf den Kasten. Damit ist die Rechnung
+        // in `zumPunkt` wieder die Wahrheit über das Bild, und die Kurve füllt
+        // endlich das Band, in dem sie steht. Die Striche nehmen die Streckung
+        // nicht mit (`non-scaling-stroke`) · sonst wäre die Haarlinie
+        // waagerecht dicker als senkrecht.
+        preserveAspectRatio="none"
         className="block overflow-visible"
         aria-hidden="true"
       >
         <polygon points={flaeche} fill="var(--color-win)" opacity="0.13" />
-        <line x1="0" y1={hoehe / 2} x2={breite} y2={hoehe / 2} stroke="var(--color-line2)" strokeWidth="1" />
-        <polyline points={punkte} fill="none" stroke="var(--color-ink)" strokeWidth="1.25" strokeLinejoin="round" />
-        <line x1={cx} y1="0" x2={cx} y2={hoehe} stroke="var(--color-ink)" strokeWidth="1" strokeDasharray="2 3" />
+        <line
+          x1="0"
+          y1={hoehe / 2}
+          x2={breite}
+          y2={hoehe / 2}
+          stroke="var(--color-line2)"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+        <polyline
+          points={punkte}
+          fill="none"
+          stroke="var(--color-ink)"
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        <line
+          x1={cx}
+          y1="0"
+          x2={cx}
+          y2={hoehe}
+          stroke="var(--color-ink)"
+          strokeWidth="1"
+          strokeDasharray="2 3"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
     </div>
   );
@@ -390,6 +479,8 @@ export default function AnalysisBlatt({
   genauigkeit,
   buch,
   stellungen,
+  genauigkeiten,
+  notizen,
 }: AnalysisBlattProps) {
   const { t, locale } = useI18n();
 
@@ -445,7 +536,16 @@ export default function AnalysisBlatt({
    * Höchstens drei · alle wären die Auto-Annotation ein zweites Mal, und die
    * steht schon eingerückt im Satz darüber.
    */
-  const zumZug = ply > 0 && zuege[ply - 1]?.erklaerung ? { zug: zuege[ply - 1], index: ply - 1 } : null;
+  // Nur zu einem Zug, der oben keine Anmerkung trägt. Seit die Anmerkung im
+  // Fließsatz den Motivsatz selbst mitbringt (siehe `kommentiereZug`), stünde
+  // er hier ein zweites Mal — drei Zeilen unter dem ersten Mal. Bleibt der
+  // Abschnitt bei der Liste der schwersten Stellen, führt er von da aus
+  // weiter, statt zu wiederholen.
+  const stehtSchonImSatz = ply > 0 && Boolean(zuege[ply - 1]?.kommentar);
+  const zumZug =
+    ply > 0 && !stehtSchonImSatz && zuege[ply - 1]?.erklaerung
+      ? { zug: zuege[ply - 1], index: ply - 1 }
+      : null;
   const wichtigste = zuege
     .map((zug, index) => ({ zug, index }))
     .filter(({ zug }) => zug.erklaerung && (zug.gewicht ?? 0) > 0)
@@ -887,9 +987,66 @@ export default function AnalysisBlatt({
     </div>
   ) : null;
 
+  /**
+   * Genauigkeit nach Partiephase.
+   *
+   * Eine Zeile je Phase, zwei Spalten für die beiden Namen. Ein Strich unter
+   * der Gesamtzeile trennt das Ergebnis von seinen Teilen — sie ist die
+   * Summe der drei darunter und keine vierte Phase.
+   *
+   * Wo nichts gerechnet wurde, steht ein Gedankenstrich und keine Null: Eine
+   * Partie ohne Endspiel hat keine Endspielgenauigkeit von 0 %.
+   */
+  const genauigkeitsTeil =
+    genauigkeiten && genauigkeiten.zeilen.length > 0 ? (
+      <div>
+        <Rubrik>{t("an.phaseAccuracy")}</Rubrik>
+        {/* Die Stubspalte bleibt ohne Kopf · die Zeilen nennen sich selbst,
+            und „Phase" stimmte für die Gesamtzeile ohnehin nicht. */}
+        {spaltenkopf([
+          { label: "" },
+          { label: genauigkeiten.ich, breite: 74, rechts: true },
+          { label: genauigkeiten.gegner, breite: 74, rechts: true },
+        ])}
+        {genauigkeiten.zeilen.map((zeile, index) => (
+          <div
+            key={zeile.name}
+            className={`flex items-baseline gap-[11px] py-[6px] ${
+              index === 0 ? "border-b border-ink3" : "border-b border-line"
+            }`}
+          >
+            <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink2">{zeile.name}</span>
+            {[zeile.ich, zeile.gegner].map((wert, spalte) => (
+              <span
+                key={spalte}
+                className="blatt-zahl w-[74px] flex-none text-end text-[13px] text-ink"
+              >
+                {wert == null ? "—" : `${de(wert)} %`}
+              </span>
+            ))}
+          </div>
+        ))}
+        {genauigkeiten.hinweis && <Fussnote>{genauigkeiten.hinweis}</Fussnote>}
+      </div>
+    ) : null;
+
+  /** Notizen und Stichwörter · die gewöhnlichen Felder, neu gesetzt. */
+  const notizenTeil = notizen ? (
+    <div>
+      <Rubrik>{t("an.notesAndTags")}</Rubrik>
+      <div className="blatt-formular mt-2.5">{notizen}</div>
+    </div>
+  ) : null;
+
+  // Der Apparat ist die Spalte zur *Stellung*: Was rechnet die Engine hier,
+  // was ist hier üblich, was habe ich hier selbst gespielt. Mit Partie steht
+  // die Engine deshalb obenan; am freien Brett trägt sie die rechte Spalte
+  // und darf hier nicht ein zweites Mal stehen.
+  const motorTeil = frei ? null : motor;
   const apparat =
-    buchTeil || stellungenTeil ? (
+    motorTeil || buchTeil || stellungenTeil ? (
       <div className="flex min-w-0 flex-col gap-6">
+        {motorTeil}
         {buchTeil}
         {stellungenTeil}
       </div>
@@ -1029,7 +1186,15 @@ export default function AnalysisBlatt({
   // Auto-Annotation; am freien Brett gibt es keine, dafür rechnet die Engine
   // mit — ihre Linien sind hier das, was auf einer Buchseite die Varianten
   // sind.
-  const neben = frei ? motor : auswertung;
+  const neben = frei ? (
+    motor
+  ) : (
+    <div className="flex flex-col gap-6">
+      {auswertung}
+      {genauigkeitsTeil}
+      {notizenTeil}
+    </div>
+  );
 
   if (mobile) {
     return (
