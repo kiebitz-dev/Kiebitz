@@ -22,6 +22,7 @@ import {
   Lightbulb,
   ListTree,
   Loader2,
+  Pencil,
   Plus,
   Share2,
   Shuffle,
@@ -44,6 +45,7 @@ import {
   repLookup,
   repNodeGames,
   repReorder,
+  repSetName,
   repSetNote,
   repStats,
   type NodeGameStats,
@@ -141,6 +143,7 @@ function VariationList({
   onSelect,
   onReorder,
   onDelete,
+  onEdit,
 }: {
   lines: VariationLine[];
   selectedLineKey: string | null;
@@ -157,6 +160,17 @@ function VariationList({
    * ansieht. Ohne den Handler bleibt die Liste lesend (Web-Vorschau).
    */
   onDelete?: (line: VariationLine) => void;
+  /**
+   * Variante bearbeiten · sie geht im Baukasten auf, mit ihren Zügen auf dem
+   * Brett und ihrem Namen im Feld. Bis hierher gab es zu einer angelegten
+   * Variante nur zwei Wege: verschieben und wegwerfen. Wer einen Zug
+   * anhängen oder den Namen richtigstellen wollte, musste sie neu bauen · und
+   * verlor dabei den Lernstand.
+   *
+   * Der Griff sitzt zwischen den beiden anderen, weil er dazwischen gehört:
+   * Ändern ist mehr als Umsortieren und weniger als Löschen.
+   */
+  onEdit?: (line: VariationLine) => void;
 }) {
   const t = useT();
   const optionRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -385,6 +399,17 @@ function VariationList({
                             <GripVertical aria-hidden="true" size={14} />
                           </button>
                         )}
+                        {onEdit && (
+                          <button
+                            type="button"
+                            aria-label={t("rep.editLine", { name: line.name })}
+                            title={t("rep.editVariant")}
+                            onClick={() => onEdit(line)}
+                            className="flex w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-panel2/60 text-ink3 transition-colors hover:border-line2 hover:text-ink2 focus:outline-none focus:ring-2 focus:ring-accent-dim"
+                          >
+                            <Pencil aria-hidden="true" size={14} />
+                          </button>
+                        )}
                         {onDelete && (
                           <button
                             type="button"
@@ -478,6 +503,13 @@ function LiveRepertoire() {
    * wechseln · der Baukasten geht dahinter auf, das Brett bleibt vorn.
    */
   const [seedFocused, setSeedFocused] = useState(false);
+  /**
+   * Die Variante, die im Baukasten bearbeitet wird · null heißt „neu anlegen".
+   *
+   * Sie hängt nicht an der Auswahl: Bearbeitet wird die Zeile, auf deren Griff
+   * getippt wurde, und nicht die, die zufällig gerade aufgeschlagen ist.
+   */
+  const [editing, setEditing] = useState<VariationLine | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [limits, setLimits] = useState<{ due: number; fresh: number }>({ due: 20, fresh: 5 });
   const now = Math.floor(Date.now() / 1000);
@@ -671,6 +703,76 @@ function LiveRepertoire() {
     [children, pathNodes]
   );
 
+  /**
+   * Eine bearbeitete Variante zurückschreiben.
+   *
+   * `rep_add_line` legt an und benutzt wieder: Was von der Zeile stehen bleibt,
+   * behält seine Knoten und damit seinen Lernstand · genau deshalb ist
+   * Bearbeiten nicht dasselbe wie Löschen und neu Anlegen. Drei Fälle
+   * unterscheiden sich danach nur noch darin, was von der *alten* Zeile übrig
+   * ist:
+   *
+   * · **Nur der Name geändert.** Der Endpunkt bleibt derselbe, es ist nichts
+   *   aufzuräumen.
+   * · **Verlängert.** Der alte Endpunkt liegt jetzt mitten in der Zeile. Er
+   *   trüge den Namen weiter und stünde als zweite, gleichnamige Zeile im
+   *   Verzeichnis · deshalb verliert er ihn.
+   * · **Gekürzt oder abgebogen.** Der Rest ab der Abzweigung gehört nicht mehr
+   *   dazu. Weggenommen wird er von unten nach oben, und nur so weit, wie er
+   *   wirklich allein dieser Zeile gehört: Hängt daran noch eine benannte
+   *   Fortsetzung oder eine Schwesternvariante, bleibt sie stehen, und der
+   *   alte Endpunkt verliert bloß seinen Namen.
+   *
+   * Was oberhalb der Abzweigung liegt, wird nie angefasst · dort steht die
+   * neue Zeile selbst.
+   */
+  const writeEdit = useCallback(
+    async (line: VariationLine, side: "white" | "black", name: string, sans: string[]) => {
+      const leafId = await repAddLine(side, name, sans);
+      // Auch das Leeren muss ankommen · `rep_add_line` lässt einen alten Namen
+      // stehen, wenn das Feld leer ist.
+      await repSetName(leafId, name);
+      const oldId = typeof line.targetId === "number" ? line.targetId : null;
+      if (oldId == null || oldId === leafId) return;
+
+      let gemeinsam = 0;
+      while (
+        gemeinsam < line.sans.length &&
+        gemeinsam < sans.length &&
+        line.sans[gemeinsam] === sans[gemeinsam]
+      )
+        gemeinsam += 1;
+      if (gemeinsam === line.sans.length) {
+        await repSetName(oldId, "");
+        return;
+      }
+
+      // Von unten nach oben, bis etwas kommt, das bleiben muss. Der Baum unter
+      // der Abzweigung hat sich beim Anlegen nicht geändert · die neue Zeile
+      // führt dort nicht entlang, und deshalb stimmt der Stand, den die Seite
+      // schon hat.
+      const ids = line.nodeIds ?? [];
+      let schnitt: number | null = null;
+      for (let i = ids.length - 1; i >= gemeinsam; i -= 1) {
+        const node = byId.get(ids[i]);
+        if (!node) break;
+        const kinder = children.get(`${node.side}:${node.id}`) ?? [];
+        const letzter = i === ids.length - 1;
+        const nurDieZeile = letzter
+          ? kinder.length === 0
+          : kinder.length === 1 && kinder[0].id === ids[i + 1];
+        if (!nurDieZeile) break;
+        // Ein benannter Zwischenknoten ist eine eigene Variante im Verzeichnis
+        // · der einzige, dessen Name hier zur Debatte steht, ist der Endpunkt.
+        if (!letzter && node.name.trim() !== "") break;
+        schnitt = ids[i];
+      }
+      if (schnitt != null) await repDelete(schnitt);
+      else await repSetName(oldId, "");
+    },
+    [byId, children]
+  );
+
   const remove = async (id: number) => {
     await repDelete(id).catch((e) => setNotice(errorMessage(e)));
     if (selectedId === id) {
@@ -729,6 +831,12 @@ function LiveRepertoire() {
           typeof line.targetId === "number" &&
           setPendingDelete({ id: exclusiveRoot(line.targetId), name: line.name })
         }
+        onEdit={(line) => {
+          setEditing(line);
+          setSeedSans([]);
+          setSeedFocused(false);
+          setMode("add");
+        }}
       />
       <div className="border-t border-line p-2">
         {nodes.length === 0 && (
@@ -741,6 +849,7 @@ function LiveRepertoire() {
         )}
         <button
           onClick={() => {
+            setEditing(null);
             setSeedSans([]);
             setSeedFocused(false);
             setMode("add");
@@ -792,6 +901,7 @@ function LiveRepertoire() {
     try {
       const chess = new Chess(fen);
       const move = chess.move({ from, to, promotion: "q" });
+      setEditing(null);
       setSeedSans([move.san]);
       // Aus dem Fokus heraus gezogen, bleibt der Fokus · der Baukasten
       // übernimmt ihn mit dem Zug, der ihn geöffnet hat. Das eigene Fokus-Brett
@@ -1056,12 +1166,22 @@ function LiveRepertoire() {
         />
       ) : mode === "add" ? (
         <AddLine
-          baseSans={baseSans}
-          baseSide={selected?.side ?? null}
-          seedSans={seedSans}
+          // Frisch aufsetzen, wenn eine andere Zeile drankommt · der Baukasten
+          // hält seine Züge im eigenen Zustand.
+          key={editing?.key ?? "neu"}
+          // Beim Bearbeiten steht die ganze Zeile zur Verfügung, von der
+          // Grundstellung an · sonst hinge sie an der Stellung, die zufällig
+          // aufgeschlagen ist, und ließe sich nicht kürzen.
+          baseSans={editing ? [] : baseSans}
+          baseSide={editing ? editing.side : (selected?.side ?? null)}
+          seedSans={editing ? editing.sans : seedSans}
+          seedName={editing?.name ?? ""}
+          eigeneIds={editing?.nodeIds}
           startFocused={seedFocused}
+          onSave={editing ? (side, name, sans) => writeEdit(editing, side, name, sans) : undefined}
           onDone={(err) => {
             setMode("browse");
+            setEditing(null);
             setSeedSans([]);
             setSeedFocused(false);
             if (err) setNotice(err);
@@ -1128,6 +1248,7 @@ function LiveRepertoire() {
               selectedLine?.name ?? t("rep.startPos"),
             ]}
             amZug={baseSans.length % 2 === 0 ? "white" : "black"}
+            seite={selected?.side ?? "white"}
             linie={notationLine(baseSans, locale)}
             angaben={[
               {
@@ -1167,7 +1288,11 @@ function LiveRepertoire() {
               const line = variationLines.find((value) => value.key === key);
               if (line) selectVariation(line, (line.nodeIds?.length ?? 0) - 1);
             }}
-            onHinzufuegen={() => setMode("add")}
+            onHinzufuegen={() => {
+              setEditing(null);
+              setSeedSans([]);
+              setMode("add");
+            }}
             onTraining={() => setMode(dueTotal > 0 || freeTotal === 0 ? "train" : "free")}
           />
         </Suspense>
@@ -1441,7 +1566,10 @@ function AddLine({
   baseSans,
   baseSide,
   seedSans = [],
+  seedName = "",
   startFocused = false,
+  eigeneIds,
+  onSave,
   onDone,
 }: {
   baseSans: string[];
@@ -1449,16 +1577,37 @@ function AddLine({
   /** Züge, die schon auf dem Brett standen, als der Baukasten aufging. */
   seedSans?: string[];
   /**
+   * Der Name, der schon dransteht · nur beim Bearbeiten. Steht er da, hält
+   * der Baukasten die Finger davon: Der ECO-Namensgeber überschriebe sonst
+   * genau den selbst vergebenen Namen, den man gerade richtigstellen wollte.
+   */
+  seedName?: string;
+  /**
    * Gleich im Fokus aufgehen · wenn der Zug, der den Baukasten geöffnet hat,
    * im Fokus-Brett der Übersicht gespielt wurde.
    */
   startFocused?: boolean;
+  /**
+   * Die Knoten der Zeile, die gerade bearbeitet wird.
+   *
+   * Die Transpositionswarnung fragt, wer dieselbe Stellung sonst noch
+   * erreicht · beim Bearbeiten ist die erste Antwort die Zeile selbst, und
+   * eine Warnung vor sich selbst ist keine.
+   */
+  eigeneIds?: number[];
+  /**
+   * Was beim Sichern geschieht · ohne sie wird angelegt (`repAddLine`).
+   * Beim Bearbeiten schreibt die Seite die Zeile zurück und räumt auf, was
+   * von der alten übrig bleibt.
+   */
+  onSave?: (side: "white" | "black", name: string, sans: string[]) => Promise<void>;
   onDone: (err?: string) => void;
 }) {
   const t = useT();
+  const bearbeiten = onSave != null;
   const [draft, setDraft] = useState<string[]>(seedSans);
-  const [name, setName] = useState("");
-  const [nameEdited, setNameEdited] = useState(false);
+  const [name, setName] = useState(seedName);
+  const [nameEdited, setNameEdited] = useState(seedName.trim() !== "");
   const [side, setSide] = useState<"white" | "black">(baseSide ?? "white");
   const [book, setBook] = useState<ChessDbResult | null>(null);
   const [twins, setTwins] = useState<RepNode[]>([]);
@@ -1502,7 +1651,7 @@ function AddLine({
     const timer = setTimeout(() => {
       repLookup(side, sans)
         .then((found) => {
-          if (!stale) setTwins(found);
+          if (!stale) setTwins(found.filter((node) => !(eigeneIds ?? []).includes(node.id)));
         })
         .catch(() => {});
     }, 250);
@@ -1510,7 +1659,7 @@ function AddLine({
       stale = true;
       clearTimeout(timer);
     };
-  }, [side, sans]);
+  }, [side, sans, eigeneIds]);
 
   // ChessDB als Orientierung beim Bauen · ohne sie legt man Varianten an,
   // ohne zu wissen, was überhaupt gespielt wird.
@@ -1620,7 +1769,7 @@ function AddLine({
   const save = async () => {
     if (draft.length === 0) return;
     try {
-      await repAddLine(side, name, sans);
+      await (onSave ? onSave(side, name, sans) : repAddLine(side, name, sans));
       onDone();
     } catch (e) {
       onDone(errorMessage(e));
@@ -1632,12 +1781,17 @@ function AddLine({
       <div className="max-w-[var(--board-edge)]">
         {addBoard("rep-add")}
         {addMoves(false)}
-        <p className="mt-2 px-1 text-[12px] leading-relaxed text-ink3">{t("rep.undoMoveHint")}</p>
+        {/* Beim Bearbeiten steht hier, was das Sichern mit der alten Zeile
+            macht · dass gekürzte Züge wirklich weg sind und der Lernstand der
+            übrigen bleibt, ist die Frage, die man sich davor stellt. */}
+        <p className="mt-2 px-1 text-[12px] leading-relaxed text-ink3">
+          {bearbeiten ? t("rep.editHint") : t("rep.undoMoveHint")}
+        </p>
 
         <FocusBoard
           open={focused}
           onClose={() => setFocused(false)}
-          title={t("rep.newVariant")}
+          title={bearbeiten ? t("rep.editVariant") : t("rep.newVariant")}
           subtitle={side === "white" ? t("common.asWhite") : t("common.asBlack")}
           below={addMoves(true)}
         >
@@ -1645,7 +1799,7 @@ function AddLine({
         </FocusBoard>
       </div>
       <div className="flex max-w-[420px] flex-col gap-3">
-        <Card title={t("rep.newVariant")}>
+        <Card title={bearbeiten ? t("rep.editVariant") : t("rep.newVariant")}>
           {baseSide == null && (
             <div className="mb-3 flex gap-2">
               {(["white", "black"] as const).map((s) => (
@@ -1691,9 +1845,14 @@ function AddLine({
             >
               <Check size={14} />{" "}
               <span className="truncate">
-                {t(draft.length === 1 ? "rep.saveMoves.one" : "rep.saveMoves.many", {
-                  n: draft.length,
-                })}
+                {/* Beim Anlegen zählt der Knopf die Züge, die ins Buch gehen ·
+                    beim Bearbeiten wäre dieselbe Zahl irreführend: Die meisten
+                    davon stehen längst drin. */}
+                {bearbeiten
+                  ? t("rep.saveEdit")
+                  : t(draft.length === 1 ? "rep.saveMoves.one" : "rep.saveMoves.many", {
+                      n: draft.length,
+                    })}
               </span>
             </Button>
             <Button onClick={() => onDone()} label={t("common.cancel")} className="shrink-0" compact>

@@ -209,6 +209,27 @@ pub fn rep_set_note(db: State<db::Db>, node_id: i64, note: String) -> Result<(),
     Ok(())
 }
 
+/// Name einer Variante setzen (leerer Text nimmt ihn weg).
+///
+/// Gebraucht wird das beim Bearbeiten einer Variante: `rep_add_line` benennt
+/// den *neuen* Endpunkt, der alte trüge seinen Namen sonst weiter und stünde
+/// als zweite, gleichnamige Zeile in der Liste. Ein leerer Name macht aus ihm
+/// wieder einen gewöhnlichen Zwischenzug.
+#[tauri::command]
+pub fn rep_set_name(db: State<db::Db>, node_id: i64, name: String) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let changed = conn
+        .execute(
+            "UPDATE rep_nodes SET name = ?2 WHERE id = ?1",
+            params![node_id, name.trim()],
+        )
+        .map_err(|e| e.to_string())?;
+    if changed == 0 {
+        return Err("Knoten nicht gefunden".into());
+    }
+    Ok(())
+}
+
 /// Stellung nach `sans` von der Grundstellung aus · Fehler nennt den Zug.
 fn position_after(sans: &[String]) -> Result<chess::Position, String> {
     let mut pos = chess::Position::initial();
@@ -1104,6 +1125,49 @@ mod tests {
         assert_eq!(places(&conn, caro), (0, 0));
         reorder_nodes(&mut conn, "white", &[caro], 4_712).unwrap();
         assert_eq!(places(&conn, caro), (0, 0));
+    }
+
+    /// Der Vertrag, auf dem das Bearbeiten einer Variante aufsitzt.
+    ///
+    /// Wird eine Zeile verlängert, wandert der Name auf den neuen Endpunkt ·
+    /// der alte behält ihn aber. Die Oberfläche muss ihn deshalb selbst
+    /// abnehmen (`repSetName(alt, "")` in pages/Repertoire.tsx), sonst stünde
+    /// die Variante zweimal gleichnamig im Verzeichnis. Ändert sich nur der
+    /// Name, bleibt es bei einem Knoten und einem Namen.
+    #[test]
+    fn extending_a_line_names_the_new_leaf_and_leaves_the_old_name() {
+        let conn = memory_db();
+        let (kurz, _) = insert_line(&conn, "white", "Italienisch", &line(&["e4", "e5"])).unwrap();
+        let (lang, _) =
+            insert_line(&conn, "white", "Italienisch", &line(&["e4", "e5", "Nf3"])).unwrap();
+        assert_ne!(kurz, lang, "der Endpunkt ist ein anderer");
+
+        fn name_of(conn: &Connection, id: i64) -> String {
+            conn.query_row(
+                "SELECT name FROM rep_nodes WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        }
+        assert_eq!(name_of(&conn, lang), "Italienisch");
+        assert_eq!(
+            name_of(&conn, kurz),
+            "Italienisch",
+            "der alte Name bleibt stehen"
+        );
+
+        // Nur umbenennen: derselbe Endpunkt, kein zweiter Knoten.
+        let (wieder, neu) = insert_line(
+            &conn,
+            "white",
+            "Mein Italiener",
+            &line(&["e4", "e5", "Nf3"]),
+        )
+        .unwrap();
+        assert_eq!(wieder, lang);
+        assert_eq!(neu, 0);
+        assert_eq!(name_of(&conn, lang), "Mein Italiener");
     }
 
     #[test]

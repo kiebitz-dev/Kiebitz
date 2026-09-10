@@ -220,6 +220,21 @@ export function repSetNote(nodeId: number, note: string): Promise<void> {
   return invoke<void>("rep_set_note", { nodeId, note }).then(() => emitDataChange("repertoire"));
 }
 
+/**
+ * Namen einer Variante setzen · leerer Text nimmt ihn weg.
+ *
+ * Gebraucht beim Bearbeiten: `repAddLine` benennt den Endpunkt der *neuen*
+ * Zugfolge, der alte Endpunkt trüge seinen Namen sonst weiter und stünde als
+ * zweite, gleichnamige Zeile im Verzeichnis.
+ *
+ * Wie beim Notizfeld gilt: Der Gerätesync trägt den Namen nur mit, wenn der
+ * Knoten beim Gegenüber neu entsteht · eine Umbenennung bleibt auf dem Gerät,
+ * auf dem sie geschah.
+ */
+export function repSetName(nodeId: number, name: string): Promise<void> {
+  return invoke<void>("rep_set_name", { nodeId, name }).then(() => emitDataChange("repertoire"));
+}
+
 /** Knoten derselben Seite, die dieselbe Stellung erreichen (Transpositionen). */
 export function repLookup(side: "white" | "black", sans: string[]): Promise<RepNode[]> {
   return invoke<RepNode[]>("rep_lookup", { side, sans });

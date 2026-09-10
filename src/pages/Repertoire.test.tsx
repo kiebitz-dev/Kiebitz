@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   repReview: vi.fn(),
   repReorder: vi.fn(),
   repDelete: vi.fn(),
+  repAddLine: vi.fn(),
+  repSetName: vi.fn(),
   /** Der Zug, den ein Klick auf das Brett-Double auslöst. */
   drop: { from: "", to: "" },
   engineMove: "e2e4",
@@ -25,7 +27,7 @@ vi.mock("../lib/backend", () => ({
   engineInfo: vi.fn(() => Promise.resolve({ ok: false, name: "", path: "" })),
 }));
 vi.mock("../lib/repertoire", () => ({
-  repAddLine: vi.fn(),
+  repAddLine: mocks.repAddLine,
   repDelete: mocks.repDelete,
   repDue: mocks.repDue,
   repExportPgnFile: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock("../lib/repertoire", () => ({
   repNodeGames: vi.fn(() => new Promise(() => {})),
   repReorder: mocks.repReorder,
   repReview: mocks.repReview,
+  repSetName: mocks.repSetName,
   repSetNote: vi.fn(),
   repStats: mocks.repStats,
 }));
@@ -97,7 +100,7 @@ function variationTree(): RepNode[] {
     { ...base, id: 3, parent_id: 2, san: "Nf3", name: "Italian Game", depth: 3, my_move: true, fen_key: "v3" },
     { ...base, id: 4, parent_id: 1, san: "c5", depth: 2, my_move: false, fen_key: "v4" },
     { ...base, id: 5, parent_id: 4, san: "Nf3", name: "Sicilian Defense", depth: 3, my_move: true, fen_key: "v5" },
-    { ...base, id: 6, parent_id: 3, san: "Bc4", name: "Italian Main Line", depth: 4, my_move: false, fen_key: "v6" },
+    { ...base, id: 6, parent_id: 3, san: "Nc6", name: "Italian Main Line", depth: 4, my_move: false, fen_key: "v6" },
   ];
 }
 
@@ -108,6 +111,10 @@ beforeEach(() => {
   mocks.repReview.mockResolvedValue({ due_ts: 0, interval_days: 1 });
   mocks.repReorder.mockResolvedValue(undefined);
   mocks.repDelete.mockResolvedValue(undefined);
+  mocks.repSetName.mockResolvedValue(undefined);
+  // Die Kennung des Endpunkts, den `rep_add_line` zurückmeldet · die Tests
+  // setzen sie auf den Knoten, auf dem die gesicherte Zeile endet.
+  mocks.repAddLine.mockResolvedValue(0);
   mocks.repList.mockResolvedValue([]);
   mocks.repGaps.mockResolvedValue([]);
   mocks.repStats.mockResolvedValue({
@@ -227,7 +234,7 @@ describe("Repertoire training", () => {
 
     const italian = await screen.findByRole("option", { name: "Italian Game: 1.e4 e5 2.Nf3" });
     const sicilian = screen.getByRole("option", { name: "Sicilian Defense: 1.e4 c5 2.Nf3" });
-    expect(screen.getByRole("option", { name: "Italian Main Line: 1.e4 e5 2.Nf3 Bc4" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Italian Main Line: 1.e4 e5 2.Nf3 Nc6" })).toBeTruthy();
     const board = screen.getByTestId("board-repertoire");
 
     fireEvent.click(italian);
@@ -438,7 +445,7 @@ describe("Repertoire deleting and building", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Italian Main Line löschen" }));
     fireEvent.click(screen.getByRole("button", { name: "Endgültig löschen" }));
-    // Über Bc4 steht die benannte italienische Partie · sie bleibt stehen.
+    // Über Nc6 steht die benannte italienische Partie · sie bleibt stehen.
     await waitFor(() => expect(mocks.repDelete).toHaveBeenCalledWith(6));
   });
 
@@ -544,5 +551,128 @@ describe("Repertoire deleting and building", () => {
     await waitFor(() =>
       expect(screen.getByTestId("board-rep-add").dataset.fen).toBe(fenAfter(["e4"]))
     );
+  });
+});
+
+/**
+ * Eine angelegte Variante ändern.
+ *
+ * Bis hierher gab es zu einer Zeile nur zwei Wege: verschieben und wegwerfen.
+ * Wer einen Zug anhängen oder den Namen richtigstellen wollte, musste sie neu
+ * bauen — und verlor dabei den Lernstand. Der Griff zwischen den beiden legt
+ * sie im Baukasten auf, mit ihren Zügen auf dem Brett.
+ *
+ * Geprüft wird vor allem, was danach von der *alten* Zeile übrig ist: Ein
+ * Endpunkt, der seinen Namen behielte, stünde als zweite, gleichnamige Zeile
+ * im Verzeichnis, und ein Rest, der zu viel mitnähme, risse fremde Varianten
+ * mit.
+ */
+describe("Repertoire editing", () => {
+  async function edit(name: string) {
+    mocks.repList.mockResolvedValue(variationTree());
+    render(
+      <LocaleProvider>
+        <Repertoire />
+      </LocaleProvider>
+    );
+    fireEvent.click(await screen.findByRole("button", { name: `${name} bearbeiten` }));
+    return await screen.findByTestId("board-rep-add");
+  }
+
+  const save = () => fireEvent.click(screen.getByRole("button", { name: "Änderungen sichern" }));
+  const undo = () => fireEvent.click(screen.getByRole("button", { name: "Zug zurück" }));
+
+  it("opens the line in the builder, moves and name and all", async () => {
+    const board = await edit("Italian Main Line");
+    expect(board.dataset.fen).toBe(fenAfter(["e4", "e5", "Nf3", "Nc6"]));
+    expect(
+      (screen.getByPlaceholderText("Name der Variante (optional)") as HTMLInputElement).value
+    ).toBe("Italian Main Line");
+    // Die Seite steht fest · eine Variante wechselt beim Bearbeiten nicht die
+    // Farbe, und die Wahl stünde nur im Weg.
+    expect(screen.queryByRole("button", { name: "Als Schwarz" })).toBeNull();
+  });
+
+  /** Nur der Name · dann bleibt der Endpunkt derselbe und nichts ist aufzuräumen. */
+  it("renames without touching the tree", async () => {
+    mocks.repAddLine.mockResolvedValue(5);
+    await edit("Sicilian Defense");
+    fireEvent.change(screen.getByPlaceholderText("Name der Variante (optional)"), {
+      target: { value: "Mein Sizilianer" },
+    });
+    save();
+
+    await waitFor(() =>
+      expect(mocks.repAddLine).toHaveBeenCalledWith("white", "Mein Sizilianer", ["e4", "c5", "Nf3"])
+    );
+    expect(mocks.repSetName).toHaveBeenCalledWith(5, "Mein Sizilianer");
+    expect(mocks.repDelete).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Verlängert: Der alte Endpunkt liegt jetzt mitten in der Zeile · er verliert
+   * seinen Namen, sonst stünde er ein zweites Mal im Verzeichnis.
+   */
+  it("takes the name off the old endpoint when the line grows", async () => {
+    mocks.repAddLine.mockResolvedValue(9);
+    await edit("Sicilian Defense");
+    mocks.engineMove = "d7d6";
+    fireEvent.click(screen.getByRole("button", { name: "play engine move" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("board-rep-add").dataset.fen).toBe(
+        fenAfter(["e4", "c5", "Nf3", "d6"])
+      )
+    );
+    save();
+
+    await waitFor(() =>
+      expect(mocks.repAddLine).toHaveBeenCalledWith("white", "Sicilian Defense", [
+        "e4",
+        "c5",
+        "Nf3",
+        "d6",
+      ])
+    );
+    expect(mocks.repSetName).toHaveBeenCalledWith(5, "");
+    expect(mocks.repDelete).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Gekürzt: Was hinten abfällt, gehört allein dieser Zeile · es geht weg,
+   * und zwar genau bis zur Abzweigung und keinen Knoten weiter.
+   */
+  it("sweeps up the tail that only belonged to the line", async () => {
+    mocks.repAddLine.mockResolvedValue(3);
+    await edit("Italian Main Line");
+    undo();
+    await waitFor(() =>
+      expect(screen.getByTestId("board-rep-add").dataset.fen).toBe(fenAfter(["e4", "e5", "Nf3"]))
+    );
+    save();
+
+    await waitFor(() => expect(mocks.repDelete).toHaveBeenCalledWith(6));
+    expect(mocks.repAddLine).toHaveBeenCalledWith("white", "Italian Main Line", [
+      "e4",
+      "e5",
+      "Nf3",
+    ]);
+  });
+
+  /**
+   * Am Rest hängt noch eine benannte Fortsetzung · sie bleibt stehen, und der
+   * alte Endpunkt verliert bloß seinen Namen. Eine Variante zu bearbeiten darf
+   * keine zweite mitnehmen.
+   */
+  it("leaves a named continuation standing", async () => {
+    mocks.repAddLine.mockResolvedValue(2);
+    await edit("Italian Game");
+    undo();
+    await waitFor(() =>
+      expect(screen.getByTestId("board-rep-add").dataset.fen).toBe(fenAfter(["e4", "e5"]))
+    );
+    save();
+
+    await waitFor(() => expect(mocks.repSetName).toHaveBeenCalledWith(3, ""));
+    expect(mocks.repDelete).not.toHaveBeenCalled();
   });
 });

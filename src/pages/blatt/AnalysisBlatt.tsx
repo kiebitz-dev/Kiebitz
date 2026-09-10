@@ -104,6 +104,20 @@ export interface AnalysisBlattProps {
    * hier wäre dieselbe Bedienung ein zweites Mal.
    */
   brett: ReactNode;
+  /**
+   * Die Nebengriffe zum Brett · Drehen, Teilen, Fokus, neues Brett.
+   *
+   * Sie kommen wie das Brett fertig von der Seite (`boardExtras` in
+   * pages/Analysis.tsx) und stehen hier am Ende der Tastenreihe unter dem
+   * Brett, hinter der Zählung. Der Modus setzt sie neu — `blatt-formular`
+   * nimmt Rundungen und Flächen zurück (siehe blatt.css) —, er baut sie aber
+   * nicht ein zweites Mal.
+   *
+   * Ohne sie war das Blatt die Fassung, in der man das Brett nicht drehen und
+   * die Stellung nicht teilen kann. Ein Modus, der Bedienung kostet, ist kein
+   * Modus, sondern ein Nachteil.
+   */
+  griffe?: ReactNode;
   zuege: SatzZug[];
   /** Der gezeigte Halbzug · die Marke in der Kurve und im Satz. */
   ply: number;
@@ -244,6 +258,7 @@ export default function AnalysisBlatt({
   oben,
   unten,
   brett,
+  griffe,
   zuege,
   ply,
   onPly,
@@ -411,9 +426,21 @@ export default function AnalysisBlatt({
           <Icon size={16} />
         </button>
       ))}
-      <span className="blatt-zahl flex h-11 flex-[2] items-center justify-center border-s border-line text-[12.5px] text-ink3">
+      {/* Die Zählung nimmt ohne Nebengriffe die doppelte Breite einer Taste,
+          mit ihnen nur die ihres Textes · sonst stünden auf einem schmalen
+          Telefon acht Zellen in einer Reihe, die für sechs Platz hat. */}
+      <span
+        className={`blatt-zahl flex h-11 items-center justify-center border-s border-line text-[12.5px] text-ink3 ${
+          griffe ? "flex-none px-3" : "flex-[2]"
+        }`}
+      >
         {t("blatt.plyOf", { n: deInt(ply), total: deInt(zuege.length) })}
       </span>
+      {griffe && (
+        <span className="blatt-formular flex h-11 flex-none items-center gap-1 border-s border-line px-1.5">
+          {griffe}
+        </span>
+      )}
     </div>
   );
 

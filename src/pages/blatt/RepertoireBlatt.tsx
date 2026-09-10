@@ -52,6 +52,13 @@ export interface RepertoireBlattProps {
   fen: string;
   unterschrift: string[];
   amZug: "white" | "black";
+  /**
+   * Für welche Farbe das Buch an dieser Stelle geführt wird · nicht, wer am
+   * Zug ist. Ein Schwarzrepertoire liest man von unten aus Schwarzsicht, sonst
+   * steht die eigene Vorbereitung auf dem Kopf. Die gewöhnliche Fassung dreht
+   * das Brett längst so (siehe `orientation` in pages/Repertoire.tsx).
+   */
+  seite: "white" | "black";
   /** Die Zugfolge der Linie, schon in der Sprache der Oberfläche gesetzt. */
   linie: string;
   /** Angaben zum gewählten Knoten · Formularfelder. */
@@ -77,6 +84,7 @@ export default function RepertoireBlatt({
   fen,
   unterschrift,
   amZug,
+  seite,
   linie,
   angaben,
   notiz,
@@ -124,7 +132,7 @@ export default function RepertoireBlatt({
   // die Hülle gibt sie vor, und die Bildunterschrift folgt ihr.
   const diagrammBlock = (
     <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
-      <Diagramm fen={fen} orientation={amZug === "black" ? "white" : "white"} />
+      <Diagramm fen={fen} orientation={seite} />
       <Bildunterschrift
         nummer={unterschrift[0]}
         zeilen={unterschrift.slice(1)}

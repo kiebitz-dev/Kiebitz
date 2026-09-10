@@ -1538,41 +1538,86 @@ export default function Analysis({
     }
   };
 
+  const flip = () => setFlipped((value) => !value);
+  const newBoard = () => {
+    setOpened(null);
+    setScratchSans([]);
+    setPly(0);
+    setScratchSelected(null);
+    setLiveEval(null);
+    setLiveBestUci(null);
+  };
+
+  /**
+   * Die Nebengriffe zum Brett · Brett drehen, teilen, Fokus und · am freien
+   * Brett · von vorn anfangen.
+   *
+   * Sie stehen für sich, weil zwei Leisten sie tragen: die Leiste der
+   * gewöhnlichen Fassung (`boardControls`) und die Tastenreihe des Blattes
+   * (`griffe` in pages/blatt/AnalysisBlatt.tsx). Im Blatt fehlten sie ganz ·
+   * dort kam man an das Drehen des Bretts und an das Teilen gar nicht mehr
+   * heran, und das ist kein Layout mehr, sondern eine Fassung, die weniger
+   * kann.
+   *
+   * Die Aufteilung mobil/Desktop steckt deshalb hier und nicht in den beiden
+   * Leisten. Auf dem Telefon ist für alles nebeneinander kein Platz, und dort
+   * greift die Regel, nach der die App ihre Menüs baut (siehe `Menu` in
+   * components/ui.tsx): Was beim Durchsehen einer Partie ständig gebraucht
+   * wird · Blättern · bleibt als eigene Taste stehen; was einmal pro Partie
+   * vorkommt, rückt in ein Blatt am Ende der Tastengruppe. Es klappt nach
+   * oben auf, weil unter der Leiste die Navigationsleiste steht. Auf dem
+   * Desktop bleibt alles nebeneinander: Dort ist die Breite da, und ein Klick
+   * weniger ist besser als ein aufgeräumteres Blatt.
+   *
+   * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
+   */
+  const boardExtras = (inFocus: boolean) =>
+    mobile ? (
+      <Menu label={t("an.boardActions")} align="end" up compact icon={<MoreHorizontal size={15} />}>
+        <MenuItem onClick={flip}>
+          <FlipVertical2 size={15} /> {t("an.flip")}
+        </MenuItem>
+        <MenuItem onClick={openShare}>
+          <Share2 size={15} /> {t("sh.title")}
+        </MenuItem>
+        {!inFocus && <FocusMenuItem onClick={() => setFocused(true)} />}
+        {scratch && (
+          <MenuItem onClick={newBoard}>
+            <RotateCcw size={15} /> {t("an.newBoard")}
+          </MenuItem>
+        )}
+      </Menu>
+    ) : (
+      <>
+        <Button onClick={flip} title={t("an.flip")} label={t("an.flip")} compact>
+          <FlipVertical2 size={15} />
+        </Button>
+        <Button onClick={openShare} title={t("sh.title")} label={t("sh.title")} compact>
+          <Share2 size={15} />
+        </Button>
+        {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+        {scratch && (
+          <Button onClick={newBoard} title={t("an.newBoard")}>
+            <RotateCcw size={15} /> {t("an.newBoard")}
+          </Button>
+        )}
+      </>
+    );
+
   /**
    * Eine Leiste statt einer Reihe verstreuter Knöpfe.
    *
-   * Links alles, was die gezeigte Stellung ändert: blättern, Brett drehen,
-   * teilen, in den Fokus gehen und · am freien Brett · von vorn anfangen.
-   * Rechts die Bewertung, unverrückbar. Beide Gruppen liegen in einer
-   * gemeinsamen Fläche, damit die Leiste als ein Bedienelement gelesen wird
-   * und nicht als acht gleich laute Angebote.
+   * Links alles, was die gezeigte Stellung ändert: blättern und die
+   * Nebengriffe von oben. Rechts die Bewertung, unverrückbar. Beide Gruppen
+   * liegen in einer gemeinsamen Fläche, damit die Leiste als ein
+   * Bedienelement gelesen wird und nicht als acht gleich laute Angebote.
    *
    * Die Leiste bleibt einzeilig · und auf dem Telefon auch vollständig
    * sichtbar. Dort ist für acht Tasten und die Bewertung kein Platz, und eine
    * Leiste, die man erst zur Seite schieben muss, um an das Drehen des Bretts
-   * zu kommen, ist keine Leiste mehr, sondern ein Versteck. Deshalb greift
-   * dort die Regel, nach der die App ihre Menüs baut (siehe `Menu` in
-   * components/ui.tsx): Was beim Durchsehen einer Partie ständig gebraucht
-   * wird · Blättern · bleibt als eigene Taste stehen; was einmal pro Partie
-   * vorkommt · Brett drehen, teilen, Fokus, neues Brett · rückt in ein Blatt
-   * am Ende der Tastengruppe. Es klappt nach oben auf, weil unter der Leiste
-   * die Navigationsleiste steht.
-   *
-   * Auf dem Desktop bleibt alles nebeneinander: Dort ist die Breite da, und
-   * ein Klick weniger ist besser als ein aufgeräumteres Blatt.
-   *
-   * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
+   * zu kommen, ist keine Leiste mehr, sondern ein Versteck.
    */
   const boardControls = (inFocus: boolean) => {
-    const flip = () => setFlipped((value) => !value);
-    const newBoard = () => {
-      setOpened(null);
-      setScratchSans([]);
-      setPly(0);
-      setScratchSelected(null);
-      setLiveEval(null);
-      setLiveBestUci(null);
-    };
     return (
       <div className="ml-[calc(var(--board-gutter)-var(--board-bleed))] mt-3 flex items-center gap-2 rounded-xl border border-line bg-panel px-2 py-1.5">
         <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
@@ -1601,43 +1646,14 @@ export default function Analysis({
           {!mobile && (
             <>
               <span className="mx-1 h-6 w-px shrink-0 bg-line2" aria-hidden="true" />
-              <Button
-                onClick={flip}
-                title={t("an.flip")}
-                label={t("an.flip")}
-                compact
-              >
-                <FlipVertical2 size={15} />
-              </Button>
-              <Button onClick={openShare} title={t("sh.title")} label={t("sh.title")} compact>
-                <Share2 size={15} />
-              </Button>
-              {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
-              {scratch && (
-                <Button onClick={newBoard} title={t("an.newBoard")}>
-                  <RotateCcw size={15} /> {t("an.newBoard")}
-                </Button>
-              )}
+              {boardExtras(inFocus)}
             </>
           )}
         </div>
         {mobile && (
           <>
             <span className="h-6 w-px shrink-0 bg-line2" aria-hidden="true" />
-            <Menu label={t("an.boardActions")} align="end" up compact icon={<MoreHorizontal size={15} />}>
-              <MenuItem onClick={flip}>
-                <FlipVertical2 size={15} /> {t("an.flip")}
-              </MenuItem>
-              <MenuItem onClick={openShare}>
-                <Share2 size={15} /> {t("sh.title")}
-              </MenuItem>
-              {!inFocus && <FocusMenuItem onClick={() => setFocused(true)} />}
-              {scratch && (
-                <MenuItem onClick={newBoard}>
-                  <RotateCcw size={15} /> {t("an.newBoard")}
-                </MenuItem>
-              )}
-            </Menu>
+            {boardExtras(inFocus)}
           </>
         )}
         <div
@@ -1990,6 +2006,7 @@ export default function Analysis({
             geschlagen: blattGeschlagen(false),
           }}
           brett={boardRow("blatt")}
+          griffe={boardExtras(false)}
           zuege={viewMoves.map((move, index) => ({
             san: move.san,
             nag: move.judgment && MARKED_IN_LIST.includes(move.judgment) ? NAG[move.judgment] : undefined,
@@ -2010,6 +2027,29 @@ export default function Analysis({
           acpl={summary.acpl}
           genauigkeit={live ? (game.accuracy ?? derivedAccuracies?.mine.overall ?? null) : null}
         />
+        {/* Fokus und Teilen gehören zum Brett und nicht zum Layout · beide
+            Fassungen setzen dieselbe Stellung, und wer sie im Blatt groß sehen
+            oder weitergeben will, hat denselben Grund wie in der gewöhnlichen
+            Fassung. Der Fokus zeigt das Brett dabei so, wie es hier steht:
+            gedreht wie die Seite, in den Farben, die im Modus gelten. */}
+        <FocusBoard
+          open={focused}
+          onClose={() => setFocused(false)}
+          title={t("an.title")}
+          subtitle={headerSub}
+          frameWidth="var(--board-col)"
+          above={playerLine(true)}
+          below={
+            <>
+              {playerLine(false)}
+              {variationHint}
+              {boardControls(true)}
+            </>
+          }
+        >
+          {boardRow("analysis-blatt-focus")}
+        </FocusBoard>
+        {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
       </Suspense>
     );
   }
