@@ -346,20 +346,12 @@ export default function Dashboard({
           ? (erklaereZug(row, { t, locale, seed: `${record.id}:${row.ply}` }) ?? undefined)
           : undefined;
       });
-      // Und die Zeile darunter: woher der Preis kommt. Die Bewertung *vor*
-      // dem Zug ist die Bewertung *nach* dem vorigen · beim ersten Halbzug
-      // gibt es keine, und dann bleibt der Satz bei der Widerlegung.
+      // Und die Zeile darunter: womit der Zug widerlegt wird. Ohne
+      // gespeicherten Gegenzug bleibt sie fort.
       const gruende = sans.map((_, index) => {
         const row = rows[index];
         if (!row) return undefined;
-        return (
-          begruendeZug(row, {
-            t,
-            locale,
-            evalDavor: index > 0 ? rows[index - 1]?.eval_cp : undefined,
-            evalDanach: row.eval_cp,
-          }) ?? undefined
-        );
+        return begruendeZug(row, { t, locale }) ?? undefined;
       });
       const me = record.my_name || users.name || users.cc || users.li || t("blatt.you");
       const white = record.color === "white" ? me : record.opponent;
@@ -416,12 +408,7 @@ export default function Dashboard({
         ),
         gruende: featuredGame.moves.map((move, index) =>
           move.motif
-            ? (begruendeZug(demoZeile(move, index), {
-                t,
-                locale,
-                evalDavor: index > 0 ? featuredGame.moves[index - 1].eval : undefined,
-                evalDanach: move.eval,
-              }) ?? undefined)
+            ? (begruendeZug(demoZeile(move, index), { t, locale }) ?? undefined)
             : undefined
         ),
         fazit: erklaereFazit(featuredGame.verdict, { t, locale }),

@@ -67,6 +67,14 @@ pub struct Settings {
     /// ausschließlich das Layout; die Farbwelt oben bleibt unberührt. Wie die
     /// übrigen Erscheinungsbild-Werte gerätelokal und nicht im Sync.
     pub diagram_mode: bool,
+    /// Anmerkungen der Auto-Analyse nur zu den eigenen Zügen zeigen.
+    ///
+    /// Die Analyse rechnet weiter über die ganze Partie — Genauigkeit und
+    /// Bilanz brauchen beide Seiten. Zurückgehalten wird allein die Anzeige:
+    /// Wer eine Partie nachspielt, um an sich zu arbeiten, will nicht neben
+    /// jedem gegnerischen Zug lesen, was der falsch gemacht hat. Ab Werk aus,
+    /// weil die Fehler des Gegners erklären, warum die Partie so lief.
+    pub annotate_own_only: bool,
     /// Monatsfenster für den Schnell-Import ("Neueste importieren").
     pub import_months: u32,
     /// Puzzle-Tagesziel (Versuche pro Tag) für Dashboard und Lernplan.
@@ -258,6 +266,7 @@ impl Default for Settings {
             theme_night_from: "19:00".into(),
             theme_night_to: "07:00".into(),
             diagram_mode: false,
+            annotate_own_only: false,
             import_months: 3,
             puzzle_goal: 20,
             puzzle_hide_theme: false,

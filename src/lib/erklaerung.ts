@@ -20,10 +20,10 @@
  * Zug liest sich bei jedem Öffnen gleich, aber zwei Züge nebeneinander lesen
  * sich verschieden.
  */
+import type { Fortsetzung, Materialstand } from "./folge";
 import type { Key, Locale, TFunc } from "./i18n";
 import { notationLine, translateSan } from "./notation";
 import { de } from "./format";
-import { evalLabel } from "./evaluation";
 
 /** So viele Formulierungen gibt es je Motiv · siehe `expl.*.1` / `expl.*.2`. */
 const VARIANTS = 2;
@@ -207,14 +207,32 @@ function motivSatz(
 
 export function erklaereZug(
   row: Zugzeile,
-  options: { t: TFunc; locale: Locale; seed?: string }
+  options: {
+    t: TFunc;
+    locale: Locale;
+    seed?: string;
+    /**
+     * Die nachgespielte Fortsetzung · wo sie vorliegt, sagt sie in Figuren,
+     * was der Zug kostet, und geht dem Satz über Bewertungspunkte vor.
+     * Gerechnet wird sie dort, wo die Stellung steht · siehe lib/folge.ts.
+     */
+    folge?: Fortsetzung | null;
+  }
 ): string | null {
   const motiv = motivSatz(row, options);
   if (motiv) return motiv;
 
-  // Kein Motiv · dann bleibt der Satz über den Preis. Er stimmt immer.
   if (!row.judgment) return null;
   const { t, locale } = options;
+
+  // Kein Motiv · dann sagt die Fortsetzung, was sie einbringt. „Sxe5 kostet
+  // 3,0 Bewertungspunkte" ist wahr und in einer Einheit, die außerhalb einer
+  // Engine niemand benutzt; „Lxe5 schlägt einen Springer" ist dasselbe in der
+  // Währung, in der man Schach spielt.
+  const kosten = folgeSatz(t, locale, options.folge, undefined);
+  if (kosten) return kosten;
+
+  // Und wo auch die fehlt, bleibt der Satz über den Preis. Er stimmt immer.
   const seed = options.seed ?? `${row.ply}`;
   const san = (value: string | undefined): string =>
     value ? translateSan(value, locale) : "";
@@ -233,65 +251,92 @@ export function erklaereZug(
 }
 
 /**
- * Warum ein bemängelter Zug so teuer ist · `null`, wenn sich das nicht sagen
- * lässt.
+ * Womit der Zug widerlegt wird · `null`, wenn sich das nicht sagen lässt.
  *
- * Der Satz aus `erklaereZug` nennt den Preis. Diese Zeile nennt, woher er
- * kommt, und sie tut es aus zwei Angaben, die ohnehin gespeichert sind: dem
- * Gegenzug, mit dem die Analyse den Zug widerlegt (`motif_detail.reply`, in
- * `motifs.rs` gesetzt), und den beiden Bewertungen davor und danach. Fehlt
- * beides, bleibt die Zeile fort — erfunden wird hier so wenig wie eine Zeile
- * höher.
+ * Eine Zeile aus einer Angabe, die ohnehin gespeichert ist: dem Gegenzug, mit
+ * dem die Analyse den Zug widerlegt (`motif_detail.reply`, in `motifs.rs`
+ * gesetzt). Fehlt er, bleibt die Zeile fort — erfunden wird hier so wenig wie
+ * eine Zeile höher.
+ *
+ * Bewertungen standen hier bis 1.3 daneben („die Bewertung fällt von +0,4 auf
+ * −4,9"). Sie sind fort: Zwei Zahlen auf einer Skala, die der Leser nicht im
+ * Kopf hat, sind keine Begründung, sondern eine zweite Frage. Was der Zug
+ * wirklich kostet, steht jetzt in der Anmerkung selbst und in Figuren statt in
+ * Punkten · siehe `kommentiereZug` und lib/folge.ts.
  *
  * Die Widerlegung steht nur da, wo der Satz darüber sie nicht schon nennt. Zu
  * einer Gabel oder einer hängenden Figur sagt er den Gegenzug selbst; ihn
  * gleich darunter zu wiederholen, machte aus einer Begründung eine
- * Verdopplung. Bleibt es beim schlichten Satz über den Preis — dem Fall, für
- * den diese Zeile überhaupt gebaut ist —, steht die Widerlegung hier zum
- * ersten Mal.
+ * Verdopplung.
  *
  * Nur zu bemängelten Zügen: „Widerlegt" ist ein Wort über einen Fehler, und
  * ein gutgeheißener Zug wird nicht widerlegt. Dieselbe Regel, nach der
  * `motifs.rs` seine Bestrafungsmotive erst ab einem Urteil vergibt.
- *
- * Gespeichert sind die Bewertungen aus Sicht von Weiß; gedreht werden sie hier
- * auf die Sicht des Ziehenden. Nur so geht die Rechnung des Satzes darüber
- * sichtbar auf: „kostet 5,3" und „fällt von +0,4 auf −4,9" sind dann dieselbe
- * Auskunft, einmal als Differenz und einmal als die beiden Zahlen. Aus
- * Weiß-Sicht stiege die Zahl, während Schwarz verliert, und der Leser müsste
- * die Umrechnung selbst machen.
  */
 export function begruendeZug(
   row: Zugzeile,
-  options: {
-    t: TFunc;
-    locale: Locale;
-    /** Bewertung vor dem Zug in Zentibauern, aus Weiß-Sicht. */
-    evalDavor?: number | null;
-    /** Bewertung nach dem Zug, ebenso · bei einem Matt fehlt sie. */
-    evalDanach?: number | null;
-  }
+  options: { t: TFunc; locale: Locale }
 ): string | null {
-  const { t, locale, evalDavor, evalDanach } = options;
+  const { t, locale } = options;
   if (!row.judgment) return null;
   const detail = parseDetail(row.motif_detail);
-  // Steht ein erkanntes Motiv dahinter, hat `erklaereZug` den Gegenzug schon
-  // gesagt · dann bleibt hier nur die Rechnung.
-  const reply =
-    detail.reply && !isMotif(row.motif ?? "") ? translateSan(detail.reply, locale) : "";
-  // Halbzüge zählen ab eins · ungerade zieht Weiß, und dann steht die
-  // gespeicherte Zahl schon richtig herum.
-  const dreh = row.ply % 2 === 1 ? 1 : -1;
-  // Gleiche Zahlen auf beiden Seiten wären keine Auskunft · dann bleibt der
-  // Teil über die Bewertung fort.
-  const zahlen =
-    evalDavor != null && evalDanach != null && evalDavor !== evalDanach
-      ? { before: evalLabel(dreh * evalDavor), after: evalLabel(dreh * evalDanach) }
-      : null;
-  if (reply && zahlen) return t("expl.why.replyEval", { reply, ...zahlen });
-  if (reply) return t("expl.why.reply", { reply });
-  if (zahlen) return t("expl.why.eval", zahlen);
-  return null;
+  if (!detail.reply || isMotif(row.motif ?? "")) return null;
+  return t("expl.why.reply", { reply: translateSan(detail.reply, locale) });
+}
+
+/**
+ * Material in Worten · „einen Läufer", „zwei Bauern", sonst „Material".
+ *
+ * Genannt wird eine Figur nur, wenn sie eindeutig übrig bleibt. Ein ungleicher
+ * Tausch (Turm gegen Läufer und Bauer) hat keinen Namen — dort steht das
+ * allgemeine Wort, und der Satz bleibt trotzdem wahr.
+ */
+function materialWort(t: TFunc, stand: Materialstand): string | null {
+  if (stand.wert <= 0) return null;
+  const { figuren } = stand;
+  if (figuren.length === 1) return t(`expl.mat.${figuren[0]}` as Key);
+  if (figuren.length > 1 && figuren.every((figur) => figur === "P")) {
+    return t("expl.mat.pawns", { n: figuren.length });
+  }
+  return t("expl.mat.some");
+}
+
+/**
+ * Was die Fortsetzung kostet · der Satz, der die Bewertungszahlen ersetzt.
+ *
+ * Gezählt wird in lib/folge.ts, gesetzt hier. Zwei Fälle:
+ *
+ * - **Der Schlagzug steht noch nicht da.** Dann nennt der Satz ihn mitsamt der
+ *   Figur, die er nimmt, und — falls die Linie darüber hinaus noch etwas
+ *   einbringt — was danach noch fällt.
+ * - **Der Motivsatz hat ihn schon genannt.** Zu einer hängenden Figur sagt er
+ *   „Lxb5 schlägt auf b5"; ihn hier zu wiederholen, wäre derselbe Zug in zwei
+ *   Sätzen. Dann bleibt nur, was über den ersten Schlag hinausgeht.
+ */
+function folgeSatz(
+  t: TFunc,
+  locale: Locale,
+  folge: Fortsetzung | null | undefined,
+  /** Der Gegenzug, den der Motivsatz bereits genannt hat (englisches SAN). */
+  motivZug: string | undefined
+): string | null {
+  if (!folge) return null;
+  const schonGenannt = Boolean(folge.schlag && folge.schlag === motivZug);
+  if (folge.schlag && folge.geschlagen && !schonGenannt) {
+    const reply = translateSan(folge.schlag, locale);
+    const mat = t(`expl.mat.${folge.geschlagen}` as Key);
+    const gain = materialWort(t, folge.danach);
+    if (gain) {
+      return t(folge.schach ? "expl.cost.captureCheckGain" : "expl.cost.captureGain", {
+        reply,
+        mat,
+        gain,
+      });
+    }
+    return t(folge.schach ? "expl.cost.captureCheck" : "expl.cost.capture", { reply, mat });
+  }
+  const rest = materialWort(t, schonGenannt ? folge.danach : folge.netto);
+  return rest ? t("expl.cost.only", { mat: rest }) : null;
 }
 
 /**
@@ -312,69 +357,41 @@ export function istBemaengelt(judgment: string | undefined): boolean {
 }
 
 /**
- * Die Bewertung in Worten · was die Zahl für die Stellung bedeutet.
- *
- * „−1,1" ist eine Auskunft für den, der die Skala im Kopf hat. Für alle
- * anderen ist es eine Zahl, und eine Anmerkung, die nur Zahlen nennt, erklärt
- * nichts. Die vier Bänder sind die üblichen Schwellen: eine halbe Bauerneinheit
- * ist Rauschen, anderthalb sind spürbar, dreieinhalb sind entschieden.
- *
- * Gelesen wird aus Weiß-Sicht, wie die gespeicherte Zahl selbst · die Seite
- * steht im Satz und nicht im Vorzeichen.
- */
-function bewertungsband(
-  cp: number,
-  matt: number | null | undefined,
-  t: TFunc
-): string {
-  const seite = (weiss: boolean) => t(weiss ? "common.white" : "common.black");
-  if (matt != null) return t("expl.band.mate", { side: seite(matt > 0) });
-  const betrag = Math.abs(cp);
-  if (betrag < 50) return t("expl.band.equal");
-  const side = seite(cp > 0);
-  if (betrag < 150) return t("expl.band.slight", { side });
-  if (betrag < 350) return t("expl.band.clear", { side });
-  return t("expl.band.winning", { side });
-}
-
-/**
  * Die Anmerkung zu einem Zug · der ganze Kommentar, nicht nur sein Urteil.
  *
- * Bis zur Version 1.3 stand hier ein Satz: „Ungenauigkeit. Die Bewertung
- * springt von −0,1 auf −1,1. Besser war Se2." Er ist wahr und beantwortet die
- * Frage nicht, die man beim Nachspielen hat — *warum* ist er ungenau, und was
- * hätte der andere Zug besser gemacht? Beides steht längst in der Datenbank
- * und wurde nur nicht gesetzt:
+ * Bis 1.3 stand hier eine Rechnung:
  *
- * - `move_evals.pv` ist die Hauptvariante **vor** dem Zug. Sie beginnt beim
- *   besten Zug und zeigt damit, was er erreicht hätte.
- * - Dieselbe Spalte der **nächsten** Zeile ist die Hauptvariante nach dem
- *   gespielten Zug — also genau das, was der Gegner jetzt damit anfängt. Das
- *   ist die Herkunft der Zahl, über die sich der Leser wundert.
+ *     Txd5?? Patzer. Die Bewertung springt von −1,7 auf +1,6. Vorher klarer
+ *     Vorteil für Schwarz, jetzt klarer Vorteil für Weiß. Die Zahl kommt aus
+ *     der Fortsetzung 14.Dxa4+ Dd7 15.cxd5 Le7. Besser war axb3: 13…axb3
+ *     14.Txa5 Dxa5 15.Dxb3 hält die Bewertung bei −1,7.
  *
- * Daraus werden bis zu fünf Sätze, jeder mit einer Bedingung, unter der er
- * wegbleibt:
+ * Jeder Satz darin ist wahr, und zusammen beantworten sie die Frage nicht, die
+ * man beim Nachspielen hat. „Die Bewertung springt von −1,7 auf +1,6" setzt
+ * eine Skala voraus, die außerhalb einer Engine niemand im Kopf hat; „vorher
+ * klarer Vorteil, jetzt klarer Vorteil" ist dieselbe Auskunft noch einmal in
+ * Worten. Was tatsächlich passiert ist — der Gegner nimmt einen Bauern mit
+ * Schach und holt sich hinterher den Turm —, stand nirgends.
  *
- * 1. **Das Urteil und der Preis.** Steht immer da.
- * 2. **Was die Zahlen bedeuten** · die beiden Bewertungsbänder. Liegen beide
- *    im selben Band, bleibt der Satz fort: „vorher klarer Vorteil, jetzt
- *    klarer Vorteil" ist keine Auskunft.
- * 3. **Was passiert ist** · der Motivsatz, wenn `motifs.rs` eines erkannt hat.
- *    Ohne Motiv bleibt er fort — der Rückfallsatz von `erklaereZug` sagte nur
- *    noch einmal, was der erste Satz schon gesagt hat.
- * 4. **Woher die Zahl kommt** · die Fortsetzung des Gegners.
- * 5. **Was besser war** · der Zug und seine Linie, mit der Bewertung, die er
- *    gehalten hätte.
+ * Jetzt steht genau das da, und zwar in Figuren:
  *
- * Zu einem gutgeheißenen Zug stehen nur 1, 3 und — wenn der Zug selbst der
+ *     Txd5?? Patzer. Dxa4+ schlägt einen Bauern mit Schach und gewinnt danach
+ *     einen Turm. Besser war axb3: 13…axb3 14.Txa5 Dxa5 15.Dxb3.
+ *
+ * Bis zu vier Sätze, jeder mit einer Bedingung, unter der er wegbleibt:
+ *
+ * 1. **Das Urteil.** Steht immer da — mehr als ein Wort ist es nicht mehr.
+ * 2. **Was passiert ist** · der Motivsatz, wenn `motifs.rs` eines erkannt hat.
+ * 3. **Was es kostet** · der Schlagzug des Gegners und das Material, das die
+ *    Fortsetzung einbringt (`lib/folge.ts`). Ohne nachgespielte Linie und ohne
+ *    einen einzigen Schlag darin bleibt er fort; dann steht ersatzweise die
+ *    Fortsetzung selbst da, aber nur, wenn auch kein Motivsatz sie erzählt.
+ * 4. **Was besser war** · der Zug und seine Linie. Ohne Bewertung am Ende:
+ *    Sie war der Rest derselben Rechnung, die oben herausgeflogen ist.
+ *
+ * Zu einem gutgeheißenen Zug stehen nur 1, 2 und — wenn der Zug selbst der
  * Anfang der Hauptvariante ist — deren Fortsetzung. „Besser war" gibt es dort
- * nicht: Es gab nichts Besseres, und ein Band-Satz auch nicht — er gehört zu
- * einem Sprung, und einen gab es nicht.
- *
- * Alle Zahlen stehen aus Weiß-Sicht, wie schon der erste Satz. Der Reason-Satz
- * in `begruendeZug` dreht sie auf den Ziehenden, weil er neben „kostet 5,3"
- * steht und dieselbe Rechnung sichtbar machen soll; hier stünden zwei
- * Blickrichtungen in einem Absatz.
+ * nicht: Es gab nichts Besseres.
  */
 export function kommentiereZug(
   row: Zugzeile,
@@ -386,12 +403,6 @@ export function kommentiereZug(
     urteil: string;
     /** Ob dieses Urteil ein Mangel ist · Ungenauigkeit, Fehler, Patzer. */
     bemaengelt: boolean;
-    /** Bewertung vor dem Zug in Zentibauern, aus Weiß-Sicht. */
-    evalDavor: number;
-    /** Bewertung nach dem Zug, ebenso · `null` bei einem Matt. */
-    evalDanach: number | null;
-    /** Steht nach dem Zug ein Matt, dann in wie vielen Zügen. */
-    mattDanach?: number | null;
     /**
      * Der bessere Zug in englischem SAN, wo er nicht aus der Linie hervorgeht.
      *
@@ -403,41 +414,38 @@ export function kommentiereZug(
     linieDavor?: readonly string[];
     /** Die Hauptvariante nach dem Zug, englisches SAN. */
     linieDanach?: readonly string[];
+    /**
+     * Die nachgespielte Fortsetzung · was der Gegner mit dem Zug anfängt.
+     *
+     * Gerechnet wird sie dort, wo die Stellung steht (die Analyseseite kennt
+     * die Züge davor), nicht hier: Dieses Modul setzt Sprache und spielt kein
+     * Schach nach. Siehe `fortsetzung` in lib/folge.ts.
+     */
+    folge?: Fortsetzung | null;
   }
 ): string {
-  const { t, locale, urteil, bemaengelt, evalDavor, evalDanach } = options;
+  const { t, locale, urteil, bemaengelt } = options;
   const saetze: string[] = [];
 
-  if (bemaengelt) {
-    saetze.push(
-      t("an.comment", {
-        judgment: urteil,
-        from: evalLabel(evalDavor),
-        to: options.mattDanach != null ? `#${options.mattDanach}` : evalLabel(evalDanach ?? 0),
-      })
-    );
-  } else {
-    saetze.push(t("an.qualityComment", { judgment: urteil }));
-  }
-
-  // Was die beiden Zahlen bedeuten. Stehen sie im selben Band, sagt der Satz
-  // nichts — dann bleibt er fort.
-  if (bemaengelt) {
-    const before = bewertungsband(evalDavor, null, t);
-    const after = bewertungsband(evalDanach ?? 0, options.mattDanach, t);
-    if (before !== after) saetze.push(t("expl.swing", { before, after }));
-  }
+  saetze.push(t("an.qualityComment", { judgment: urteil }));
 
   const motiv = motivSatz(row, options);
   if (motiv) saetze.push(motiv);
+
+  // Der Gegenzug, den der Motivsatz schon genannt hat · er darf im
+  // Kostensatz nicht ein zweites Mal auftauchen.
+  const motivZug = motiv && isMotif(row.motif ?? "") ? parseDetail(row.motif_detail).reply : undefined;
+  const kosten = bemaengelt ? folgeSatz(t, locale, options.folge, motivZug) : null;
+  if (kosten) saetze.push(kosten);
 
   const davor = (options.linieDavor ?? []).slice(0, LINIE);
   const danach = (options.linieDanach ?? []).slice(0, LINIE);
 
   if (bemaengelt) {
-    // Woher die Zahl kommt · zwei Halbzüge sind das Mindeste, sonst stünde da
-    // ein einzelner Gegenzug und keine Fortsetzung.
-    if (danach.length >= 2) {
+    // Die Fortsetzung im Wortlaut nur dort, wo weder Motiv noch Kostensatz
+    // schon erzählt haben, was in ihr passiert · sonst stünde dieselbe Linie
+    // zweimal, einmal als Satz und einmal als Notation.
+    if (!motiv && !kosten && danach.length >= 2) {
       saetze.push(t("expl.replyLine", { line: notationLine(danach, locale, row.ply) }));
     }
     // Und was besser war. Die Linie beginnt beim besseren Zug selbst; ist sie
@@ -448,7 +456,6 @@ export function kommentiereZug(
         t("expl.betterLine", {
           san: translateSan(davor[0], locale),
           line: notationLine(davor, locale, row.ply - 1),
-          eval: evalLabel(evalDavor),
         })
       );
     } else if (besserSan && besserSan !== row.san) {

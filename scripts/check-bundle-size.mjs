@@ -60,9 +60,14 @@ const limits = {
   // Satz kostet 11 Regeln (796 Byte), eine alte fällt weg, netto 599 Byte.
   // Allein 448 Byte davon sind die drei `grid-cols-[…]` mit ausgeschriebenen
   // Spaltenmaßen · ein solcher Wert steht zweimal in der Datei, einmal
-  // maskiert im Selektor und einmal in der Regel. Gemessen sind es damit
-  // 78,6 KiB.
-  css: 80 * 1024,
+  // maskiert im Selektor und einmal in der Regel.
+  //
+  // 80 KiB ließen danach 205 Byte Luft, und die reichten für die nächste
+  // Kleinigkeit nicht: `color-scheme` in jeder der acht Farbwelten (die
+  // Klapplisten, Rollbalken und Kalender, die kein Stylesheet erreicht),
+  // die Fläche der Auswahleinträge im Diagramm-Modus und die Rubrik
+  // „Anmerkungen" in den Einstellungen. Gemessen sind es damit 79,8 KiB.
+  css: 82 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht

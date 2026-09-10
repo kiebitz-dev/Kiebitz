@@ -34,6 +34,9 @@ import {
   DEFAULT_BOARD_SET,
   THEMES,
   THEME_FEATURE,
+  appliedTheme,
+  subscribeAppearance,
+  themeDef,
   type Appearance,
   type BoardSetId,
   type ThemeId,
@@ -223,6 +226,20 @@ export default function AppearanceSection({
    */
   const hint = locked;
 
+  /**
+   * Das Thema, das tatsächlich auf dem Bildschirm steht.
+   *
+   * Es ist nicht immer das gewählte: Bei eingeschaltetem automatischem Wechsel
+   * übernimmt abends die Nachtseite, und ohne Plus fällt ein Plus-Thema auf
+   * sein freies Gegenstück zurück. Beides ist so gewollt — nur sah es von
+   * außen aus wie ein kaputter Schalter: Man tippt „Papier" an, die Kachel
+   * bekommt ihren Rahmen, und die App bleibt dunkel.
+   *
+   * Deshalb wird hier gefragt, was gilt, und darunter gesagt, warum.
+   */
+  const geltend = useSyncExternalStore(subscribeAppearance, appliedTheme, appliedTheme);
+  const uebergangen = geltend !== appearance.theme;
+
   const pickTheme = (theme: ThemeId) => onChange({ ...appearance, theme });
   const pickNight = (night: ThemeId) => onChange({ ...appearance, night });
   const pickBoard = (boardSet: BoardSetId) => onChange({ ...appearance, boardSet });
@@ -271,6 +288,25 @@ export default function AppearanceSection({
       <p className="mt-2 text-[12px] leading-relaxed text-ink3">
         {t(THEMES.find((theme) => theme.id === appearance.theme)!.descKey)}
       </p>
+
+      {/* Der Hinweis steht nur da, wenn die Wahl gerade übergangen wird · und
+          dann mit dem Griff, der sie zurückholt. Ein Satz, der erklärt, warum
+          nichts passiert, ist mehr wert als drei, die erklären, was der
+          automatische Wechsel kann. */}
+      {uebergangen && appearance.auto !== "off" && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line bg-panel2 px-3 py-2">
+          <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-ink2">
+            {t("set.themeOverridden", { theme: t(themeDef(geltend).nameKey) })}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange({ ...appearance, auto: "off" })}
+            className="shrink-0 text-[12px] font-medium text-accent hover:underline"
+          >
+            {t("set.themeAutoStop")}
+          </button>
+        </div>
+      )}
 
       {/* ── Brett ─────────────────────────────────────────────────────────── */}
       <h4 className="mt-5 flex items-center gap-2 text-[13px] font-medium text-ink">

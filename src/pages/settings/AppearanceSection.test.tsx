@@ -40,6 +40,45 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe("übergangene Themenwahl", () => {
+  // `appliedTheme()` liest ohne gelaufene Steuerung den Zwischenspeicher ·
+  // hier steht damit, was gerade tatsächlich auf dem Bildschirm gilt.
+  const gilt = (theme: string) =>
+    localStorage.setItem("kiebitz.appearance", JSON.stringify({ theme }));
+
+  afterEach(() => localStorage.clear());
+
+  it("sagt, dass der automatische Wechsel die Wahl übernommen hat", () => {
+    gilt("dark");
+    show({ theme: "paper", auto: "time", night: "dark" });
+    expect(screen.getByText("set.themeOverridden")).toBeTruthy();
+  });
+
+  it("holt die Wahl mit einem Griff zurück", () => {
+    gilt("dark");
+    show({ theme: "paper", auto: "time", night: "dark" });
+    fireEvent.click(screen.getByText("set.themeAutoStop"));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "paper", auto: "off" })
+    );
+  });
+
+  it("schweigt, solange die Wahl auch gilt", () => {
+    gilt("paper");
+    show({ theme: "paper", auto: "time", night: "dark" });
+    expect(screen.queryByText("set.themeOverridden")).toBeNull();
+  });
+
+  it("schweigt ohne automatischen Wechsel", () => {
+    // Ohne Plus fällt ein Plus-Thema auf sein freies Gegenstück zurück · das
+    // erklärt schon das Schloss auf der Kachel, und zwei Erklärungen für
+    // dieselbe Sache sind eine zu viel.
+    gilt("dark");
+    show({ theme: "paper", auto: "off" });
+    expect(screen.queryByText("set.themeOverridden")).toBeNull();
+  });
+});
+
 describe("layout mode row", () => {
   it("stands above the themes", () => {
     show();

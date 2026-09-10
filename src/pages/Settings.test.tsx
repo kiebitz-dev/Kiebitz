@@ -125,6 +125,7 @@ const androidSettings = {
   theme_night_from: "19:00",
   theme_night_to: "07:00",
   diagram_mode: false,
+  annotate_own_only: false,
   import_months: 3,
   puzzle_goal: 10,
   puzzle_hide_theme: false,
@@ -426,6 +427,7 @@ describe("Settings loading", () => {
       "set.sync",
       // Training · Widgets fehlen bewusst: die Homescreen-Widgets gibt es nur
       // unter Android · siehe eigener Test weiter unten.
+      "set.annotations",
       "set.sound",
       "set.notify",
       // App

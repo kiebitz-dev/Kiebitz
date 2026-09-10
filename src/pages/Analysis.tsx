@@ -96,6 +96,7 @@ import {
 import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
 import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug } from "../lib/erklaerung";
+import { fortsetzung } from "../lib/folge";
 import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
@@ -348,7 +349,6 @@ function commentFor(
   locale: Locale,
   sansBefore: string[],
   m: ViewMove,
-  prevEval: number,
   ply: number,
   seed: string,
   row?: MoveEvalRow,
@@ -386,12 +386,13 @@ function commentFor(
       seed,
       urteil: judgmentLabel(t, m.judgment),
       bemaengelt,
-      evalDavor: prevEval,
-      evalDanach: m.evalCp,
-      mattDanach: m.mateIn,
       besser,
       linieDavor: row?.pv,
       linieDanach: next?.pv,
+      // Gerechnet wird über die *ganze* gespeicherte Linie und nicht über die
+      // fünf Halbzüge, die im Text stehen · sonst endete die Zählung mitten in
+      // einem Abtausch. Siehe lib/folge.ts.
+      folge: bemaengelt ? fortsetzung(sansBefore, m.san, next?.pv) : null,
     }
   );
 }
@@ -533,6 +534,14 @@ export default function Analysis({
    * schickte eine Anfrage ins Netz für jemanden, der ChessDB abgeschaltet hat.
    */
   const [chessdbOn, setChessdbOn] = useState<boolean | null>(null);
+  /**
+   * Anmerkungen nur zu eigenen Zügen · die Wahl aus den Einstellungen.
+   *
+   * Sie hält nichts zurück, was gerechnet wurde: Bilanz, Genauigkeit und die
+   * Kurve zählen weiter beide Seiten. Zurückgehalten wird das Lesbare — Urteil
+   * am Zug, Marke auf dem Brett und die Anmerkung darunter.
+   */
+  const [nurEigene, setNurEigene] = useState(false);
   const [playerProfile, setPlayerProfile] = useState({ cc: "", li: "", display: "" });
   const [book, setBook] = useState<ChessDbResult | null>(null);
   // „Wird geladen" und nicht „keine Auskunft": Bis die Einstellungen gelesen
@@ -671,6 +680,7 @@ export default function Analysis({
     getSettings()
       .then((s) => {
         setChessdbOn(s.chessdb_enabled);
+        setNurEigene(s.annotate_own_only === true);
         setExplorerOn(s.explorer_enabled !== false);
         setExplorerFilters({
           ratings: s.explorer_ratings ?? "",
@@ -719,6 +729,24 @@ export default function Analysis({
 
   // Zug-Sicht: Demo im Web, echte Partie auf dem Desktop.
   const live = desktop && game != null;
+  /**
+   * Bekommt dieser Halbzug seine Anmerkung zu sehen?
+   *
+   * Ohne die Einstellung „nur zu eigenen Zügen" bekommt jeder eine · das ist
+   * die Werkseinstellung und der Grund, warum die Frage überhaupt eine
+   * Funktion und keine Konstante ist. Mit ihr bleibt es bei den Zügen, die
+   * man selbst gespielt hat: Halbzüge zählen ab eins, ungerade zieht Weiß.
+   *
+   * Am freien Brett und in der Web-Vorschau gibt es keine eigene Seite (es
+   * gibt keinen Gegner) · dort gilt die Einstellung nicht, sonst verschwänden
+   * die Anmerkungen der Schaufensterpartie zur Hälfte.
+   *
+   * Gerechnet wird davon nichts anders: Bilanz, Genauigkeit, ACPL und die
+   * Kurve lesen weiterhin `viewMoves` und nicht diese Frage. Eine Auswertung,
+   * die nur die halbe Partie zählte, wäre falsch und nicht knapp.
+   */
+  const zeigtUrteil = (ply: number) =>
+    !nurEigene || !live || !game.color || (ply % 2 === 1) === (game.color === "white");
   const sans = useMemo(
     () => live
       ? game.moves.split(" ").filter(Boolean)
@@ -1052,20 +1080,19 @@ export default function Analysis({
   const currentComment = useMemo(() => {
     if (!currentMove) return null;
     if (scratch || variation) return null;
+    if (!zeigtUrteil(ply)) return null;
     if (!live) return featuredGame.moves[ply - 1]?.comment ?? null;
-    const prevEval = ply <= 1 ? 20 : evalNum(viewMoves[ply - 2]?.evalCp ?? null, viewMoves[ply - 2]?.mateIn ?? null);
     return commentFor(
       t,
       locale,
       sans.slice(0, ply - 1),
       currentMove,
-      prevEval,
       ply,
       `${game?.id}:${ply}`,
       rowsByPly.get(ply),
       rowsByPly.get(ply + 1)
     );
-  }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t, locale, game?.id, rowsByPly]);
+  }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t, locale, game?.id, game?.color, nurEigene, rowsByPly]);
 
   /**
    * Die Anmerkung zu einem beliebigen Zug · dieselbe Regel wie für den
@@ -1081,16 +1108,14 @@ export default function Analysis({
     // selbst gespielte Züge geschrieben.
     if (!desktop) return featuredGame.moves[index]?.comment ?? null;
     if (!live) return null;
+    if (!zeigtUrteil(index + 1)) return null;
     if (!move.judgment) return null;
     if (!istBemaengelt(move.judgment)) return null;
-    const prevEval =
-      index === 0 ? 20 : evalNum(viewMoves[index - 1]?.evalCp ?? null, viewMoves[index - 1]?.mateIn ?? null);
     return commentFor(
       t,
       locale,
       sans.slice(0, index),
       move,
-      prevEval,
       index + 1,
       `${game?.id}:${index + 1}`,
       rowsByPly.get(index + 1),
@@ -1128,34 +1153,47 @@ export default function Analysis({
         };
         return {
           erklaerung: erklaereZug(zeile, { t, locale, seed: `demo:${index + 1}` }),
-          grund: begruendeZug(zeile, {
-            t,
-            locale,
-            evalDavor: index > 0 ? featuredGame.moves[index - 1].eval : undefined,
-            evalDanach: move.eval,
-          }),
+          grund: begruendeZug(zeile, { t, locale }),
           gewicht: move.lossCp ?? null,
         };
       });
     }
     if (!live || !rows || rows.length === 0) return NO_ANALYSEN;
-    return sans.map((_, index) => {
+    // Die Partie wird *einmal* nachgespielt, nicht je Zug von vorn: Was jede
+    // Zeile braucht, ist die Stellung vor ihrem Halbzug, und die entsteht
+    // beim Durchgehen ohnehin. Von vorn wären es bei achtzig Halbzügen
+    // dreitausendzweihundert Züge statt achtzig.
+    const stellungen: string[] = [];
+    const brett = new Chess();
+    for (const san of sans) {
+      stellungen.push(brett.fen());
+      try {
+        brett.move(san);
+      } catch {
+        // Ab hier ist die Partie nicht mehr nachzuspielen · die restlichen
+        // Zeilen bekommen dann keinen Kostensatz, aber weiterhin ihr Motiv.
+        break;
+      }
+    }
+    return sans.map((san, index) => {
       const row = rowsByPly.get(index + 1);
-      if (!row) return {};
+      if (!row || !zeigtUrteil(index + 1)) return {};
+      const davor = stellungen[index];
       return {
-        erklaerung: erklaereZug(row, { t, locale, seed: `${game.id}:${row.ply}` }),
-        // Die Bewertung *vor* dem Zug ist die *nach* dem vorigen · beim ersten
-        // Halbzug gibt es keine, und dann bleibt der Satz bei der Widerlegung.
-        grund: begruendeZug(row, {
+        erklaerung: erklaereZug(row, {
           t,
           locale,
-          evalDavor: index > 0 ? rowsByPly.get(index)?.eval_cp : undefined,
-          evalDanach: row.eval_cp,
+          seed: `${game.id}:${row.ply}`,
+          folge: davor ? fortsetzung([], san, rowsByPly.get(index + 2)?.pv, davor) : null,
         }),
+        grund: begruendeZug(row, { t, locale }),
         gewicht: row.loss_cp ?? null,
       };
     });
-  }, [diagramMode, desktop, live, game?.id, rows, rowsByPly, sans, t, locale]);
+    // `nurEigene` und die eigene Farbe hängen mit drin: Beide entscheiden über
+    // `zeigtUrteil`, und ohne sie behielte eine einmal gebaute Liste ihre Sätze
+    // auch dann, wenn die Einstellung dazwischen umgestellt wurde.
+  }, [diagramMode, desktop, live, game?.id, game?.color, nurEigene, rows, rowsByPly, sans, t, locale]);
 
   const evalSeries = viewMoves
     .map((m, i) => ({ ply: i + 1, eval: Math.max(-600, Math.min(600, evalNum(m.evalCp, m.mateIn))) / 100 }))
@@ -1296,7 +1334,10 @@ export default function Analysis({
       opponent: game.opponent_accuracy_endgame ?? derivedAccuracies?.opponent.endgame ?? null,
     },
   ] : [];
-  const currentQuality = currentMove?.judgment;
+  // Die Marke auf dem Brett gehört zum Urteil und folgt derselben Frage wie
+  // das Kürzel in der Liste · sonst stünde am gegnerischen Zug kein „??" mehr,
+  // aber weiterhin ein rotes Feld darüber.
+  const currentQuality = zeigtUrteil(ply) ? currentMove?.judgment : undefined;
   const currentTarget = currentMove?.playedUci?.slice(2, 4);
   const nextMove = !variation ? viewMoves[ply] : null;
   const nextBestUci = liveBestUci || nextMove?.bestUci || "";
@@ -2515,7 +2556,7 @@ export default function Analysis({
                       }`}
                     >
                       {m.san}
-                      {m.nag && m.judgment && MARKED_IN_LIST.includes(m.judgment) && (
+                      {m.nag && m.judgment && zeigtUrteil(i + 1) && MARKED_IN_LIST.includes(m.judgment) && (
                         <span className="ml-0.5" style={{ color: JUDGMENT_COLOR[m.judgment] }}>{m.nag}</span>
                       )}
                     </button>

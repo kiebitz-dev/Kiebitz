@@ -18,13 +18,26 @@
 
    Reihenfolge wie in der Auswahl: erst die beiden freien, dann die von Kiebitz
    Plus. Die Brett-Sets stehen am Ende, damit eine ausdrückliche Wahl das Brett
-   des Themas überschreibt. */
+   des Themas überschreibt.
+
+   `color-scheme` steht in jedem Block, weil es das Einzige ist, was auch die
+   Teile erreicht, die der Browser selbst zeichnet: die Klappliste eines
+   `<select>`, den Rollbalken, den Kalender eines Datumsfeldes. Ohne die Zeile
+   malt die WebView sie in der Vorgabe des Systems — im Diagramm-Modus, wo die
+   Auswahlliste der Partie auf einer Linie und nicht in einem Kasten steht
+   (`background: transparent`, siehe components/blatt/blatt.css), stand die
+   aufgeklappte Liste deshalb hellgrau unter einer dunklen Seite, mit heller
+   Schrift darin. Die Zeile ist kein Farbwert, sondern die Auskunft, welche
+   Sorte Thema hier gilt. */
 
 /* ── Dunkel · Standard, frei ─────────────────────────────────────────────────
    Identisch mit den Standardwerten aus index.css. Der Block steht trotzdem
    hier: Er macht die Rückkehr aus einem anderen Thema zu einem Attributwechsel
    statt zu einem Sonderfall, und die Vorschaukachel braucht ihn ohnehin. */
 [data-theme="dark"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #0e0e0d;
   --color-panel: #171716;
   --color-panel2: #1e1e1d;
@@ -73,6 +86,9 @@
    Für Tageslicht. Der Akzent wird dunkler als im dunklen Thema (#0f7a56 statt
    #22c08a): Dasselbe Grün läge auf Weiß bei 2:1 und wäre als Text unlesbar. */
 [data-theme="light"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: light;
+
   --color-bg: #f7f6f2;
   --color-panel: #ffffff;
   --color-panel2: #f1efe9;
@@ -122,6 +138,9 @@
    #f2f1ec auf Fast-Schwarz franst bei Dunkelheit sichtbar aus (Halation), und
    genau davon handelt die Rückmeldung. */
 [data-theme="dusk"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #16130f;
   --color-panel: #1f1b16;
   --color-panel2: #262119;
@@ -171,6 +190,9 @@
    bleibt über 12:1, aber der Sprung von Grund zu Text ist kleiner · das ist das
    Thema für die dreistündige Sitzung. */
 [data-theme="graphite"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #1a1c1e;
   --color-panel: #212427;
   --color-panel2: #282c2f;
@@ -219,6 +241,9 @@
    Warmes Hell für lange Lesestrecken (Erkenntnisse, Repertoire, PGN) · ohne die
    Blendung, die von reinem Weiß ausgeht. */
 [data-theme="paper"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: light;
+
   --color-bg: #f2ece0;
   --color-panel: #faf6ec;
   --color-panel2: #ece5d6;
@@ -267,6 +292,9 @@
    AAA über die ganze Fläche, kräftigere Linien. Deckt Sehschwäche ebenso ab wie
    sehr helle Umgebungen. */
 [data-theme="contrast"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #000000;
   --color-panel: #0b0b0b;
   --color-panel2: #141414;
@@ -318,6 +346,9 @@
    ganzen App. Der Akzent bleibt grün: Er trägt keine Aussage, die von einer
    zweiten Farbe abgegrenzt werden müsste. */
 [data-theme="signal"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #101215;
   --color-panel: #181b1f;
   --color-panel2: #1f2328;
@@ -372,6 +403,9 @@
    das Rot neben dem Rosé nicht als zweiter Akzent gelesen wird, steht es
    dunkler und weniger gesättigt als in „Dunkel" (#e2645f statt #e66767). */
 [data-theme="rose"] {
+  /* Fensterteile, die kein Stylesheet erreicht · siehe oben. */
+  color-scheme: dark;
+
   --color-bg: #140f13;
   --color-panel: #1d171c;
   --color-panel2: #251e24;

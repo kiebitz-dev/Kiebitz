@@ -105,6 +105,33 @@ describe("Erklärung eines Zuges", () => {
     expect(erklaereZug(row, zwei)).not.toBeUndefined();
   });
 
+  it("sagt ohne Motiv lieber Figuren als Bewertungspunkte", () => {
+    const satz = erklaereZug(
+      zeile({ motif: "none", motif_detail: JSON.stringify({ best: "Qd2" }), loss_cp: 300 }),
+      {
+        t: de(),
+        locale: "de",
+        folge: {
+          schlag: "Bxe5",
+          geschlagen: "N",
+          schach: false,
+          netto: { figuren: ["N"], wert: 3 },
+          danach: { figuren: [], wert: 0 },
+        },
+      }
+    );
+    expect(satz).toBe("Lxe5 schlägt einen Springer.");
+  });
+
+  it("bleibt beim Preis, wo sich nichts nachspielen ließ", () => {
+    setFormatLocale("de-DE");
+    const satz = erklaereZug(
+      zeile({ motif: "none", motif_detail: JSON.stringify({ best: "Qd2" }), loss_cp: 300 }),
+      { t: de(), locale: "de", folge: null }
+    );
+    expect(satz).toContain("3,0");
+  });
+
   it("nimmt ein unbekanntes Motiv nicht für bare Münze", () => {
     // Eine spätere Rust-Fassung könnte ein Motiv liefern, das diese Fassung
     // nicht kennt. Dann darf kein roher Schlüssel auf der Seite stehen.
@@ -122,53 +149,37 @@ describe("Begründung eines Zuges", () => {
     expect(satz).toBeNull();
   });
 
-  it("schweigt, wenn weder Widerlegung noch Bewertungen dastehen", () => {
+  it("schweigt, wenn keine Widerlegung gespeichert ist", () => {
     expect(begruendeZug(zeile(), { t: de(), locale: "de" })).toBeNull();
   });
 
-  it("nennt Widerlegung und Bewertungen, wo kein Motiv erkannt wurde", () => {
+  it("nennt die Widerlegung, wo kein Motiv erkannt wurde", () => {
     // Der Fall, für den die Zeile gebaut ist: Die Analyse hat ein Urteil, aber
-    // kein Motiv · dann sagt der Satz darüber nur den Preis.
+    // kein Motiv · dann sagt der Satz darüber nichts über den Gegenzug.
     const satz = begruendeZug(
-      // Halbzug 25 · ungerade, also zieht Weiß, und die gespeicherte Zahl
-      // steht schon aus seiner Sicht.
       zeile({ ply: 25, motif: "none", motif_detail: JSON.stringify({ reply: "Nxe4" }) }),
-      { t: de(), locale: "de", evalDavor: 40, evalDanach: -490 }
+      { t: de(), locale: "de" }
     );
+    // In deutscher Notation · dieselbe Sprache wie die Oberfläche.
     expect(satz).toContain("Sxe4");
-    expect(satz).toContain("+0,4");
-    expect(satz).toContain("−4,9");
-  });
-
-  it("dreht die Bewertungen auf die Sicht des Ziehenden", () => {
-    // Halbzug 26 · Schwarz zieht. Gespeichert ist die Zahl aus Weiß-Sicht;
-    // die Zeile muss sie umdrehen, sonst stiege sie, während Schwarz verliert.
-    const satz = begruendeZug(zeile({ ply: 26, motif: "none" }), {
-      t: de(),
-      locale: "de",
-      evalDavor: -40,
-      evalDanach: 490,
-    });
-    expect(satz).toContain("+0,4");
-    expect(satz).toContain("−4,9");
   });
 
   it("wiederholt die Widerlegung nicht, die das Motiv schon nennt", () => {
     const satz = begruendeZug(
       zeile({ ply: 25, motif: "fork", motif_detail: JSON.stringify({ reply: "Qd5+" }) }),
-      { t: de(), locale: "de", evalDavor: 40, evalDanach: -490 }
+      { t: de(), locale: "de" }
     );
-    expect(satz).not.toContain("Dd5+");
-    expect(satz).toContain("+0,4");
+    expect(satz).toBeNull();
   });
 
-  it("lässt die Bewertung fort, wo sich nichts geändert hat", () => {
+  it("nennt keine Bewertungen mehr", () => {
+    // Zwei Zahlen auf einer Skala, die außerhalb einer Engine niemand im Kopf
+    // hat, waren keine Begründung · siehe `begruendeZug`.
     const satz = begruendeZug(
       zeile({ ply: 25, motif: "none", motif_detail: JSON.stringify({ reply: "Nxe4" }) }),
-      { t: de(), locale: "de", evalDavor: 40, evalDanach: 40 }
+      { t: de(), locale: "de" }
     );
-    expect(satz).toContain("Sxe4");
-    expect(satz).not.toContain("+0,4");
+    expect(satz).not.toMatch(/[+−]\d/);
   });
 });
 
@@ -179,12 +190,10 @@ describe("Anmerkung zu einem Zug", () => {
     locale: "de" as const,
     urteil: "Ungenauigkeit",
     bemaengelt: true,
-    evalDavor: -10,
-    evalDanach: -110,
     ...over,
   });
 
-  it("sagt, woher die Zahl kommt, und was der bessere Zug gehalten hätte", () => {
+  it("nennt die Fortsetzung des Gegners und was besser war", () => {
     setFormatLocale("de-DE");
     const text = kommentiereZug(
       zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
@@ -193,15 +202,23 @@ describe("Anmerkung zu einem Zug", () => {
         linieDanach: ["Bg4", "Be2", "Nd4"],
       })
     );
-    // Das Urteil und der Sprung · der Satz, der schon immer dastand.
+    // Das Urteil steht für sich · ohne Rechnung dahinter.
     expect(text).toContain("Ungenauigkeit");
-    expect(text).toContain("−0,1");
-    expect(text).toContain("−1,1");
     // Die Fortsetzung des Gegners, mit Zugzahlen und in deutscher Notation.
     expect(text).toContain("4...Lg4 5.Le2 Sd4");
-    // Und die Linie, die es besser gemacht hätte, samt gehaltener Bewertung.
+    // Und die Linie, die es besser gemacht hätte.
     expect(text).toContain("4.Se2 Lg4 5.0–0");
     expect(text).toContain("Se2");
+  });
+
+  it("nennt keine Bewertungszahlen mehr", () => {
+    setFormatLocale("de-DE");
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
+      umstand({ linieDanach: ["Bg4", "Be2", "Nd4"] })
+    );
+    expect(text).not.toMatch(/[+−]\d/);
+    expect(text).not.toContain("Vorteil");
   });
 
   it("kürzt eine lange Variante auf ein lesbares Maß", () => {
@@ -240,35 +257,75 @@ describe("Anmerkung zu einem Zug", () => {
     expect(text).toContain("f3");
   });
 
-  it("wiederholt zu einem Zug ohne Motiv nicht den ersten Satz", () => {
-    // `erklaereZug` fällt ohne Motiv auf den Satz über den Preis zurück. In
-    // einer Anmerkung stünde er neben dem Urteilssatz, der dasselbe sagt.
+  it("bleibt zu einem Zug ohne Motiv und ohne Linie beim Urteil", () => {
     const text = kommentiereZug(
       zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none", loss_cp: 100 }),
       umstand()
     );
-    expect(text).toBe(
-      "Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1. " +
-        "Vorher ausgeglichen, jetzt leichter Vorteil für Schwarz."
-    );
+    expect(text).toBe("Ungenauigkeit.");
   });
 
-  it("sagt in Worten, was aus der Stellung geworden ist", () => {
+  it("sagt in Figuren, was die Fortsetzung kostet", () => {
+    // Der Fall aus docs/EXPLANATIONS.md: Der Gegner nimmt einen Bauern mit
+    // Schach und holt sich hinterher den Turm.
     const text = kommentiereZug(
-      zeile({ ply: 7, san: "d3", judgment: "blunder", motif: "" }),
-      umstand({ urteil: "Patzer", evalDavor: -150, evalDanach: 420 })
+      zeile({ ply: 7, san: "d3", judgment: "blunder", motif: "none" }),
+      umstand({
+        urteil: "Patzer",
+        folge: {
+          schlag: "Qxa4+",
+          geschlagen: "P",
+          schach: true,
+          netto: { figuren: ["P", "R"], wert: 6 },
+          danach: { figuren: ["R"], wert: 5 },
+        },
+      })
     );
-    expect(text).toContain("Vorher klarer Vorteil für Schwarz");
-    expect(text).toContain("jetzt Gewinnstellung für Weiß");
+    expect(text).toContain("Dxa4+ schlägt einen Bauern mit Schach");
+    expect(text).toContain("gewinnt danach einen Turm");
   });
 
-  it("lässt den Satz über die Bänder fort, wo beide dasselbe sagen", () => {
-    // „Vorher klarer Vorteil, jetzt klarer Vorteil" ist keine Auskunft.
+  it("nennt den Schlagzug nicht zweimal, wenn das Motiv ihn schon hat", () => {
     const text = kommentiereZug(
-      zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "" }),
-      umstand({ evalDavor: -200, evalDanach: -300 })
+      zeile({
+        ply: 7,
+        san: "Nxb5",
+        judgment: "blunder",
+        motif: "hanging_piece",
+        motif_detail: JSON.stringify({ piece: "N", square: "b5", reply: "Bxb5" }),
+      }),
+      umstand({
+        urteil: "Patzer",
+        folge: {
+          schlag: "Bxb5",
+          geschlagen: "N",
+          schach: false,
+          netto: { figuren: ["N"], wert: 3 },
+          danach: { figuren: [], wert: 0 },
+        },
+      })
     );
-    expect(text).not.toContain("Vorher");
+    // Einmal im Motivsatz und kein zweites Mal daneben.
+    expect(text.match(/Lxb5/g)).toHaveLength(1);
+  });
+
+  it("lässt die Notation der Fortsetzung fort, wo ein Satz sie schon erzählt", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 7, san: "d3", judgment: "blunder", motif: "none" }),
+      umstand({
+        urteil: "Patzer",
+        linieDanach: ["Bg4", "Be2", "Nd4"],
+        folge: {
+          schlag: "Bxg4",
+          geschlagen: "B",
+          schach: false,
+          netto: { figuren: ["B"], wert: 3 },
+          danach: { figuren: [], wert: 0 },
+        },
+      })
+    );
+    expect(text).toContain("Lxg4 schlägt einen Läufer");
+    expect(text).not.toContain("4...Lg4");
   });
 
   it("führt zu einem gutgeheißenen Zug die Hauptvariante weiter", () => {

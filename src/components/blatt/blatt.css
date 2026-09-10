@@ -124,6 +124,16 @@
   padding-inline: 0;
 }
 
+/* Eine Auswahlliste ohne Fläche hat trotzdem eine Klappliste, und die zeichnet
+   der Browser selbst. `color-scheme` in src/themes.css sagt ihm, welche Sorte
+   Thema gilt; die Einträge bekommen hier zusätzlich ihre Fläche, weil ein
+   transparentes `<select>` sie sonst an die Vorgabe des Systems vererbt —
+   heller Grund unter heller Schrift. */
+.blatt-formular select option {
+  background-color: var(--color-panel);
+  color: var(--color-ink);
+}
+
 /* Die gefüllte Hauptschaltfläche wird zum Kasten aus einer Haarlinie. Der
    Rahmen liegt innen (`inset`), damit die Fläche dabei ihre Maße behält —
    ein echter Rahmen schöbe jede Leiste um zwei Bildpunkte auseinander. */

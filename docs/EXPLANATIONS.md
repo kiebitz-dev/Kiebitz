@@ -8,26 +8,19 @@ them, on the dashboard and on the analysis board.
 ```
 AUS DER ANALYSE
 „Dd5+ trifft König g8 und Springer e5 zugleich."
-Die Bewertung fällt dabei von −2,1 auf −5,2.
+Widerlegt wird der Zug durch Dd5+.
 ```
 
-The second line is the **reason**, and it exists because the first one alone
-does not answer "why that much?". It is built from two things the analysis has
-already stored: the reply the engine punishes the move with, and the two
-evaluations around it. Where neither is there, the line stays out.
+The second line is the **reason**: the reply the engine punishes the move
+with, which the analysis has stored anyway (`motif_detail.reply`). Where there
+is none, the line stays out, and where the sentence above already names that
+reply — a fork sentence does — it stays out too rather than saying the same
+move twice. `begruendeZug`, same file.
 
-Two rules of its own:
-
-- **It repeats nothing.** A fork sentence names the refuting move itself, so
-  the reason line then carries only the numbers. After the plain sentence about
-  the price — the case it was built for — it names the refutation first.
-- **It counts from the mover's side.** The database stores evaluations from
-  White's point of view; the line flips them, so "costs 5.3" and "falls from
-  +0.4 to −4.9" are visibly the same statement. `begruendeZug`, same file.
-
-The price itself is stated in **points of evaluation**, not in pawns. "5.3
-pawns" is correct engine speech and reads as a claim about material, which it
-is not.
+Evaluations used to stand there ("falls from +0.4 to −4.9") and are gone. Two
+numbers on a scale nobody outside an engine carries in their head are not a
+reason, they are a second question. What a move actually costs is now said in
+**pieces**, in the annotation itself — see below.
 
 ## The annotation
 
@@ -42,45 +35,61 @@ Until 1.3 it was one sentence and answered neither:
 4.d3?! Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1. Besser war Se2.
 ```
 
-Both answers were already in the database and were simply not being set.
-`move_evals.pv` is the engine's best line **before** the move — it begins with
-the better move and therefore shows what it would have achieved. The same
-column of the **next** row is the best line *after* the played move: exactly
-what the opponent now does with it, and the origin of the number the reader is
-puzzled by. `kommentiereZug` in `lib/erklaerung.ts` builds up to five sentences
-from that, each with a condition under which it stays out:
+1.3 answered them with more numbers, which was worse:
+
+```
+13…Txd5?? Patzer. Die Bewertung springt von −1,7 auf +1,6. Vorher klarer
+          Vorteil für Schwarz, jetzt klarer Vorteil für Weiß. Die Zahl kommt
+          aus der Fortsetzung 14.Dxa4+ Dd7 15.cxd5 Le7. Besser war axb3:
+          13…axb3 14.Txa5 Dxa5 15.Dxb3 hält die Bewertung bei −1,7.
+```
+
+Every sentence in it is true, and together they still do not say what
+happened: the opponent takes a pawn with check and helps himself to the rook
+afterwards. That is what the reader wants, and it is computable — the line is
+already stored, it just has to be **played out** instead of quoted.
+
+`move_evals.pv` of the **next** row is the engine's best line after the played
+move: exactly what the opponent now does with it. `fortsetzung` in
+`lib/folge.ts` replays it with chess.js and counts the captures;
+`kommentiereZug` in `lib/erklaerung.ts` turns that into up to four sentences,
+each with a condition under which it stays out:
 
 | | Sentence | Stays out when |
 | --- | --- | --- |
-| 1 | judgment and the evaluation jump | never |
-| 2 | what the two numbers mean, in words | both fall in the same band |
-| 3 | the motif — what happened | no motif was detected |
-| 4 | where the number comes from — the opponent's continuation | no line stored |
-| 5 | what was better — the move, its line, the evaluation it holds | no line, or the line starts with the move that was played |
+| 1 | the judgment | never — and it is one word now |
+| 2 | the motif — what happened | no motif was detected |
+| 3 | what it costs, in pieces — the opponent's capture and what the line collects after it | nothing is captured, or the line cannot be replayed |
+| 4 | what was better — the move and its line | no line, or the line starts with the move that was played |
+
+Where neither 2 nor 3 has anything to say, the continuation itself stands
+there in notation instead ("Der Gegner setzt mit 14.Dxa4+ Dd7 15.cxd5 fort.").
 
 ```
-4.d3?! Ungenauigkeit. Die Bewertung springt von −0,1 auf −1,1.
-       Vorher ausgeglichen, jetzt leichter Vorteil für Schwarz.
-       Die Zahl kommt aus der Fortsetzung 4…Lg4 5.Le2 Sd4.
-       Besser war Se2: 4.Se2 Lg4 5.0–0 hält die Bewertung bei −0,1.
+13…Txd5?? Patzer. Dxa4+ schlägt einen Bauern mit Schach und gewinnt danach
+          einen Turm. Besser war axb3: 13…axb3 14.Txa5 Dxa5 15.Dxb3.
 ```
 
-Three rules:
+Four rules:
 
 - **Five half-moves of a line, no more.** Two and a half moves show the intent;
   from the sixth on it is engine prose, and whoever reads that far is not
-  reading an annotation any more. `LINIE`, same file.
-- **White's point of view throughout.** The first sentence has always counted
-  that way, and two directions in one paragraph would make the reader convert.
-  (`begruendeZug` flips to the mover instead — it stands next to "costs 5.3"
-  and has to make that same sum visible.)
+  reading an annotation any more. `LINIE`, same file. The *counting* in
+  `lib/folge.ts` uses the whole stored line — cut at five, the tally would end
+  in the middle of an exchange.
+- **The refutation is counted, not the whole trade.** If the played move
+  captured something itself, that stays out of the sum. The annotation tells
+  what the opponent does now; the balance of an exchange the reader just
+  watched is not the point.
+- **An uneven trade gets no piece named.** Rook for bishop and pawn is not
+  "wins a rook". Then the sentence says "material" and stays true.
 - **A move that was approved gets no "better was".** There was nothing better.
-  It gets sentences 1 and 3, and the continuation of the main line where the
+  It gets sentences 1 and 2, and the continuation of the main line where the
   move played *is* its first half-move.
 
 **Games analysed before the `pv` column** have `best_uci` and no line. They
-keep the short form — sentences 1, 2, 3 and " Besser war {san}." Nothing is
-invented for them; re-analysing the game fills the lines in.
+keep the short form — the judgment, the motif, and " Besser war {san}."
+Nothing is invented for them; re-analysing the game fills the lines in.
 
 ## The shape of it
 
@@ -93,6 +102,7 @@ text written in Rust speaks one of them.
 | Motif detection | `src-tauri/src/motifs.rs` | a motif name plus its squares, as JSON |
 | Game verdict | `src-tauri/src/verdict.rs` | a list of `{key, params}` building blocks |
 | Wiring | `src-tauri/src/analysis.rs` | writes both during the analysis run |
+| Captures | `src/lib/folge.ts` | the opponent's first capture and the material tally of the line |
 | Sentences | `src/lib/erklaerung.ts` | the finished text, per interface language |
 | Words | `src/lib/locales/*.ts` | `expl.*` and `verdict.*` |
 
@@ -175,10 +185,28 @@ paragraph in the game text of `AnalysisBlatt`, and the coloured callout under
 the move list on the dashboard, whose border keeps saying which judgment it
 carries. The sentences below are the ones that belong to diagram mode alone.
 
+**Only five annotations stand in the game text by themselves** (`ANMERKUNGEN`
+in `AnalysisBlatt`), chosen by what the move cost and read back in game order,
+plus whichever move the reader is standing on. A badly played blitz game
+carries twenty otherwise, and the game itself disappears between them — that is
+a protocol, not a tournament book. Nothing is lost: clicking a move opens its
+annotation in place, and a footnote says so.
+
+**"Only for my own moves"** (Settings › Annotations,
+`Settings.annotate_own_only`) holds the annotation back on the opponent's
+half-moves — the judgment mark in the move list, the badge on the board and the
+annotation itself. `zeigtUrteil` in `pages/Analysis.tsx` is the one place that
+decides it. The analysis still runs over the whole game: accuracy, ACPL, the
+tally and the curve read both sides, and a count over half a game would be
+wrong rather than brief.
+
 `DashboardBlatt`, in both its layouts: a quote block `AUS DER ANALYSE`
 carrying the sentence for the diagram move — which `lib/blatt.ts` already
 chooses as the first blunder or mistake — its reason line under it, and one
-`FAZIT DER PARTIE` under that.
+`FAZIT DER PARTIE` under that. Without a motif it falls back to the sentence
+about the price in points, not to the one about pieces: counting captures
+needs chess.js, and `Dashboard.tsx` keeps chess.js out of the startup bundle
+on purpose (the board is replayed in the lazily loaded variant).
 
 `AnalysisBlatt`, under the game text, as a section of the same name. It
 answers one question — *what happened here?* — and which "here" it means

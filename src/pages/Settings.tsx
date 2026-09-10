@@ -27,6 +27,7 @@ import {
   LifeBuoy,
   Loader2,
   ExternalLink,
+  NotebookPen,
   Palette,
   Puzzle as PuzzleIcon,
   QrCode,
@@ -1187,6 +1188,36 @@ export default function SettingsPage({
               {t("set.importMonthsNote", { n: draft.import_months })}
             </p>
           </div>
+        ) : (
+          desktopOnly
+        ),
+    },
+    {
+      // Anmerkungen · was von der Auto-Analyse in der Partie zu lesen ist.
+      //
+      // Die Rubrik steht vor „Brett & Ton": Beides sind Vorlieben beim
+      // Nachspielen, und was man liest, kommt vor dem, was man hört.
+      id: "annotations",
+      group: "training",
+      icon: NotebookPen,
+      title: t("set.annotations"),
+      summary: t("set.annotationsSummary"),
+      content:
+        desktop && draft ? (
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={draft.annotate_own_only}
+              onChange={(e) => patch({ annotate_own_only: e.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-accent"
+            />
+            <span>
+              <span className="block text-[13px] text-ink">{t("set.annotateOwnOnly")}</span>
+              <span className="block text-[12px] leading-relaxed text-ink3">
+                {t("set.annotateOwnOnlyNote")}
+              </span>
+            </span>
+          </label>
         ) : (
           desktopOnly
         ),

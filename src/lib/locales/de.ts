@@ -238,7 +238,6 @@ export const de = {
   "an.qualityComment": "{judgment}.",
   "an.variationAt": "Variante ab Zug {n}",
   "an.returnToGame": "Zurück zur Partie",
-  "an.comment": "{judgment}. Die Bewertung springt von {from} auf {to}.",
   "an.commentBetter": " Besser war {san}.",
   "an.phaseAccuracy": "Genauigkeit nach Spielphase",
   "an.overallAccuracy": "Gesamt · Partie",
@@ -921,6 +920,8 @@ export const de = {
   "set.themeAutoOff": "Aus",
   "set.themeAutoSystem": "Nach System",
   "set.themeAutoTime": "Nach Uhrzeit",
+  "set.themeOverridden": "Gerade gilt {theme} · der automatische Wechsel hat die Wahl übernommen.",
+  "set.themeAutoStop": "Wechsel ausschalten",
   "set.themeNight": "Thema für die Nacht",
   "set.themeNightFrom": "Ab",
   "set.themeNightTo": "Bis",
@@ -1170,6 +1171,10 @@ export const de = {
   "set.tourNote": "Kiebitz führt dich durch die App und zeigt jede Funktion an der Stelle, an der sie steht. Es wird nichts verändert und nichts gespeichert.",
   "set.tourOpen": "Rundgang starten",
   "set.accountsSummary": "chess.com, Lichess, Anzeigename, Tagesziel",
+  "set.annotations": "Anmerkungen",
+  "set.annotationsSummary": "Was die Analyse zu den Zügen schreibt",
+  "set.annotateOwnOnly": "Nur zu eigenen Zügen",
+  "set.annotateOwnOnlyNote": "Urteil und Erklärung stehen dann allein an den Zügen, die du selbst gespielt hast. Gerechnet wird weiter über die ganze Partie · Genauigkeit und Bilanz bleiben vollständig.",
   "set.sound": "Brett & Ton",
   "set.soundSummary": "Zug-, Schlag- und Mattklänge · Motivhinweis im Puzzle-Training",
   "set.soundToggle": "Klänge auf dem Brett",
@@ -1838,6 +1843,7 @@ export const de = {
   "blatt.bookNote": "Der Balken läuft aus Sicht von Weiß · Sieg, Remis, Niederlage. Ein Klick auf eine Zeile legt den Zug aufs Brett.",
   "blatt.posNote": "Der Strich in der Bahn ist die 50-%-Marke. Ein Klick auf einen Zug legt ihn aufs Brett, ein Klick auf eine Partie schlägt sie an dieser Stellung auf.",
   "blatt.explNote": "Ein Klick auf einen Zug im Satz zeigt hier, was die Analyse zu ihm gefunden hat.",
+  "blatt.notesTrimmed": "Im Satz stehen die schwersten Anmerkungen · ein Klick auf einen Zug zeigt seine.",
   "blatt.theHint": "Der Hinweis",
   "blatt.goal": "Ziel",
   "blatt.goalKey": "Die Zahl rechts ist das Ziel: 1 gewinnen, ½ Remis halten.",
@@ -1940,22 +1946,28 @@ export const de = {
   "expl.loss.2": "{best} hielt mehr: {san} gibt {loss} Bewertungspunkte ab.",
   "expl.lossOnly.1": "{san} verschlechtert die Stellung deutlich.",
   "expl.lossOnly.2": "Nach {san} kippt die Bewertung.",
-  "expl.why.replyEval": "Widerlegt wird der Zug durch {reply}: die Bewertung fällt dabei von {before} auf {after}.",
   "expl.why.reply": "Widerlegt wird der Zug durch {reply}.",
-  "expl.why.eval": "Die Bewertung fällt dabei von {before} auf {after}.",
-  // Woher die Zahl kommt und was besser war · die beiden Sätze, die aus
-  // einer Anmerkung eine Erklärung machen (siehe `kommentiereZug`).
-  "expl.replyLine": "Die Zahl kommt aus der Fortsetzung {line}.",
-  "expl.betterLine": "Besser war {san}: {line} hält die Bewertung bei {eval}.",
+  // Wie es weitergeht und was besser war · die beiden Sätze, die aus einer
+  // Anmerkung eine Erklärung machen (siehe `kommentiereZug`).
+  "expl.replyLine": "Der Gegner setzt mit {line} fort.",
+  "expl.betterLine": "Besser war {san}: {line}.",
+  // Material in Worten · was eine Fortsetzung kostet, steht in Figuren und
+  // nicht in Bewertungspunkten. Der Wenfall ist Absicht: Jeder Satz unten
+  // stellt dieses Stück als Objekt („schlägt einen Läufer", „gewinnt danach
+  // die Dame"), damit es nur eine Beugung je Sprache gibt.
+  "expl.mat.P": "einen Bauern",
+  "expl.mat.N": "einen Springer",
+  "expl.mat.B": "einen Läufer",
+  "expl.mat.R": "einen Turm",
+  "expl.mat.Q": "die Dame",
+  "expl.mat.pawns": "{n} Bauern",
+  "expl.mat.some": "Material",
+  "expl.cost.capture": "{reply} schlägt {mat}.",
+  "expl.cost.captureCheck": "{reply} schlägt {mat} mit Schach.",
+  "expl.cost.captureGain": "{reply} schlägt {mat} und gewinnt danach {gain}.",
+  "expl.cost.captureCheckGain": "{reply} schlägt {mat} mit Schach und gewinnt danach {gain}.",
+  "expl.cost.only": "Die Fortsetzung kostet {mat}.",
   "expl.mainLine": "Die Engine rechnet weiter mit {line}.",
-  // Was die Zahl bedeutet · vier Bänder und der Satz, der zwei davon
-  // gegenüberstellt. Ohne ihn nennt eine Anmerkung nur Zahlen.
-  "expl.swing": "Vorher {before}, jetzt {after}.",
-  "expl.band.equal": "ausgeglichen",
-  "expl.band.slight": "leichter Vorteil für {side}",
-  "expl.band.clear": "klarer Vorteil für {side}",
-  "expl.band.winning": "Gewinnstellung für {side}",
-  "expl.band.mate": "Matt für {side}",
   "expl.motif.mate": "Matt",
   "expl.motif.missed_mate": "übersehenes Matt",
   "expl.motif.allowed_mate": "zugelassenes Matt",

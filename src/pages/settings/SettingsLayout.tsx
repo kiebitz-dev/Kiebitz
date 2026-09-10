@@ -72,6 +72,7 @@ export type SectionId =
   | "tour"
   | "plus"
   | "accounts"
+  | "annotations"
   | "sound"
   | "notify"
   | "widgets"

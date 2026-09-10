@@ -12,10 +12,12 @@
  * Hervorhebung, Drehung und Klänge hängen dort, und ein zweites Brett wäre
  * eine zweite Bedienung derselben Sache.
  *
- * Alle Anmerkungen bleiben stehen, auch bei langen Partien. Die
- * Auto-Annotation vergibt nur für Ungenauigkeit, Fehler und Patzer einen
- * Kommentar; das sind wenige, und eine Partie, in der es viele sind, ist genau
- * die, bei der man sie alle sehen will.
+ * Frei Haus stehen die schwersten Anmerkungen und nicht alle. Die
+ * Auto-Annotation vergibt zu jeder Ungenauigkeit, jedem Fehler und jedem
+ * Patzer einen Kommentar; in einer schlecht gelaufenen Blitzpartie sind das
+ * zwanzig Absätze, zwischen denen die Partie selbst verschwindet — man liest
+ * dann kein Turnierbuch mehr, sondern ein Protokoll. Fünf stehen im Satz, der
+ * Rest schlägt auf, wenn man den Zug antippt · siehe `ANMERKUNGEN`.
  *
  * Neben dem Satz steht der Apparat: das Eröffnungsbuch und die eigenen
  * Partien, die durch diese Stellung gingen. Beides gibt es in der
@@ -70,6 +72,16 @@ export interface SatzZug {
    */
   gewicht?: number | null;
 }
+
+/**
+ * So viele Anmerkungen stehen ohne Zutun im Satz.
+ *
+ * Fünf sind so viele, wie auf eine Buchseite passen, ohne dass die Partie
+ * zwischen ihnen verschwindet — und so wenige, dass jede einzelne noch etwas
+ * bedeutet. Wer mehr will, tippt einen Zug an; die Anmerkung schlägt dann an
+ * seiner Stelle auf, und nichts geht verloren.
+ */
+const ANMERKUNGEN = 5;
 
 /** Ein Zug im Eröffnungsbuch · dieselben Zahlen wie in der Karte von heute. */
 export interface BuchZug {
@@ -485,18 +497,40 @@ export default function AnalysisBlatt({
   const { t, locale } = useI18n();
 
   /**
+   * Die Anmerkungen, die ohne Zutun im Satz stehen · die schwersten Stellen.
+   *
+   * Ausgewählt wird nach dem, was ein Zug gekostet hat (`gewicht`), gezeigt
+   * wird in der Reihenfolge der Partie. Dazu kommt immer die Anmerkung zu dem
+   * Zug, auf dem man gerade steht: Ein Klick in den Satz ist die Frage „und
+   * was war hier los?", und die soll auch dann eine Antwort bekommen, wenn
+   * der Zug nicht unter den fünf schwersten war.
+   */
+  const schwerste = new Set(
+    zuege
+      .map((zug, index) => ({ zug, index }))
+      .filter(({ zug }) => zug.kommentar)
+      .sort((a, b) => (b.zug.gewicht ?? 0) - (a.zug.gewicht ?? 0))
+      .slice(0, ANMERKUNGEN)
+      .map(({ index }) => index)
+  );
+  const zeigtAnmerkung = (index: number) =>
+    Boolean(zuege[index]?.kommentar) && (schwerste.has(index) || index === ply - 1);
+  /** Wurde etwas zurückgehalten? Dann sagt eine Fußnote, wo es steht. */
+  const zurueckgehalten = zuege.filter((zug) => zug.kommentar).length > schwerste.size;
+
+  /**
    * Der Fließsatz der Partie.
    *
-   * Züge laufen durch, bis einer eine Anmerkung trägt; dann bricht der Satz,
-   * die Anmerkung steht eingerückt darunter, und der nächste Satz beginnt.
-   * Genau so steht eine kommentierte Partie im Turnierbuch.
+   * Züge laufen durch, bis einer eine gezeigte Anmerkung trägt; dann bricht
+   * der Satz, die Anmerkung steht eingerückt darunter, und der nächste Satz
+   * beginnt. Genau so steht eine kommentierte Partie im Turnierbuch.
    */
   const abschnitte: { zuege: { zug: SatzZug; index: number }[]; anmerkung: { zug: SatzZug; index: number } | null }[] =
     [];
   let laufend: { zug: SatzZug; index: number }[] = [];
   zuege.forEach((zug, index) => {
     laufend.push({ zug, index });
-    if (zug.kommentar) {
+    if (zeigtAnmerkung(index)) {
       abschnitte.push({ zuege: laufend, anmerkung: { zug, index } });
       laufend = [];
     }
@@ -541,7 +575,7 @@ export default function AnalysisBlatt({
   // er hier ein zweites Mal — drei Zeilen unter dem ersten Mal. Bleibt der
   // Abschnitt bei der Liste der schwersten Stellen, führt er von da aus
   // weiter, statt zu wiederholen.
-  const stehtSchonImSatz = ply > 0 && Boolean(zuege[ply - 1]?.kommentar);
+  const stehtSchonImSatz = ply > 0 && zeigtAnmerkung(ply - 1);
   const zumZug =
     ply > 0 && !stehtSchonImSatz && zuege[ply - 1]?.erklaerung
       ? { zug: zuege[ply - 1], index: ply - 1 }
@@ -646,6 +680,9 @@ export default function AnalysisBlatt({
           )}
         </div>
       ))}
+      {/* Sagt, dass da noch mehr ist und wie man drankommt · sonst sähe eine
+          Partie mit zwanzig Fehlern aus wie eine mit fünf. */}
+      {zurueckgehalten && <Fussnote>{t("blatt.notesTrimmed")}</Fussnote>}
       {analyse}
     </div>
   );

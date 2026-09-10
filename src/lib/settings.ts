@@ -46,6 +46,13 @@ export interface Settings {
   theme_night_to: string;
   /** Diagramm-Modus („Das Blatt") · Layoutmodus, siehe lib/theme.ts. */
   diagram_mode: boolean;
+  /**
+   * Anmerkungen der Auto-Analyse nur zu den eigenen Zügen zeigen.
+   *
+   * Gerechnet wird weiter über die ganze Partie · zurückgehalten wird allein
+   * die Anzeige. Siehe `zeigtUrteil` in pages/Analysis.tsx.
+   */
+  annotate_own_only: boolean;
   import_months: number;
   puzzle_goal: number;
   /** Motiv der laufenden Aufgabe im Puzzle-Training verdecken. */
