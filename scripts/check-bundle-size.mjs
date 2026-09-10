@@ -44,12 +44,14 @@ const limits = {
   // Seitenfassungen. Beides steht im einen Stylesheet, weil Tailwind alles
   // zusammenzieht · geladen wird davon nichts nach.
   //
-  // 76 KiB ließen zuletzt nur noch 0,2 KiB Luft und rissen mit den neuen
-  // Blätterleisten von Games und GamesBlatt: Sie kosten 734 Byte an
-  // Hilfsklassen, davon 430 Byte allein für `decoration-line2` und
-  // `hover:decoration-accent` · Tailwind schreibt `-webkit-text-decoration-color`
-  // je Regel dreimal. Gemessen sind es damit 76,5 KiB.
-  css: 78 * 1024,
+  // 78 KiB ließen nach den Blätterleisten von Games und GamesBlatt genau
+  // 1 Byte Luft und rissen mit dem Blatt der Analyse: Dessen dreispaltiger
+  // Satz kostet 11 Regeln (796 Byte), eine alte fällt weg, netto 599 Byte.
+  // Allein 448 Byte davon sind die drei `grid-cols-[…]` mit ausgeschriebenen
+  // Spaltenmaßen · ein solcher Wert steht zweimal in der Datei, einmal
+  // maskiert im Selektor und einmal in der Regel. Gemessen sind es damit
+  // 78,6 KiB.
+  css: 80 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht
