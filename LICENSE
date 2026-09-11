@@ -25,11 +25,17 @@ Permission is granted, free of charge, to any individual to:
 
   a) view, read, study and privately modify the Software;
   b) compile and run the Software, including privately modified versions, on
-     devices you own or personally control, for your own personal,
-     non-commercial use;
+     devices you own or personally control, for your own personal use;
   c) create and keep private copies and backups for the purposes above;
   d) quote short excerpts of the source code for the purpose of discussion,
      review, teaching, bug reports or academic citation, with attribution.
+
+The permission to modify in 2(a) and to run modified versions in 2(b) does not
+extend to removing, disabling, bypassing or reproducing the entitlement
+verification, the feature gating of Kiebitz Plus, or the advertising surface of
+the free version. Rights that mandatory law grants you regardless — in
+particular Art. 5 and 6 of Directive 2009/24/EC and §§ 69d, 69e UrhG — remain
+unaffected.
 
 3. What you may not do
 ----------------------
@@ -43,8 +49,10 @@ may not:
   b) publish or submit the Software, or any derivative or repackaged form of
      it, to any application store, package repository or other distribution
      channel;
-  c) use the Software, or any part of it, in a commercial product or service,
-     or otherwise for commercial advantage or monetary compensation;
+  c) incorporate the Software, or any part of it, into a commercial product or
+     service, or otherwise exploit the Software itself for commercial advantage
+     or monetary compensation — for example by selling it, licensing it,
+     bundling it, or offering it to others as a hosted or managed service;
   d) use the Software to create a product that substitutes for or competes with
      Kiebitz;
   e) remove, obscure or alter any copyright, license, attribution or
@@ -54,16 +62,31 @@ may not:
      identify any product other than the original Software, or in a way that
      suggests endorsement.
 
-Rights beyond this license — commercial use, redistribution, forking as a
-separate product — may be granted individually. Ask via
-https://github.com/kiebitz-dev/Kiebitz/issues.
+Section 3(c) restricts what you may do *with the Software as such*. It does not
+restrict what you do *with Kiebitz as a user*: running it while you teach, coach,
+stream, compete or otherwise earn money from your own chess activity is
+permitted, and is what the Kiebitz Plus subscription is sold for (see section 4).
 
-4. Official binaries
---------------------
+Rights beyond this license — redistribution, commercial exploitation of the
+Software itself, forking as a separate product — may be granted individually.
+Ask via https://github.com/kiebitz-dev/Kiebitz/issues.
+
+4. Official binaries and Kiebitz Plus
+-------------------------------------
 
 Binaries published by the copyright holder (GitHub releases, and any app store
-listing) are made available for personal use under this same license. Nothing in
-this license restricts your rights under section 6 with regard to the
+listing) are made available for your own use under this same license. There is
+no limit on the purpose for which you use them; section 3(c) applies to the
+Software as source and derivatives, not to your use of an official build.
+
+The free version of Kiebitz and the paid Kiebitz Plus subscription are governed
+by the Terms of Service at https://kiebitz.dev/terms, which also carry the
+subscription, payment, withdrawal and cancellation terms. Where those terms and
+this license address the same question, those terms prevail for the official
+binaries and for the subscription. Store-distributed builds are additionally
+subject to the terms of the store that distributes them.
+
+Nothing in this license restricts your rights under section 6 with regard to the
 Third-Party Components bundled in those binaries.
 
 5. Contributions
@@ -90,6 +113,11 @@ In particular:
     the exact source commit, and a written offer for the corresponding source
     are in `src-tauri/resources/stockfish/` and `THIRD_PARTY_NOTICES.md`.
   - **Lichess puzzle database** — CC0 1.0 (public domain dedication).
+  - **Piece sets, board graphics and fonts** bundled with the Software carry
+    their own licenses and attribution requirements — CC BY-SA 3.0, Apache-2.0
+    and OFL among them — and some of them apply to artwork that is only offered
+    with Kiebitz Plus. The per-set attributions and the terms that go with them
+    are in `THIRD_PARTY_NOTICES.md`.
   - Third-party libraries pulled in via npm and Cargo remain under their own
     licenses (MIT, Apache-2.0, ISC, BSD, OFL and others).
 
@@ -118,6 +146,12 @@ under mandatory law, remains unaffected.
 
 The permissions in section 2 end automatically if you breach section 3. They
 are reinstated if you cure the breach and the copyright holder does not object.
+
+Termination under this section concerns the permissions granted by this license
+only. It does not affect a subsisting contract for the free account or for
+Kiebitz Plus, which ends only as provided in the Terms of Service referenced in
+section 4 and under applicable law, nor does it affect any statutory right you
+have as a consumer.
 
 10. Governing law
 -----------------
