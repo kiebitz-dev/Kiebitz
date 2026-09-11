@@ -180,10 +180,30 @@ a game that cannot produce one is not retried on every launch.
 
 ## In the interface
 
-Both modes. The annotation goes wherever a move is commented — the indented
-paragraph in the game text of `AnalysisBlatt`, and the coloured callout under
-the move list on the dashboard, whose border keeps saying which judgment it
-carries. The sentences below are the ones that belong to diagram mode alone.
+Both modes, and **word for word the same in both**. Which of the two texts a
+move gets depends on the move, never on the mode:
+
+- **A move that was faulted** — inaccuracy, mistake, blunder — gets the
+  annotation: the indented paragraph in the game text of `AnalysisBlatt`, the
+  coloured callout under the move list on the dashboard, whose border keeps
+  saying which judgment it carries.
+- **Every other judged move** gets the sentence from the analysis
+  (`erklaereZug` plus its reason line) — the `AUS DER ANALYSE` block in diagram
+  mode, the same callout on the dashboard.
+
+Until 1.4 the dashboard put the annotation under every judged move, so an
+approved one read differently on either side: "Bester Zug. Rxe2 trifft die
+Hauptvariante. Die Engine rechnet weiter mit …" against "Rxe2 trifft die
+Hauptvariante." Two versions of one sentence are not two modes. `currentComment`
+in `pages/Analysis.tsx` now follows the same split `blattKommentar` always did.
+
+A note on the **notation**: moves are set in English SAN everywhere — `Rxe2`,
+not `Txe2`. `translateSan` in `lib/notation.ts` swapped the piece letters into
+the interface language until 1.4, but only in the analysis sentences and the
+diagram-mode game text, never in the move list, the opening book, the engine
+lines or the shared images. Two names for one move on one screen are worse than
+a foreign one. What the function still does is typography: castling is set
+`0–0`, as print has always set it.
 
 **Only five annotations stand in the game text by themselves** (`ANMERKUNGEN`
 in `AnalysisBlatt`), chosen by what the move cost and read back in game order,

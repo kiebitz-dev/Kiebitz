@@ -1077,21 +1077,48 @@ export default function Analysis({
     () => new Map((rows ?? []).map((row) => [row.ply, row])),
     [rows]
   );
+  /**
+   * Der Kasten unter der Zugliste · derselbe Wortlaut wie im Diagramm-Modus.
+   *
+   * Die Aufteilung stammt von dort und ist die Antwort auf zwei verschiedene
+   * Fragen: Ein bemängelter Zug bekommt die **Anmerkung** (Urteil, Motiv,
+   * Preis, bessere Fortsetzung — `kommentiereZug`), jeder andere den Satz
+   * **aus der Analyse** (`erklaereZug` samt seiner Begründung). Bis 1.4 stand
+   * hier in beiden Fällen die Anmerkung, und ein gutgeheißener Zug las sich
+   * deshalb je nach Modus verschieden: „Bester Zug. Rxe2 trifft die
+   * Hauptvariante. Die Engine rechnet weiter mit …" gegen „Rxe2 trifft die
+   * Hauptvariante." Zwei Fassungen desselben Satzes sind keine zwei Modi,
+   * sondern ein Fehler.
+   */
   const currentComment = useMemo(() => {
     if (!currentMove) return null;
     if (scratch || variation) return null;
     if (!zeigtUrteil(ply)) return null;
     if (!live) return featuredGame.moves[ply - 1]?.comment ?? null;
-    return commentFor(
+    if (istBemaengelt(currentMove.judgment)) {
+      return commentFor(
+        t,
+        locale,
+        sans.slice(0, ply - 1),
+        currentMove,
+        ply,
+        `${game?.id}:${ply}`,
+        rowsByPly.get(ply),
+        rowsByPly.get(ply + 1)
+      );
+    }
+    const row = rowsByPly.get(ply);
+    if (!row) return null;
+    // Nur für diesen einen Halbzug nachgespielt · das Blatt rechnet die ganze
+    // Partie durch, weil es alle Sätze zugleich zeigt. Hier steht einer.
+    const satz = erklaereZug(row, {
       t,
       locale,
-      sans.slice(0, ply - 1),
-      currentMove,
-      ply,
-      `${game?.id}:${ply}`,
-      rowsByPly.get(ply),
-      rowsByPly.get(ply + 1)
-    );
+      seed: `${game?.id}:${ply}`,
+      folge: fortsetzung(sans.slice(0, ply - 1), currentMove.san, rowsByPly.get(ply + 1)?.pv),
+    });
+    const grund = begruendeZug(row, { t, locale });
+    return [satz, grund].filter(Boolean).join(" ") || null;
   }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t, locale, game?.id, game?.color, nurEigene, rowsByPly]);
 
   /**

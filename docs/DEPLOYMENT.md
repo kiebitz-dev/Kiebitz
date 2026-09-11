@@ -686,6 +686,35 @@ any completed artifacts for diagnosis, rather than publishing a partial release.
   the glibc of the machine that built it, so building on the oldest supported
   runner keeps the result usable on older distributions.
 
+### The AppImage on a black screen
+
+```text
+Could not create default EGL display: EGL_BAD_PARAMETER. Aborting...
+```
+
+Reported from CachyOS, and not a Kiebitz bug: WebKitGTK's DMA-BUF renderer
+needs the host's EGL stack and the GTK/WebKit libraries carried inside the
+AppImage to agree. A newer Mesa, the proprietary NVIDIA driver or a Wayland
+session without a matching render node breaks that, WebKit fails to get an EGL
+display and kills its web process — the window opens, stays black, and only
+the window menu still answers.
+
+`calm_webkit()` in `src-tauri/src/lib.rs` therefore sets
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` at startup on Linux, before the first
+window exists, unless the environment already says otherwise. The webview then
+draws over the older, portable path — invisible on a page made of chessboards
+and diagrams.
+
+Two things left for a user who still sees a black window:
+
+```bash
+WEBKIT_DISABLE_COMPOSITING_MODE=1 ./Kiebitz_*.AppImage
+```
+
+and, on a hybrid-graphics machine, running it on the integrated GPU
+(`__GLX_VENDOR_LIBRARY_NAME=mesa`). Where neither helps, the `.deb`/`.rpm`
+builds use the system's own WebKitGTK and sidestep the mismatch entirely.
+
 ## Auto-update
 
 The updater plugin (`tauri-plugin-updater`) is wired up for desktop. Behavior in

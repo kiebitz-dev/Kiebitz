@@ -895,8 +895,6 @@ export const fr: Record<Key, string> = {
   "set.themeAutoOff": "Désactivée",
   "set.themeAutoSystem": "Selon le système",
   "set.themeAutoTime": "Selon l'heure",
-  "set.themeOverridden": "C'est {theme} qui s'applique en ce moment · le changement automatique a pris le dessus.",
-  "set.themeAutoStop": "Désactiver le changement",
   "set.themeNight": "Thème pour la nuit",
   "set.themeNightFrom": "À partir de",
   "set.themeNightTo": "Jusqu'à",

@@ -327,8 +327,44 @@ async fn stop_live(app: tauri::AppHandle) {
     .await;
 }
 
+/// WebKitGTK vor dem ersten EGL-Griff entschärfen · nur Linux.
+///
+/// Auf einer frischen Arch-Installation (CachyOS) bricht die AppImage beim
+/// Start ab:
+///
+/// ```text
+/// Could not create default EGL display: EGL_BAD_PARAMETER. Aborting...
+/// ```
+///
+/// Dahinter steckt nicht Kiebitz, sondern der DMA-BUF-Renderer von WebKitGTK.
+/// Er verlangt, dass die EGL-Bibliothek des Systems und die GTK-/WebKit-Stücke
+/// im AppImage-Bündel zueinander passen. Tun sie das nicht — ein neueres Mesa,
+/// der proprietäre NVIDIA-Treiber, eine Wayland-Sitzung ohne passenden
+/// Render-Node —, bekommt WebKit kein EGL-Display und beendet den
+/// Web-Prozess. Übrig bleibt ein leeres schwarzes Fenster, in dem nur noch das
+/// Fenstermenü funktioniert. Eine App, die sich selbst gebaut hat, läuft
+/// deshalb auf demselben Rechner, die AppImage nicht.
+///
+/// `WEBKIT_DISABLE_DMABUF_RENDERER=1` schaltet diesen Renderer ab; WebKit
+/// zeichnet dann über den älteren, portableren Weg. Das kostet auf einer
+/// Seite, die Schachbretter und Diagramme zeigt, nichts Messbares und ist der
+/// Preis dafür, dass die App überhaupt aufgeht.
+///
+/// Gesetzt wird nur, was nicht schon gesetzt ist: Wer den Renderer bewusst
+/// anlässt (`WEBKIT_DISABLE_DMABUF_RENDERER=0`), behält ihn.
+#[cfg(all(desktop, target_os = "linux"))]
+fn calm_webkit() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Vor allem anderen · WebKit liest die Umgebung beim ersten Fenster, und
+    // ein abgestürzter Web-Prozess schreibt kein Logbuch mehr.
+    #[cfg(all(desktop, target_os = "linux"))]
+    calm_webkit();
     // Logbuch und Panic-Hook zuerst · alles, was danach schiefgeht, ist damit
     // im Diagnosebericht sichtbar, auch wenn kein Fenster mehr aufgeht.
     diag::install();

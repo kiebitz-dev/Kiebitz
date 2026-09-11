@@ -920,8 +920,6 @@ export const de = {
   "set.themeAutoOff": "Aus",
   "set.themeAutoSystem": "Nach System",
   "set.themeAutoTime": "Nach Uhrzeit",
-  "set.themeOverridden": "Gerade gilt {theme} · der automatische Wechsel hat die Wahl übernommen.",
-  "set.themeAutoStop": "Wechsel ausschalten",
   "set.themeNight": "Thema für die Nacht",
   "set.themeNightFrom": "Ab",
   "set.themeNightTo": "Bis",

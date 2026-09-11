@@ -902,8 +902,6 @@ export const en: Record<Key, string> = {
   "set.themeAutoOff": "Off",
   "set.themeAutoSystem": "Follow system",
   "set.themeAutoTime": "By time",
-  "set.themeOverridden": "{theme} is showing right now · the automatic switch has taken over the choice.",
-  "set.themeAutoStop": "Turn switching off",
   "set.themeNight": "Theme for the night",
   "set.themeNightFrom": "From",
   "set.themeNightTo": "Until",

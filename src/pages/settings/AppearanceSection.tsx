@@ -1,5 +1,13 @@
 /**
- * Erscheinungsbild: Farbwelt, Brett, Figuren und automatischer Wechsel.
+ * Erscheinungsbild: Farbwelt, automatischer Wechsel, Brett und Figuren.
+ *
+ * Der Wechsel steht seit 1.4 direkt unter den Themenkacheln und nicht mehr
+ * am Ende der Seite. Er ist die Fortsetzung derselben Frage — welches Thema
+ * gilt wann — und gehört deshalb neben die Wahl und nicht hinter zwei
+ * Abschnitte über Feldfarben und Figurenzeichnungen. Ein Hinweis stand
+ * zwischen beidem („Gerade gilt Dunkel · der automatische Wechsel hat die
+ * Wahl übernommen"); mit dem Wechsel eine Zeile darunter erklärt sich das
+ * von selbst.
  *
  * Die Vorschau ist keine Nachbildung, sondern die Sache selbst: Jede Kachel
  * trägt `data-theme` ihres Themas, und die Farbtokens darin gelten für ihren
@@ -34,9 +42,6 @@ import {
   DEFAULT_BOARD_SET,
   THEMES,
   THEME_FEATURE,
-  appliedTheme,
-  subscribeAppearance,
-  themeDef,
   type Appearance,
   type BoardSetId,
   type ThemeId,
@@ -226,20 +231,6 @@ export default function AppearanceSection({
    */
   const hint = locked;
 
-  /**
-   * Das Thema, das tatsächlich auf dem Bildschirm steht.
-   *
-   * Es ist nicht immer das gewählte: Bei eingeschaltetem automatischem Wechsel
-   * übernimmt abends die Nachtseite, und ohne Plus fällt ein Plus-Thema auf
-   * sein freies Gegenstück zurück. Beides ist so gewollt — nur sah es von
-   * außen aus wie ein kaputter Schalter: Man tippt „Papier" an, die Kachel
-   * bekommt ihren Rahmen, und die App bleibt dunkel.
-   *
-   * Deshalb wird hier gefragt, was gilt, und darunter gesagt, warum.
-   */
-  const geltend = useSyncExternalStore(subscribeAppearance, appliedTheme, appliedTheme);
-  const uebergangen = geltend !== appearance.theme;
-
   const pickTheme = (theme: ThemeId) => onChange({ ...appearance, theme });
   const pickNight = (night: ThemeId) => onChange({ ...appearance, night });
   const pickBoard = (boardSet: BoardSetId) => onChange({ ...appearance, boardSet });
@@ -289,25 +280,73 @@ export default function AppearanceSection({
         {t(THEMES.find((theme) => theme.id === appearance.theme)!.descKey)}
       </p>
 
-      {/* Der Hinweis steht nur da, wenn die Wahl gerade übergangen wird · und
-          dann mit dem Griff, der sie zurückholt. Ein Satz, der erklärt, warum
-          nichts passiert, ist mehr wert als drei, die erklären, was der
-          automatische Wechsel kann. */}
-      {uebergangen && appearance.auto !== "off" && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line bg-panel2 px-3 py-2">
-          <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-ink2">
-            {t("set.themeOverridden", { theme: t(themeDef(geltend).nameKey) })}
-          </span>
-          <button
-            type="button"
-            onClick={() => onChange({ ...appearance, auto: "off" })}
-            className="shrink-0 text-[12px] font-medium text-accent hover:underline"
-          >
-            {t("set.themeAutoStop")}
-          </button>
+      {/* ── Automatischer Wechsel ─────────────────────────────────────────── */}
+      <h4 className="mt-5 text-[13px] font-medium text-ink">{t("set.themeAuto")}</h4>
+      <p className="mt-1 text-[12px] leading-relaxed text-ink3">{t("set.themeAutoNote")}</p>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {(["off", "system", "time"] as const).map((mode) => {
+          // „Aus" ist die Vorgabe und bleibt frei · der Wechsel selbst gehört
+          // zu Plus und trägt deshalb denselben Stern und dasselbe Blass wie
+          // die Bretter und Figuren weiter unten.
+          const plus = mode !== "off";
+          const blocked = plus && locked;
+          return (
+            <Chip
+              key={mode}
+              active={appearance.auto === mode}
+              className={blocked ? "opacity-70" : ""}
+              onClick={() =>
+                blocked ? openPlusDialog(THEME_FEATURE) : onChange({ ...appearance, auto: mode })
+              }
+            >
+              <span className="flex items-center gap-1.5">
+                {t(
+                  mode === "off"
+                    ? "set.themeAutoOff"
+                    : mode === "system"
+                      ? "set.themeAutoSystem"
+                      : "set.themeAutoTime"
+                )}
+                {plus && hint && <Sparkles size={12} className="text-accent" />}
+              </span>
+            </Chip>
+          );
+        })}
+      </div>
+
+      {/* Die Grenzen der Nacht stehen vor der Nachtseite und nicht hinter den
+          Kacheln: Erst sagt man, wann die Nacht ist, dann, wie sie aussieht ·
+          und hinter acht Kacheln übersieht man die zwei Uhrzeiten ohnehin.
+          Beides zusammen ist ein Satz, und die Zeitspanne ist sein Anfang. */}
+      {appearance.auto === "time" && (
+        <div className="mt-3 grid grid-cols-2 gap-3 min-[640px]:max-w-sm">
+          <Field label={t("set.themeNightFrom")}>
+            <input
+              type="time"
+              value={appearance.nightFrom}
+              onChange={(e) => onChange({ ...appearance, nightFrom: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("set.themeNightTo")}>
+            <input
+              type="time"
+              value={appearance.nightTo}
+              onChange={(e) => onChange({ ...appearance, nightTo: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
         </div>
       )}
 
+      {appearance.auto !== "off" && (
+        <>
+          <p className="mt-3 text-[12px] text-ink3">{t("set.themeNight")}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 min-[640px]:grid-cols-4">
+            {THEMES.map((theme) => themeTile(theme.id, appearance.night === theme.id, pickNight))}
+          </div>
+        </>
+      )}
       {/* ── Brett ─────────────────────────────────────────────────────────── */}
       <h4 className="mt-5 flex items-center gap-2 text-[13px] font-medium text-ink">
         <Palette size={14} className="text-ink3" /> {t("set.boardSet")}
@@ -375,73 +414,6 @@ export default function AppearanceSection({
         {t(pieceSetDef(appearance.pieceSet).descKey)}
       </p>
 
-      {/* ── Automatischer Wechsel ─────────────────────────────────────────── */}
-      <h4 className="mt-5 text-[13px] font-medium text-ink">{t("set.themeAuto")}</h4>
-      <p className="mt-1 text-[12px] leading-relaxed text-ink3">{t("set.themeAutoNote")}</p>
-      <div className="mt-2.5 flex flex-wrap gap-2">
-        {(["off", "system", "time"] as const).map((mode) => {
-          // „Aus" ist die Vorgabe und bleibt frei · der Wechsel selbst gehört
-          // zu Plus und trägt deshalb denselben Stern und dasselbe Blass wie
-          // die Bretter und Figuren darüber.
-          const plus = mode !== "off";
-          const blocked = plus && locked;
-          return (
-            <Chip
-              key={mode}
-              active={appearance.auto === mode}
-              className={blocked ? "opacity-70" : ""}
-              onClick={() =>
-                blocked ? openPlusDialog(THEME_FEATURE) : onChange({ ...appearance, auto: mode })
-              }
-            >
-              <span className="flex items-center gap-1.5">
-                {t(
-                  mode === "off"
-                    ? "set.themeAutoOff"
-                    : mode === "system"
-                      ? "set.themeAutoSystem"
-                      : "set.themeAutoTime"
-                )}
-                {plus && hint && <Sparkles size={12} className="text-accent" />}
-              </span>
-            </Chip>
-          );
-        })}
-      </div>
-
-      {/* Die Grenzen der Nacht stehen vor der Nachtseite und nicht hinter den
-          Kacheln: Erst sagt man, wann die Nacht ist, dann, wie sie aussieht ·
-          und hinter acht Kacheln übersieht man die zwei Uhrzeiten ohnehin.
-          Beides zusammen ist ein Satz, und die Zeitspanne ist sein Anfang. */}
-      {appearance.auto === "time" && (
-        <div className="mt-3 grid grid-cols-2 gap-3 min-[640px]:max-w-sm">
-          <Field label={t("set.themeNightFrom")}>
-            <input
-              type="time"
-              value={appearance.nightFrom}
-              onChange={(e) => onChange({ ...appearance, nightFrom: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
-          <Field label={t("set.themeNightTo")}>
-            <input
-              type="time"
-              value={appearance.nightTo}
-              onChange={(e) => onChange({ ...appearance, nightTo: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
-        </div>
-      )}
-
-      {appearance.auto !== "off" && (
-        <>
-          <p className="mt-3 text-[12px] text-ink3">{t("set.themeNight")}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 min-[640px]:grid-cols-4">
-            {THEMES.map((theme) => themeTile(theme.id, appearance.night === theme.id, pickNight))}
-          </div>
-        </>
-      )}
     </>
   );
 }

@@ -226,6 +226,29 @@ afterEach(() => {
   revokePlus();
 });
 
+/**
+ * Eine gerechnete Zeile zu „2.Nf3" der Vorlagepartie · der Zug, den auch die
+ * Engine wählt. `judgment` bleibt leer: Die Auto-Analyse vergibt nur Mängel,
+ * alles Übrige leitet die Seite aus Bewertung und Empfehlung ab.
+ */
+const bestMoveRows = [
+  { ply: 1, san: "e4", eval_cp: 20, mate_in: null, best_uci: "e2e4", judgment: "", phase: "opening" },
+  { ply: 2, san: "e5", eval_cp: 20, mate_in: null, best_uci: "e7e5", judgment: "", phase: "opening" },
+  {
+    ply: 3,
+    san: "Nf3",
+    eval_cp: 20,
+    mate_in: null,
+    best_uci: "g1f3",
+    judgment: "",
+    phase: "opening",
+    motif: "best_move",
+    motif_detail: JSON.stringify({ san: "Nf3" }),
+    pv: ["Nf3", "Nc6", "Bc4"],
+  },
+  { ply: 4, san: "Nc6", eval_cp: 20, mate_in: null, best_uci: "b8c6", judgment: "", phase: "opening" },
+];
+
 describe("Analysis page", () => {
   it("opens a playable new game when entered without a target", async () => {
     render(<LocaleProvider><Analysis targetGameId={null} /></LocaleProvider>);
@@ -243,6 +266,30 @@ describe("Analysis page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Analysieren" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Diese Partie analysieren" }));
     expect(mocks.startAnalysis).toHaveBeenCalledWith({ gameIds: [7] });
+  });
+
+  /**
+   * Derselbe Wortlaut in beiden Modi · siehe docs/EXPLANATIONS.md.
+   *
+   * Zu einem gutgeheißenen Zug stand auf dem Dashboard bis 1.4 die ganze
+   * Anmerkung („Buchzug. Nf3 trifft die Hauptvariante. Die Engine rechnet
+   * weiter mit …"), im Diagramm-Modus nur der Satz aus der Analyse. Zwei
+   * Fassungen desselben Satzes sind keine zwei Modi.
+   */
+  it("writes the analysis sentence and nothing more under an approved move", async () => {
+    mocks.gameAnalysis.mockResolvedValue(bestMoveRows);
+    render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+
+    await gameOnBoard("7");
+    fireEvent.click(await screen.findByRole("button", { name: /^Nf3/ }));
+
+    const satz = await screen.findByText(/Hauptvariante|Engine wählt/);
+    // Der Satz selbst · in englischem SAN, wie überall in der App.
+    expect(satz.textContent).toContain("Nf3");
+    // Und nichts davor und dahinter: weder das Urteil als Wort noch die
+    // Fortsetzung, die der Diagramm-Modus an dieser Stelle auch nicht zeigt.
+    expect(satz.textContent).not.toContain("Buchzug");
+    expect(satz.textContent).not.toContain("Die Engine rechnet weiter mit");
   });
 
   describe("navigation", () => {

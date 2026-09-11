@@ -60,9 +60,9 @@ describe("Erklärung eines Zuges", () => {
     expect(satz).toContain("d5");
     expect(satz).toContain("König");
     expect(satz).toContain("Springer");
-    // Deutsche Notation, nicht englische.
-    expect(satz).toContain("Dd5+");
-    expect(satz).not.toContain("Qd5+");
+    // Englisches SAN · die Dame heißt in jeder Sprache Q.
+    expect(satz).toContain("Qd5+");
+    expect(satz).not.toContain("Dd5+");
   });
 
   it("fällt auf den Preis zurück, wenn kein Motiv gefunden wurde", () => {
@@ -75,9 +75,9 @@ describe("Erklärung eines Zuges", () => {
       }),
       { t: de(), locale: "de" }
     );
-    // Der Verlust steht in Bauern und in deutscher Schreibweise.
+    // Der Verlust steht in Bauern und in deutscher Zahlschreibweise.
     expect(satz).toContain("1,2");
-    expect(satz).toContain("Sf3");
+    expect(satz).toContain("Nf3");
   });
 
   it("behauptet kein Motiv, dem die Felder fehlen", () => {
@@ -120,7 +120,7 @@ describe("Erklärung eines Zuges", () => {
         },
       }
     );
-    expect(satz).toBe("Lxe5 schlägt einen Springer.");
+    expect(satz).toBe("Bxe5 schlägt einen Springer.");
   });
 
   it("bleibt beim Preis, wo sich nichts nachspielen ließ", () => {
@@ -160,8 +160,8 @@ describe("Begründung eines Zuges", () => {
       zeile({ ply: 25, motif: "none", motif_detail: JSON.stringify({ reply: "Nxe4" }) }),
       { t: de(), locale: "de" }
     );
-    // In deutscher Notation · dieselbe Sprache wie die Oberfläche.
-    expect(satz).toContain("Sxe4");
+    // In englischem SAN · dieselbe Schreibweise wie überall in der App.
+    expect(satz).toContain("Nxe4");
   });
 
   it("wiederholt die Widerlegung nicht, die das Motiv schon nennt", () => {
@@ -204,11 +204,11 @@ describe("Anmerkung zu einem Zug", () => {
     );
     // Das Urteil steht für sich · ohne Rechnung dahinter.
     expect(text).toContain("Ungenauigkeit");
-    // Die Fortsetzung des Gegners, mit Zugzahlen und in deutscher Notation.
-    expect(text).toContain("4...Lg4 5.Le2 Sd4");
+    // Die Fortsetzung des Gegners, mit Zugzahlen und in englischem SAN.
+    expect(text).toContain("4...Bg4 5.Be2 Nd4");
     // Und die Linie, die es besser gemacht hätte.
-    expect(text).toContain("4.Se2 Lg4 5.0–0");
-    expect(text).toContain("Se2");
+    expect(text).toContain("4.Ne2 Bg4 5.0–0");
+    expect(text).toContain("Ne2");
   });
 
   it("nennt keine Bewertungszahlen mehr", () => {
@@ -227,7 +227,7 @@ describe("Anmerkung zu einem Zug", () => {
       umstand({ linieDanach: ["Bg4", "Be2", "Nd4", "Nxd4", "Bxe2", "Qxe2", "exd4"] })
     );
     // Fünf Halbzüge stehen da, der sechste nicht mehr.
-    expect(text).toContain("Sxd4");
+    expect(text).toContain("Nxd4");
     expect(text).not.toContain("Dxe2");
   });
 
@@ -238,7 +238,7 @@ describe("Anmerkung zu einem Zug", () => {
       zeile({ ply: 7, san: "d3", judgment: "inaccuracy", motif: "none" }),
       umstand({ besser: "Ne2" })
     );
-    expect(text).toContain("Besser war Se2");
+    expect(text).toContain("Besser war Ne2");
     expect(text).not.toContain("4.");
   });
 
@@ -281,7 +281,7 @@ describe("Anmerkung zu einem Zug", () => {
         },
       })
     );
-    expect(text).toContain("Dxa4+ schlägt einen Bauern mit Schach");
+    expect(text).toContain("Qxa4+ schlägt einen Bauern mit Schach");
     expect(text).toContain("gewinnt danach einen Turm");
   });
 
@@ -306,7 +306,7 @@ describe("Anmerkung zu einem Zug", () => {
       })
     );
     // Einmal im Motivsatz und kein zweites Mal daneben.
-    expect(text.match(/Lxb5/g)).toHaveLength(1);
+    expect(text.match(/Bxb5/g)).toHaveLength(1);
   });
 
   it("lässt die Notation der Fortsetzung fort, wo ein Satz sie schon erzählt", () => {
@@ -324,8 +324,8 @@ describe("Anmerkung zu einem Zug", () => {
         },
       })
     );
-    expect(text).toContain("Lxg4 schlägt einen Läufer");
-    expect(text).not.toContain("4...Lg4");
+    expect(text).toContain("Bxg4 schlägt einen Läufer");
+    expect(text).not.toContain("4...Bg4");
   });
 
   it("führt zu einem gutgeheißenen Zug die Hauptvariante weiter", () => {
@@ -341,7 +341,7 @@ describe("Anmerkung zu einem Zug", () => {
     // Der Motivsatz zum besten Zug · er nennt den Zug selbst.
     expect(text).toContain("h3");
     // Und die Linie, in der er steht.
-    expect(text).toContain("13.h3 Sd5 14.Se4");
+    expect(text).toContain("13.h3 Nd5 14.Ne4");
     // „Besser war" gibt es hier nicht · es gab nichts Besseres.
     expect(text).not.toContain("Besser");
   });
@@ -367,7 +367,7 @@ describe("Fazit der Partie", () => {
     const saetze = erklaereFazit(fazit, { t: de(), locale: "de" });
     expect(saetze).toHaveLength(3);
     expect(saetze[0]).toContain("84,2");
-    expect(saetze[1]).toContain("Sxe5");
+    expect(saetze[1]).toContain("Nxe5");
     expect(saetze[2]).toContain("Gabel");
   });
 

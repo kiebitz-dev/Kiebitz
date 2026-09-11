@@ -110,12 +110,13 @@ describe("Blatt des Starts", () => {
     expect(document.querySelector('[data-square="d4"] svg')).toBeNull();
   });
 
-  it("sets the notation in the language of the interface", () => {
+  it("sets the moves in English SAN, like the rest of the app", () => {
     show();
-    // „Nf3" ist englisches SAN · auf einem deutschen Blatt steht Sf3.
+    // Seit 1.4 heißt der Springer auch auf einem deutschen Blatt N · die
+    // Zugliste, das Buch und die PGN schreiben ihn ohnehin so.
     const satz = [...document.querySelectorAll(".notation")].map((n) => n.textContent).join(" ");
-    expect(satz).toContain("Sf3");
-    expect(satz).not.toContain("Nf3");
+    expect(satz).toContain("Nf3");
+    expect(satz).not.toContain("Sf3");
   });
 
   it("carries the verdict of the auto analysis next to the move", () => {

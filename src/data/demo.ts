@@ -149,7 +149,7 @@ export const games: Game[] = [
     opponent: "HansN_NotCheating", oppElo: 1330, myElo: 1295, result: "loss",
     opening: "Londoner System", eco: "D02", moves: 31, accuracy: 74.2, analyzed: true,
     tags: ["London", "Patzer"],
-    note: "Schon wieder gegen London verloren. Dringend Plan gegen Lf4-Aufbau erarbeiten!",
+    note: "Schon wieder gegen London verloren. Dringend Plan gegen Bf4-Aufbau erarbeiten!",
     sans: ["d4","d5","Bf4","Nf6","e3","c5","c3","Nc6","Nd2","e6"],
   },
   {
@@ -244,7 +244,7 @@ export const featuredGame = {
       san: "Nxe5",
       eval: 520,
       nag: "??",
-      comment: "Verliert eine Figur. Nach 18.Dd5+ gibt es keine Verteidigung von e5 und g8 zugleich.",
+      comment: "Verliert eine Figur. Nach 18.Qd5+ gibt es keine Verteidigung von e5 und g8 zugleich.",
       motif: "fork",
       motifDetail: JSON.stringify({
         best: "Qe7",
@@ -273,9 +273,9 @@ export const featuredGame = {
     { key: "verdict.turningPoint", params: { n: 17, san: "Nxe5" } },
   ]),
   pvLines: [
-    { eval: "+5,4", depth: 24, line: "20.Sf5 Dxg2+?? 21.Dxg2 · oder 20…Df7 21.Dxc7 mit Mehrfigur und Angriff" },
-    { eval: "+4,9", depth: 24, line: "20.Te3 Tf6 21.Dxc7 Taf8 22.De5 · Weiß konsolidiert mit Mehrfigur" },
-    { eval: "+4,1", depth: 23, line: "20.De3 e5 21.Sf5 Tf6 22.Dg3 · auch hier bleibt die Figur mehr" },
+    { eval: "+5,4", depth: 24, line: "20.Nf5 Qxg2+?? 21.Qxg2 · oder 20…Qf7 21.Qxc7 mit Mehrfigur und Angriff" },
+    { eval: "+4,9", depth: 24, line: "20.Re3 Rf6 21.Qxc7 Raf8 22.Qe5 · Weiß konsolidiert mit Mehrfigur" },
+    { eval: "+4,1", depth: 23, line: "20.Qe3 e5 21.Nf5 Rf6 22.Qg3 · auch hier bleibt die Figur mehr" },
   ],
 };
 
@@ -297,20 +297,20 @@ export const repertoire: { side: "Weiß" | "Schwarz"; nodes: RepNode[] }[] = [
         id: "w1", label: "Italienische Partie", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4"], due: 6, score: 92,
         children: [
           {
-            id: "w1a", label: "Giuoco Pianissimo (3…Lc5 4.c3)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d3"], due: 3, score: 88,
+            id: "w1a", label: "Giuoco Pianissimo (3…Bc5 4.c3)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d3"], due: 3, score: 88,
           },
           {
-            id: "w1b", label: "Zweispringerspiel (3…Sf6 4.d3)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d3"], due: 2, score: 79,
+            id: "w1b", label: "Zweispringerspiel (3…Nf6 4.d3)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d3"], due: 2, score: 79,
           },
           {
-            id: "w1c", label: "Ungarische Verteidigung (3…Le7)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Be7", "d4"], due: 1, score: 95,
+            id: "w1c", label: "Ungarische Verteidigung (3…Be7)", moveSeq: ["e4", "e5", "Nf3", "Nc6", "Bc4", "Be7", "d4"], due: 1, score: 95,
           },
         ],
       },
       {
         id: "w2", label: "Offener Sizilianer", moveSeq: ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3"], due: 5, score: 74,
         children: [
-          { id: "w2a", label: "Najdorf (5…a6 6.Le3)", moveSeq: ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6", "Be3"], due: 4, score: 68 },
+          { id: "w2a", label: "Najdorf (5…a6 6.Be3)", moveSeq: ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6", "Be3"], due: 4, score: 68 },
         ],
       },
     ],
@@ -324,7 +324,7 @@ export const repertoire: { side: "Weiß" | "Schwarz"; nodes: RepNode[] }[] = [
       {
         id: "b2", label: "Caro-Kann", moveSeq: ["e4", "c6", "d4", "d5"], due: 0, score: 91,
         children: [
-          { id: "b2a", label: "Vorstoßvariante (3.e5 Lf5)", moveSeq: ["e4", "c6", "d4", "d5", "e5", "Bf5"], due: 0, score: 87 },
+          { id: "b2a", label: "Vorstoßvariante (3.e5 Bf5)", moveSeq: ["e4", "c6", "d4", "d5", "e5", "Bf5"], due: 0, score: 87 },
         ],
       },
     ],

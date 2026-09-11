@@ -895,8 +895,6 @@ export const ar: Record<Key, string> = {
   "set.themeAutoOff": "مُعطَّل",
   "set.themeAutoSystem": "حسب النظام",
   "set.themeAutoTime": "حسب الوقت",
-  "set.themeOverridden": "المطبَّق الآن هو {theme}. التبديل التلقائي تولّى الاختيار.",
-  "set.themeAutoStop": "إيقاف التبديل",
   "set.themeNight": "مظهر الليل",
   "set.themeNightFrom": "من",
   "set.themeNightTo": "إلى",

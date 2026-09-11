@@ -895,8 +895,6 @@ export const hi: Record<Key, string> = {
   "set.themeAutoOff": "बंद",
   "set.themeAutoSystem": "सिस्टम के अनुसार",
   "set.themeAutoTime": "समय के अनुसार",
-  "set.themeOverridden": "अभी {theme} लागू है। स्वचालित बदलाव ने चुनाव अपने हाथ में ले लिया है।",
-  "set.themeAutoStop": "बदलाव बंद करें",
   "set.themeNight": "रात की थीम",
   "set.themeNightFrom": "से",
   "set.themeNightTo": "तक",

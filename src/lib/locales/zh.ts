@@ -895,8 +895,6 @@ export const zh: Record<Key, string> = {
   "set.themeAutoOff": "关闭",
   "set.themeAutoSystem": "跟随系统",
   "set.themeAutoTime": "按时间",
-  "set.themeOverridden": "当前生效的是 {theme}，自动切换已接管了选择。",
-  "set.themeAutoStop": "关闭自动切换",
   "set.themeNight": "夜间主题",
   "set.themeNightFrom": "从",
   "set.themeNightTo": "至",
