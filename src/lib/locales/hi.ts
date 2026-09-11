@@ -1861,6 +1861,7 @@ export const hi: Record<Key, string> = {
   "blatt.severityNote": "गंभीरता कोई अंक नहीं, क्रम है: यह बताती है कि कौन-सा निष्कर्ष पहले आता है।",
   "blatt.curvesNote": "दो राशियाँ, दो चित्र: प्रतिशत में सटीकता और प्रति सौ चालों में भूलें अलग पैमानों पर हैं, इसलिए वे एक अक्ष साझा नहीं करतीं।",
   "blatt.monthsNote": "मासिक मान",
+  "blatt.weeksNote": "साप्ताहिक मान",
   "blatt.inTheDatabase": "डेटाबेस में",
   "blatt.analysedShort": "{p} % विश्लेषित",
   "blatt.gamesN": "{n} बाज़ियाँ",

@@ -1890,6 +1890,7 @@ export const de = {
   "blatt.severityNote": "Die Schwere ist keine Note, sondern eine Rangordnung: Sie sagt, welcher Befund zuerst dran ist.",
   "blatt.curvesNote": "Zwei Größen, zwei Bilder: Genauigkeit in Prozent und Patzer je hundert Züge haben verschiedene Skalen und teilen sich deshalb keine Achse.",
   "blatt.monthsNote": "Monatswerte",
+  "blatt.weeksNote": "Wochenwerte",
   "blatt.inTheDatabase": "in der Datenbank",
   "blatt.analysedShort": "{p} % analysiert",
   "blatt.gamesN": "{n} Partien",

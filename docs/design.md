@@ -34,7 +34,11 @@ Its rules:
 - **A printed diagram, not a board.** Hairline frame, coordinates outside,
   caption underneath. A print (dashboard, game entry, repertoire position) uses
   the muted square colours; a board that is actually played on (analysis,
-  endgames, puzzles) keeps the theme's squares. `src/components/blatt/Diagramm.tsx`
+  endgames, puzzles) keeps the theme's squares. A print can still be played on
+  — the repertoire's book position takes a move and opens the variation builder
+  with it — and it stays a print while doing so: same muted squares, and the
+  selection, the targets and the captures are marked with a frame, a dot and a
+  ring rather than coloured squares. `src/components/blatt/Diagramm.tsx`
 - **Hairlines, not card borders.** A section is a heading with a rule under it,
   not a box. Nothing is nested in a panel that a rule can separate.
 - **A register, not a nav bar.** Chapter left, dotted leader, number right; the
@@ -80,6 +84,24 @@ Its rules:
   the open line and under the pointer, their space always reserved so the dotted
   leader does not jump; ←/→ page through the moves of the open variation, ↑/↓
   go to the next one.
+
+  A third sweep, in 1.4, closed what was left. The weekly report existed only
+  as an icon in the ordinary page head, and a column title has no room for an
+  icon button — so the mode simply had no retrospective at all. It is the same
+  dialog now, with the report inside it set as a page of the book
+  (`pages/blatt/Wochenblatt.tsx`), and the way to it sits at the foot of the
+  week column, where that section ends. The repertoire's book position took
+  a move but dropped it: playing one on the ordinary board opens the builder
+  seeded with exactly that move, and in the mode nothing happened. A print can
+  be a handle — that is the same rule the game rows follow — so `Diagramm` now
+  takes tap-tap and drag when a page hands it a `zug`, and marks with a frame,
+  a dot and a ring instead of filled squares. And five reports of the Insights
+  tabs were only in the ordinary version: the short report and the key moment
+  on the overview, the context at the foot of strength, the format
+  recommendation above the format table, the played openings, the training
+  balance with its lag, the puzzle history and the hit rate by hour. Each of
+  them is a question the mode stopped answering; each is set the way the mode
+  sets things, and none of them is a new number.
 
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template

@@ -17,6 +17,13 @@
  *
  * Gerechnet wird hier nichts, was die gewöhnliche Fassung nicht auch rechnet ·
  * dieselben Felder aus derselben Tiefenauswertung.
+ *
+ * Der Kontext am Fuß — gegen wen, in welchem Tempo, über welche Länge — stand
+ * lange nur drüben. Er ist dreimal dieselbe Frage („wo stehe ich besser als im
+ * Schnitt?"), und deshalb dreimal dieselbe Bahnenreihe mit der 50-%-Marke,
+ * nebeneinander und über die ganze Breite. Er steht hier und nicht auf dem
+ * Muster-Blatt, weil er drüben hier steht: Der Modus ändert den Satz und nicht,
+ * in welchem Kapitel eine Auskunft zu finden ist.
  */
 import { Bahn, Bahnkopf, Blatttabelle, Fussnote, Kennzahlen, Rubrik } from "../../../components/blatt/Satz";
 import { useI18n, type Key } from "../../../lib/i18n";
@@ -462,6 +469,91 @@ export default function StrengthBlatt({
     </div>
   );
 
+  /**
+   * Eine Spalte des Kontexts · Bahnen mit der 50-%-Marke, sonst nichts.
+   *
+   * `rechts` trägt die Genauigkeit, wo es eine gibt · bei der Partielänge ist
+   * sie die zweite Hälfte der Auskunft, und eine zweite Bahn dafür wäre eine
+   * zweite Größe auf einer fremden Skala.
+   */
+  const kontextspalte = (
+    titel: string,
+    zeilen: { name: string; games: number; wert: number; genau?: number | null }[]
+  ) => (
+    <div className="min-w-0 flex-1">
+      {/* Jede Spalte sagt selbst, was in ihr steht · eine Fußnote unter drei
+          Spalten gehörte zu keiner von ihnen. */}
+      <Bahnkopf
+        was={titel}
+        wert={t("ins.scoreRate")}
+        rechts={zeilen[0]?.genau === undefined ? undefined : t("ins.accuracyShort")}
+        breite={mobile ? 112 : 124}
+        wertBreite={52}
+      />
+      {zeilen.map((zeile, index) => (
+        <Bahn
+          key={zeile.name}
+          name={zeile.name}
+          neben={t("blatt.gamesN", { n: deInt(zeile.games) })}
+          wert={zeile.wert}
+          anzeige={zeile.games === 0 ? "—" : `${de(zeile.wert)} %`}
+          rechts={
+            zeile.genau === undefined
+              ? undefined
+              : zeile.genau == null
+                ? "—"
+                : `${de(zeile.genau)} %`
+          }
+          marke={50}
+          markeFarbe="var(--color-ink3)"
+          breite={mobile ? 112 : 124}
+          wertBreite={52}
+          hoehe={30}
+          letzte={index === zeilen.length - 1}
+        />
+      ))}
+    </div>
+  );
+
+  const kontext =
+    (live.byOppStrength.length > 0 ||
+      live.byTimeControl.length > 0 ||
+      live.byLength.length > 0) && (
+      <div>
+        <Rubrik weg={t("ins.stContextSummary")}>{t("ins.stContextTitle")}</Rubrik>
+        <div className={mobile ? "flex flex-col gap-5" : "flex gap-9"}>
+          {live.byOppStrength.length > 0 &&
+            kontextspalte(
+              t("ins.oppStrengthTitle"),
+              live.byOppStrength.map((eimer) => ({
+                name: eimer.bucket,
+                games: eimer.games,
+                wert: eimer.winRate,
+              }))
+            )}
+          {live.byTimeControl.length > 0 &&
+            kontextspalte(
+              t("ins.timeControlTitle"),
+              live.byTimeControl.map((eimer) => ({
+                name: eimer.tc,
+                games: eimer.games,
+                wert: eimer.winRate,
+              }))
+            )}
+          {live.byLength.length > 0 &&
+            kontextspalte(
+              t("ins.lengthTitle"),
+              live.byLength.map((eimer) => ({
+                name: eimer.bucket,
+                games: eimer.games,
+                wert: eimer.scorePct,
+                genau: eimer.accuracy,
+              }))
+            )}
+        </div>
+      </div>
+    );
+
   if (mobile) {
     return (
       <div className="flex flex-col gap-6">
@@ -471,12 +563,13 @@ export default function StrengthBlatt({
         {vergleich}
         {anatomie}
         {endspiele}
+        {kontext}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-6">
       {kopf}
       <div className="flex min-h-0 flex-1 gap-9">
         <div className="flex w-[404px] flex-none flex-col gap-6">
@@ -489,6 +582,9 @@ export default function StrengthBlatt({
           {anatomie}
         </div>
       </div>
+      {/* Drei Spalten über die ganze Breite · in einer der beiden Spalten
+          oben stünden die Beschriftungen abgeschnitten da. */}
+      {kontext}
     </div>
   );
 }

@@ -18,7 +18,7 @@
  * Schriftfarbe, und die Zahl steht in der Zelle.
  */
 import { Fragment } from "react";
-import { Bahn, Blatttabelle, Figur, Fussnote, Kennzahlen, Kurve, Rubrik } from "../../../components/blatt/Satz";
+import { Bahn, Figur, Fussnote, Kennzahlen, Kurve, Rubrik } from "../../../components/blatt/Satz";
 import { useI18n } from "../../../lib/i18n";
 import { de, deInt } from "../../../lib/format";
 import type { DeepInsights } from "../../../lib/insights";
@@ -40,6 +40,10 @@ export default function PatternsBlatt({
   const letzte = sessions.by_index[sessions.by_index.length - 1];
   const rest = 100 - sessions.damage.worst3_pct;
   const monate = live.resultTrend.filter((punkt) => punkt.games > 0);
+  /** Der stärkste Wochentag · dieselbe Auswahl wie in der Kachel drüben. */
+  const besterTag = [...live.byWeekday]
+    .filter((tag) => tag.games > 0)
+    .sort((a, b) => b.scorePct - a.scorePct)[0];
   const punktequote = monate.map((punkt) => punkt.scorePct);
   const spanne = { breite: mobile ? 96 : 96, wertBreite: 52 };
 
@@ -188,6 +192,20 @@ export default function PatternsBlatt({
         markeFarbe="var(--color-ink3)"
         breite={mobile ? 140 : 148}
         hoehe={34}
+      />
+      {/* Die Erholung gehört auf dieselbe Skala wie das Nachsetzen: Beide
+          Zeilen beantworten „wie spielst du nach einer Niederlage?" · in der
+          gewöhnlichen Fassung steht sie als eigene Kachel oben und damit
+          getrennt von der Frage, zu der sie gehört. */}
+      <Bahn
+        name={t("ins.bounceBack")}
+        neben={t("ins.afterLoss", { n: deInt(live.bounceBack.games) })}
+        wert={live.bounceBack.scorePct}
+        anzeige={live.bounceBack.games === 0 ? "—" : `${de(live.bounceBack.scorePct)} %`}
+        marke={50}
+        markeFarbe="var(--color-ink3)"
+        breite={mobile ? 140 : 148}
+        hoehe={34}
         letzte
       />
       <Fussnote>{t("ins.paRequeueNote")}</Fussnote>
@@ -251,7 +269,18 @@ export default function PatternsBlatt({
   // Wochentag und Tageszeit · zwei Bahnenreihen und darunter die Wärmekarte.
   const rhythmus = (live.byWeekday.length > 0 || live.byTimeSlot.length > 0) && (
     <div>
-      <Rubrik weg={t("ins.paRhythmSummary")}>{t("ins.paRhythmTitle")}</Rubrik>
+      {/* Die Kernaussage der Rubrik ist der beste Wochentag · dieselbe Zahl,
+          die drüben als Kachel oben steht, hier über den Bahnen, aus denen
+          sie kommt. */}
+      <Rubrik
+        weg={
+          besterTag
+            ? `${besterTag.day} · ${t("ins.scoreByDay")}`
+            : t("ins.paRhythmSummary")
+        }
+      >
+        {t("ins.paRhythmTitle")}
+      </Rubrik>
       <div className={mobile ? "flex flex-col gap-5" : "flex gap-9"}>
         <div className="min-w-0 flex-1">
           <div className="blatt-feld text-ink3">{t("ins.weekdayPerformance")}</div>
@@ -299,27 +328,6 @@ export default function PatternsBlatt({
     </div>
   );
 
-  const laenge = live.byLength.length > 0 && (
-    <div>
-      <Rubrik>{t("ins.lengthTitle")}</Rubrik>
-      <Blatttabelle
-        hoehe={26}
-        spalten={[
-          { label: t("ins.lengthTitle") },
-          { label: t("ins.games"), breite: 60, rechts: true, zahl: true, blass: true },
-          { label: t("ins.scoreRate"), breite: 62, rechts: true, zahl: true },
-          { label: t("ins.accuracyShort"), breite: 74, rechts: true, zahl: true, blass: true },
-        ]}
-        zeilen={live.byLength.map((eintrag) => [
-          eintrag.bucket,
-          deInt(eintrag.games),
-          `${de(eintrag.scorePct)} %`,
-          eintrag.accuracy == null ? "—" : `${de(eintrag.accuracy)} %`,
-        ])}
-      />
-    </div>
-  );
-
   if (mobile) {
     return (
       <div className="flex flex-col gap-6">
@@ -330,7 +338,6 @@ export default function PatternsBlatt({
         {schaden}
         {verlauf}
         {rhythmus}
-        {laenge}
       </div>
     );
   }
@@ -342,7 +349,6 @@ export default function PatternsBlatt({
         <div className="flex w-[404px] flex-none flex-col gap-6">
           {sitzungskurve}
           {schaden}
-          {laenge}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {tilt}

@@ -14,6 +14,14 @@
  * Sie stehen nicht in der Tiefenauswertung, sondern werden erst beim Öffnen
  * des Reiters am Buch entlanggerechnet · deshalb dieselbe Bedingung wie dort
  * (nur am Rechner, nur mit angelegtem Repertoire).
+ *
+ * Familien und gespielte Eröffnungen sind zwei verschiedene Fragen und
+ * standen deshalb schon drüben als zwei Abschnitte: Die Familie ist die
+ * Trainingseinheit („Sizilianisch"), der gespielte Name ist das, was in den
+ * Partien steht („Sicilian Defense: Alapin, 2…d5"). Das Verzeichnis der
+ * gespielten Namen fehlte hier lange — mit ihm ist der Reiter wieder
+ * vollständig. Es kommt aus derselben Auswertung wie drüben (`live`), nicht
+ * aus einer eigenen Rechnung.
  */
 import { useEffect, useState } from "react";
 import {
@@ -30,16 +38,20 @@ import { useI18n } from "../../../lib/i18n";
 import { de, deInt } from "../../../lib/format";
 import { repGaps, type RepGap } from "../../../lib/repertoire";
 import type { DeepInsights, OpeningFamily } from "../../../lib/insights";
+import type { LiveInsights } from "../../../lib/stats";
 import Reiterkopf from "./Reiterkopf";
 
 export default function OpeningsBlatt({
   mobile,
   deep,
+  live,
   desktop,
   onOpenRepertoire,
 }: {
   mobile: boolean;
   deep: DeepInsights;
+  /** Die gespielten Eröffnungsnamen · dieselbe Quelle wie drüben. */
+  live: LiveInsights;
   desktop: boolean;
   onOpenRepertoire: () => void;
 }) {
@@ -297,6 +309,36 @@ export default function OpeningsBlatt({
     );
   };
 
+  /**
+   * Die gespielten Eröffnungen · Bahnen mit der 50-%-Marke.
+   *
+   * Die gewöhnliche Fassung färbt die Balken über und unter 50 %; im Blatt
+   * steht der Strich auf der Bahn und sagt dasselbe, ohne eine zweite Farbe
+   * einzuführen. Die Namen kommen ungekürzt aus der Partie und stehen deshalb
+   * im Buchsatz kursiv, wie jeder Eröffnungsname in diesem Modus.
+   */
+  const gespielt = live.openings.length > 0 && (
+    <div>
+      <Rubrik weg={t("ins.opPlayedSummary")}>{t("ins.openingsTitle")}</Rubrik>
+      {live.openings.map((eroeffnung, index) => (
+        <Bahn
+          key={eroeffnung.name}
+          name={<span className="buch italic text-[13.5px]">{eroeffnung.name}</span>}
+          neben={t("blatt.gamesN", { n: deInt(eroeffnung.games) })}
+          wert={eroeffnung.win}
+          anzeige={`${de(eroeffnung.win)} %`}
+          marke={50}
+          markeFarbe="var(--color-ink3)"
+          breite={mobile ? 118 : 152}
+          wertBreite={52}
+          hoehe={32}
+          letzte={index === live.openings.length - 1}
+        />
+      ))}
+      <Fussnote>{t("ins.winRate")}</Fussnote>
+    </div>
+  );
+
   const akte = openings.families.length > 0 && (
     <div>
       <Rubrik weg={t("ins.opTableSummary")}>{t("ins.openingTableTitle")}</Rubrik>
@@ -384,6 +426,7 @@ export default function OpeningsBlatt({
         {abweichung}
         {familienGruppe("white")}
         {familienGruppe("black")}
+        {gespielt}
         {wackelig}
         {luecken}
         {akte}
@@ -404,6 +447,7 @@ export default function OpeningsBlatt({
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {familienGruppe("white")}
           {familienGruppe("black")}
+          {gespielt}
           {luecken}
           {akte}
         </div>

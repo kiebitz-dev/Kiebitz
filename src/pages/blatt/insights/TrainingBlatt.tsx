@@ -14,9 +14,29 @@
  * Marken auf einer Bahn, dazwischen die Strecke, rechts die Veränderung.
  * „63,2 → 84,2" liest sich als Bewegung; zwei Balken nebeneinander täten das
  * nicht.
+ *
+ * ── Die Trainingsbilanz ────────────────────────────────────────────────────
+ *
+ * Last je Woche, die Patzerquote daneben und der Vergleich zwischen starken
+ * und schwachen Wochen standen lange nur in der gewöhnlichen Fassung. Das war
+ * derselbe Fehler wie beim fehlenden Wochenplan auf dem Trainingsblatt: drei
+ * Auskünfte, die der Modus gekostet hat, statt sie neu zu setzen.
+ *
+ * Sie holt dieses Blatt selbst, wie es die gewöhnliche Fassung tut: Die
+ * Wochenlast steht nicht in der Tiefenauswertung, sondern wird beim Öffnen des
+ * Reiters aus dem Trainingsprogramm gerechnet · deshalb dieselbe Bedingung
+ * dort wie hier (nur am Rechner).
+ *
+ * Gesetzt ist sie nach derselben Regel wie das Aufkommen darüber: gestapelte
+ * Balken oben, Kurve darunter, eine gemeinsame Zeitachse — und nicht beides in
+ * einem Bild mit zwei Achsen. Der Nachlauf ist kein Kachelpaar, sondern zwei
+ * Bahnen auf einer Skala; nur so ist zu sehen, wie weit die beiden Zahlen
+ * auseinanderliegen.
  */
+import { useEffect, useState } from "react";
 import {
   Bahn,
+  Bahnkopf,
   Blatttabelle,
   Figur,
   Fussnote,
@@ -24,10 +44,13 @@ import {
   Kurve,
   Rubrik,
 } from "../../../components/blatt/Satz";
-import { useI18n } from "../../../lib/i18n";
-import { de, deInt } from "../../../lib/format";
+import { useI18n, type Key } from "../../../lib/i18n";
+import { dateLocale, de, deInt } from "../../../lib/format";
+import { isoWeek } from "../../../lib/dates";
 import { themeLabel, type PuzzleInsights } from "../../../lib/puzzles";
-import type { DeepInsights } from "../../../lib/insights";
+import { studyMetrics, type DeepInsights, type MetricWindow } from "../../../lib/insights";
+import { AREAS, AREA_COLOR, AREA_KEY, trainingProgram } from "../../../lib/study";
+import { lagComparison, weeklyLoad, type WeekLoad } from "../../../lib/balance";
 import Reiterkopf from "./Reiterkopf";
 
 /** Eine Lernkurve · zwei Marken auf einer Bahn, dazwischen die Strecke. */
@@ -99,12 +122,183 @@ function Lernbahn({
   );
 }
 
+/**
+ * Die Trainingsbilanz · Last je Woche, Leitkennzahl und Nachlauf.
+ *
+ * Sie lädt eigenständig nach, weil `deep_insights` diese Daten nicht
+ * mitbringt · genau wie die gewöhnliche Fassung (siehe `Balance` in
+ * pages/insights/Training.tsx). Dieselbe Abfrage, dieselbe Rechnung, anderer
+ * Satz.
+ */
+function Bilanz({ mobile }: { mobile: boolean }) {
+  const { t } = useI18n();
+  const [wochen, setWochen] = useState<WeekLoad[]>([]);
+  const [fenster, setFenster] = useState<MetricWindow[]>([]);
+
+  useEffect(() => {
+    let abgebrochen = false;
+    trainingProgram(180)
+      .then(async (programm) => {
+        if (abgebrochen) return;
+        const last = weeklyLoad(programm.days);
+        setWochen(last);
+        // Ein Fenster je Woche in einem Aufruf · der Backend-Befehl geht die
+        // Datenbank sonst mehrfach durch.
+        const specs = last.map((woche) => ({ from_ts: woche.from_ts, to_ts: woche.to_ts }));
+        if (specs.length === 0) return;
+        const gemessen = await studyMetrics(specs).catch(() => [] as MetricWindow[]);
+        if (abgebrochen || gemessen.length !== specs.length) return;
+        setFenster(gemessen);
+      })
+      .catch(() => {});
+    return () => {
+      abgebrochen = true;
+    };
+  }, []);
+
+  if (wochen.length === 0) return null;
+
+  // Die Leitkennzahl der Verlaufskurve: die Patzerrate reagiert am schnellsten
+  // von allem, was über Partien messbar ist.
+  const kennzahl = "blunders_per100";
+  const werte = wochen.map(
+    (_, index) => fenster[index]?.metrics.find((eintrag) => eintrag.key === kennzahl) ?? null
+  );
+  const kurve = werte
+    .map((eintrag) => (eintrag?.n ? eintrag.value : null))
+    .filter((wert): wert is number => wert != null);
+  const maxLast = Math.max(1, ...wochen.map((woche) => woche.total));
+  const nachlauf = lagComparison(wochen, fenster, kennzahl);
+  // Beide Zahlen auf einer Skala · sonst sagen zwei Bahnen nebeneinander
+  // nichts über ihren Abstand.
+  const maxNachlauf = nachlauf ? Math.max(nachlauf.high, nachlauf.low, 0.1) : 1;
+
+  const last = (
+    <div>
+      <Rubrik weg={t("ins.trLoadSummary")}>{t("ins.trLoadTitle")}</Rubrik>
+      <div className="mt-2.5">
+        <div className="blatt-feld text-ink3">{t("ins.trLoadMinutes")}</div>
+        {/* Gestapelte Wochenbalken mit 2-px-Fuge · ohne die verschwimmen fünf
+            Bereiche zu einem Klotz (siehe StudyBlatt). */}
+        <div className="mt-1.5 flex h-[62px] items-end gap-[3px] border-b border-ink">
+          {wochen.map((woche) => (
+            <span
+              key={woche.from_ts}
+              title={`${t("ins.trWeek")}${isoWeek(new Date(woche.from_ts * 1000))} · ${t(
+                "plan.minutes",
+                { m: deInt(woche.total) }
+              )}`}
+              className="flex min-w-0 flex-1 flex-col justify-end"
+            >
+              {AREAS.map((bereich) =>
+                woche[bereich] > 0 ? (
+                  <span
+                    key={bereich}
+                    className="mt-[2px] block"
+                    style={{
+                      height: `${((woche[bereich] / maxLast) * 56).toFixed(1)}px`,
+                      background: AREA_COLOR[bereich],
+                    }}
+                  />
+                ) : null
+              )}
+            </span>
+          ))}
+        </div>
+        {/* Die Legende steht als Zeile und nicht als Kasten neben dem Bild. */}
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          {AREAS.map((bereich) => (
+            <span key={bereich} className="flex items-center gap-1.5 text-[10.5px] text-ink3">
+              <span
+                aria-hidden
+                className="inline-block h-[8px] w-[8px] flex-none"
+                style={{ background: AREA_COLOR[bereich] }}
+              />
+              {t(AREA_KEY[bereich])}
+            </span>
+          ))}
+        </div>
+      </div>
+      {kurve.length > 1 && (
+        <Figur
+          titel={t(`metric.${kennzahl}` as Key)}
+          rechts={de(kurve[kurve.length - 1])}
+          links={de(kurve[0])}
+          unten={t("blatt.weeksNote")}
+        >
+          <Kurve werte={kurve} breite={380} hoehe={34} farbe="var(--color-loss)" />
+        </Figur>
+      )}
+      <Fussnote>{t("ins.trLoadNote")}</Fussnote>
+    </div>
+  );
+
+  const verzoegert = (
+    <div>
+      <Rubrik weg={t("ins.trLagSummary")}>{t("ins.trLagTitle")}</Rubrik>
+      {nachlauf ? (
+        <>
+          <Bahnkopf
+            was={t(`metric.${nachlauf.metricKey}` as Key)}
+            wert={t("ins.trLagTitle")}
+            breite={mobile ? 118 : 138}
+            wertBreite={54}
+          />
+          {/* Zwei Bahnen auf einer Skala · welche die bessere ist, sagt die
+              Farbe der Ziffer und nicht ihre Größe: Bei der Patzerquote
+              gewinnt die kleinere. */}
+          {[
+            { name: t("ins.trLagHigh"), wert: nachlauf.high },
+            { name: t("ins.trLagLow"), wert: nachlauf.low },
+          ].map((seite, index, alle) => {
+            const besser = nachlauf.lowerIsBetter
+              ? seite.wert <= Math.min(nachlauf.high, nachlauf.low)
+              : seite.wert >= Math.max(nachlauf.high, nachlauf.low);
+            return (
+              <Bahn
+                key={seite.name}
+                name={seite.name}
+                wert={seite.wert}
+                max={maxNachlauf}
+                anzeige={de(seite.wert)}
+                farbe={besser ? "var(--color-win)" : "var(--color-ink2)"}
+                breite={mobile ? 118 : 138}
+                wertBreite={54}
+                hoehe={34}
+                letzte={index === alle.length - 1}
+              />
+            );
+          })}
+          <Fussnote>
+            {t(`metric.${nachlauf.metricKey}` as Key)}
+            {" · "}
+            {t("ins.trAttemptsNote", { n: deInt(nachlauf.highWeeks + nachlauf.lowWeeks) })}
+          </Fussnote>
+          <Fussnote>{t("ins.trLagNote")}</Fussnote>
+        </>
+      ) : (
+        <div className="py-3 text-[12.5px] leading-[1.6] text-ink3">{t("ins.trLagNeed")}</div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {last}
+      {verzoegert}
+    </>
+  );
+}
+
 export default function TrainingBlatt({
   mobile,
+  desktop,
   deep,
   puzzles,
 }: {
   mobile: boolean;
+  /** Die Trainingsbilanz gibt es nur am Rechner · dort liegt das Programm. */
+  desktop: boolean;
   deep: DeepInsights;
   puzzles: PuzzleInsights | null;
 }) {
@@ -124,6 +318,23 @@ export default function TrainingBlatt({
   const maxVersuche = Math.max(1, ...versuche);
   const trefferquote = (eintrag: { attempts: number; solved: number }) =>
     eintrag.attempts === 0 ? 0 : (eintrag.solved / eintrag.attempts) * 100;
+
+  // Nur Stunden, in denen überhaupt etwas versucht wurde · leere Zeilen sind
+  // keine Auskunft (dieselbe Auswahl wie in der gewöhnlichen Fassung).
+  const stunden = (puzzles?.by_hour ?? []).filter((fenster) => fenster.attempts > 0);
+  const maxTag = Math.max(1, ...(puzzles?.timeline ?? []).map((punkt) => punkt.attempts));
+  /** Erster und letzter Tag des Verlaufs · die Beschriftung der Zeitachse. */
+  const tagesspanne = (() => {
+    const punkte = puzzles?.timeline ?? [];
+    if (punkte.length === 0) return "";
+    const tag = (ts: number) =>
+      new Date(ts * 1000).toLocaleDateString(dateLocale(), {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "UTC",
+      });
+    return `${tag(punkte[0].day_ts)} – ${tag(punkte[punkte.length - 1].day_ts)}`;
+  })();
 
   const kopf = (
     <Reiterkopf
@@ -380,6 +591,105 @@ export default function TrainingBlatt({
     </div>
   );
 
+  /**
+   * Der Puzzle-Verlauf · Rating als Kurve, Versuche als Balken.
+   *
+   * In der gewöhnlichen Fassung stehen beide Bilder nebeneinander; hier
+   * untereinander auf derselben Zeitachse. Der Balken ist zweigeteilt:
+   * unten gelöst, oben gescheitert — dieselbe Stapelung wie drüben, nur ohne
+   * Legende, weil die beiden Beschriftungen an den Rändern stehen.
+   */
+  const verlauf = puzzles != null && puzzles.timeline.length > 1 && (
+    <div>
+      <Rubrik
+        weg={t("ins.trPuzzleSummary", {
+          r: deInt(puzzles.personal_rating),
+          b: deInt(puzzles.best_run),
+        })}
+      >
+        {t("ins.pzRatingTrend")}
+      </Rubrik>
+      <Figur
+        titel={t("ins.pzRating")}
+        rechts={deInt(puzzles.timeline[puzzles.timeline.length - 1].rating)}
+        links={deInt(puzzles.timeline[0].rating)}
+        unten={tagesspanne}
+      >
+        <Kurve
+          werte={puzzles.timeline.map((punkt) => punkt.rating)}
+          breite={380}
+          hoehe={44}
+          farbe="var(--color-accent)"
+        />
+      </Figur>
+      <div className="mt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="blatt-feld text-ink3">{t("ins.pzSolved")}</span>
+          <span className="blatt-feld text-ink3">{t("ins.pzFailed")}</span>
+        </div>
+        <div className="mt-1.5 flex h-[52px] items-end gap-[2px] border-b border-ink">
+          {puzzles.timeline.map((punkt) => (
+            <span
+              key={punkt.day_ts}
+              title={t("ins.pzSolvedOfAttempts", {
+                s: deInt(punkt.solved),
+                n: deInt(punkt.attempts),
+              })}
+              className="flex min-w-0 flex-1 flex-col justify-end"
+            >
+              <span
+                className="block"
+                style={{
+                  height: `${(((punkt.attempts - punkt.solved) / maxTag) * 48).toFixed(1)}px`,
+                  background: "var(--color-loss)",
+                }}
+              />
+              <span
+                className="block"
+                style={{
+                  height: `${((punkt.solved / maxTag) * 48).toFixed(1)}px`,
+                  background: "var(--color-win)",
+                }}
+              />
+            </span>
+          ))}
+        </div>
+        <div className="blatt-zahl mt-1 flex justify-between text-[10px] text-ink3">
+          <span>{tagesspanne}</span>
+          <span>{t("ins.pzAttempts")}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  /**
+   * Trefferquote nach Tageszeit · je Stunde eine Bahn mit der 50-%-Marke.
+   *
+   * Die gewöhnliche Fassung färbt die Balken nach gut/mittel/schlecht; im
+   * Blatt sagt das der Strich auf der Bahn, und die Zeilen beschriften sich
+   * selbst. Stunden ohne Versuch stehen gar nicht erst da.
+   */
+  const tageszeit = puzzles != null && stunden.length > 0 && (
+    <div>
+      <Rubrik weg={t("ins.pzByHourNote")}>{t("ins.pzByHour")}</Rubrik>
+      {stunden.map((fenster, index) => (
+        <Bahn
+          key={fenster.key}
+          name={`${deInt(fenster.key)} ${t("ins.oclock")}`}
+          neben={t("ins.trAttemptsNote", { n: deInt(fenster.attempts) })}
+          wert={trefferquote(fenster)}
+          anzeige={`${de(trefferquote(fenster))} %`}
+          marke={50}
+          markeFarbe="var(--color-ink3)"
+          breite={mobile ? 72 : 78}
+          wertBreite={58}
+          hoehe={30}
+          letzte={index === stunden.length - 1}
+        />
+      ))}
+    </div>
+  );
+
   const motivtabelle = puzzles != null && puzzles.themes.length > 0 && (
     <div>
       <Rubrik weg={t("ins.trThemeTableSummary", { n: deInt(puzzles.themes.length) })}>
@@ -405,6 +715,9 @@ export default function TrainingBlatt({
     </div>
   );
 
+  // Die Bilanz kommt nach · sie lädt eigenständig und gibt es nur am Rechner.
+  const bilanz = desktop && <Bilanz mobile={mobile} />;
+
   if (mobile) {
     return (
       <div className="flex flex-col gap-6">
@@ -412,7 +725,10 @@ export default function TrainingBlatt({
         {koennen}
         {wirkung}
         {aufkommen}
+        {bilanz}
+        {verlauf}
         {motive}
+        {tageszeit}
         {motivtabelle}
       </div>
     );
@@ -425,9 +741,12 @@ export default function TrainingBlatt({
         <div className="flex w-[404px] flex-none flex-col gap-6">
           {koennen}
           {aufkommen}
+          {verlauf}
+          {tageszeit}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {wirkung}
+          {bilanz}
           {motive}
           {motivtabelle}
         </div>

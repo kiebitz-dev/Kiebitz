@@ -1322,6 +1322,10 @@ function LiveRepertoire() {
               setMode("add");
             }}
             onTraining={() => setMode(dueTotal > 0 || freeTotal === 0 ? "train" : "free")}
+            // Derselbe Griff wie unter dem Brett der gewöhnlichen Fassung ·
+            // ein Zug auf der Buchstellung öffnet den Baukasten mit genau
+            // diesem Zug als erstem Schritt.
+            onZugSpielen={startFromMove}
           />
         </Suspense>
       ) : compact ? (

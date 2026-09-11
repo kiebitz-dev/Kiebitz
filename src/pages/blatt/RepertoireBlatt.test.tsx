@@ -5,6 +5,11 @@
  * ist: Eine Variante lässt sich verschieben, ändern und wegnehmen, und mit den
  * Pfeiltasten blättert man durch ihre Züge. Die Griffe stehen dabei nicht an
  * jeder Zeile im Weg — sichtbar sind sie an der aufgeschlagenen.
+ *
+ * Dazu der Zug auf der Buchstellung: Der Abdruck in der Mitte ist ein Griff,
+ * und ein Zug darauf führt in den Baukasten. Geprüft wird die Geste, nicht das
+ * Aussehen — tippen–tippen wie am Brett, und ein unzulässiges Ziel darf nichts
+ * auslösen.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -157,6 +162,56 @@ describe("Das Buch im Diagramm-Modus", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "rep.deleteLine Giuoco Pianissimo" }));
     expect(onLoeschen).toHaveBeenCalledWith("white:2");
+  });
+
+  it("gibt einen Zug auf der Buchstellung nach oben", () => {
+    const onZugSpielen = vi.fn(() => true);
+    const { container } = zeichne({ onZugSpielen });
+    const feld = (name: string) =>
+      container.querySelector(`[data-square="${name}"]`) as HTMLElement;
+
+    // Tippen–tippen · erst die eigene Figur, dann das Ziel. Die Felder liegen
+    // im Raster; das Diagramm rechnet das Feld aus dem Maß, deshalb bekommt
+    // die Fläche hier eines gesetzt.
+    const flaeche = container.querySelector(".kiebitz-board") as HTMLElement;
+    flaeche.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 800, right: 800, bottom: 800 }) as DOMRect;
+
+    // e2 · Spalte 4, Reihe 6 aus Weißsicht · Mitte des Feldes.
+    fireEvent.pointerDown(flaeche, { clientX: 450, clientY: 650 });
+    fireEvent.pointerUp(flaeche, { clientX: 450, clientY: 650 });
+    // e4 · zwei Reihen höher.
+    fireEvent.pointerDown(flaeche, { clientX: 450, clientY: 450 });
+    fireEvent.pointerUp(flaeche, { clientX: 450, clientY: 450 });
+    expect(onZugSpielen).toHaveBeenCalledWith("e2", "e4");
+    expect(feld("e2")).toBeTruthy();
+  });
+
+  it("nimmt denselben Zug auch gezogen an", () => {
+    const onZugSpielen = vi.fn(() => true);
+    const { container } = zeichne({ onZugSpielen });
+    const flaeche = container.querySelector(".kiebitz-board") as HTMLElement;
+    flaeche.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 800, right: 800, bottom: 800 }) as DOMRect;
+
+    // Von e2 nach e4 in einem Zug · über der Schwelle ist es ein Ziehen und
+    // kein Tippen, und dann geht der Zug direkt nach oben.
+    fireEvent.pointerDown(flaeche, { clientX: 450, clientY: 650 });
+    fireEvent.pointerMove(flaeche, { clientX: 450, clientY: 560 });
+    fireEvent.pointerMove(flaeche, { clientX: 450, clientY: 450 });
+    fireEvent.pointerUp(flaeche, { clientX: 450, clientY: 450 });
+    expect(onZugSpielen).toHaveBeenCalledWith("e2", "e4");
+  });
+
+  it("bleibt ein Abdruck, wo die Seite keinen Zug annimmt", () => {
+    const { container } = zeichne({ onZugSpielen: undefined });
+    const flaeche = container.querySelector(".kiebitz-board") as HTMLElement;
+    flaeche.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 800, right: 800, bottom: 800 }) as DOMRect;
+    // Ohne Handler passiert nichts · und vor allem wirft nichts.
+    fireEvent.pointerDown(flaeche, { clientX: 450, clientY: 650 });
+    fireEvent.pointerUp(flaeche, { clientX: 450, clientY: 650 });
+    expect(screen.queryByText("rep.playToAdd")).toBeNull();
   });
 
   it("lässt die Griffe fort, wo die Seite keine Handhabe gibt", () => {

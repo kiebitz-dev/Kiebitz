@@ -22,7 +22,7 @@
  *
  * Gerechnet wird nichts hier · siehe `lib/weekly.ts`.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, CalendarCheck, Check, Minus, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useI18n, type Key } from "../lib/i18n";
@@ -42,6 +42,16 @@ import {
   type WeeklyReport,
 } from "../lib/weekly";
 import { PlusLock } from "./PlusLock";
+import { useDiagramMode } from "../lib/diagramMode";
+
+/**
+ * Der Bericht im Buchsatz · er lädt erst, wenn der Modus an ist.
+ *
+ * Der Dialog selbst bleibt für beide derselbe: Er trägt Portal, Escape,
+ * Android-Zurück und die Plus-Sperre, und das sind Bedienteile und keine
+ * Auskunft. Was sich neu setzen lässt, ist der Bericht darin.
+ */
+const Wochenblatt = lazy(() => import("../pages/blatt/Wochenblatt"));
 
 /** Überschrift eines der drei Blöcke · sie tragen den Bericht, nicht die Zahlen. */
 function BlockTitle({ children }: { children: ReactNode }) {
@@ -225,6 +235,7 @@ export default function WeeklyReportDialog({
 }) {
   const { locale, t } = useI18n();
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const diagram = useDiagramMode();
 
   /**
    * Wohin der Bericht gezeichnet wird.
@@ -501,12 +512,19 @@ export default function WeeklyReportDialog({
         // Mobil an der Höhe des gepolsterten Schleiers und nicht an `vh`: `vh`
         // zählt die Systemleisten mit, die der Zuschlag oben gerade frei
         // gehalten hat, und der Bericht liefe wieder darunter.
-        className={`flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50 ${
-          mobile ? "max-h-full" : "max-h-[92vh]"
-        }`}
+        // Im Blatt hat auch ein Dialog keine gerundeten Ecken und keinen
+        // Schlagschatten · dieselbe Behandlung wie das Mobilblatt (siehe
+        // `blatt` in components/MobileSheet.tsx).
+        className={`flex w-full flex-col overflow-hidden border border-line2 bg-panel ${
+          diagram ? "max-w-2xl" : "max-w-xl rounded-2xl shadow-2xl shadow-black/50"
+        } ${mobile ? "max-h-full" : "max-h-[92vh]"}`}
       >
         <div className={`flex items-start gap-3 border-b border-line py-3.5 ${mobile ? "px-3.5" : "px-5"}`}>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+          <span
+            className={`flex size-9 shrink-0 items-center justify-center text-accent ${
+              diagram ? "border border-line2" : "rounded-xl bg-accent-soft"
+            }`}
+          >
             <CalendarCheck size={18} />
           </span>
           <div className="min-w-0 flex-1">
@@ -535,6 +553,15 @@ export default function WeeklyReportDialog({
             Sperre und funktioniert weiter. */}
         <div className={`min-h-0 flex-1 overflow-auto py-4 ${mobile ? "px-3.5" : "px-5"}`}>
           <PlusLock feature="adaptive_plan" label={t("wk.plusLabel")}>
+            {diagram ? (
+              // Derselbe Bericht, im Buchsatz · siehe pages/blatt/Wochenblatt.
+              // Bis er da ist, steht nichts an seiner Stelle: Ein Blatt, auf
+              // dem „wird geladen“ steht, ist kein Blatt.
+              <Suspense fallback={null}>
+                <Wochenblatt report={report} onAction={onAction} />
+              </Suspense>
+            ) : (
+              <>
             {/* Der Aufmacher trägt die Farbe der Woche an der Kante · grün,
                 wenn die deutlichste Bewegung in die gewünschte Richtung ging,
                 rot, wenn nicht, grau in einer Woche ohne Aussage. Der Satz
@@ -568,6 +595,8 @@ export default function WeeklyReportDialog({
               {effect}
               {nextBlock}
             </div>
+              </>
+            )}
           </PlusLock>
         </div>
       </div>

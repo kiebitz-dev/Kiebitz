@@ -25,6 +25,14 @@
  * paar Sätze über das eigene Spielen, nummeriert und auf Linien. Ein Rat ist
  * kein Messwert und bekommt deshalb auch keine Zahl, die einer wäre — die
  * Ziffer davor zählt nur mit.
+ *
+ * Am Fuß der Wochenspalte steht der Weg zum Wochenbericht. Er hat im Modus
+ * lange gefehlt, weil er in der gewöhnlichen Fassung als Symbol im Seitenkopf
+ * sitzt und der Kopf hier ein Kolumnentitel ist — ein Symbolknopf hat darin
+ * keinen Platz. Er gehört aber ans Ende genau dieses Abschnitts: Die Spalte
+ * sagt, was die Woche gebracht hat, und der Bericht sagt es ausführlich. Dass
+ * er ungelesen ist, steht ausgeschrieben in seiner Beschriftung und nicht als
+ * leuchtender Punkt · im Buchsatz ist das die Form, die es dafür gibt.
  */
 import type { Area } from "../../lib/study";
 import type { ReactNode } from "react";
@@ -35,6 +43,7 @@ import {
   Formularkopf,
   Kolumnentitel,
   Rubrik,
+  Weg,
   type Feld,
 } from "../../components/blatt/Satz";
 import Plantafel from "./Plantafel";
@@ -87,6 +96,14 @@ export interface StudyBlattProps {
   hygiene: string[];
   /** Der Satz, der dasteht, solange die Sitzungen keine Muster hergeben. */
   hygieneLeer: string;
+  /**
+   * Der Weg zum Wochenbericht · ohne ihn steht am Fuß der Spalte nichts.
+   * Es gibt ihn nur, wenn beide Messfenster vorliegen (siehe `weekly` in
+   * pages/Study.tsx).
+   */
+  onBericht?: () => void;
+  /** Ist der Bericht dieser Woche noch ungelesen? Steht in der Beschriftung. */
+  berichtUngelesen?: boolean;
   /** Der Wochenvorschlag und der Griff, der ihn anfordert. */
   vorschlag?: ReactNode;
   vorschlagAktion?: ReactNode;
@@ -108,6 +125,8 @@ export default function StudyBlatt({
   aufgaben,
   hygiene,
   hygieneLeer,
+  onBericht,
+  berichtUngelesen = false,
   vorschlag,
   vorschlagAktion,
   suggestMinutes,
@@ -229,7 +248,16 @@ export default function StudyBlatt({
       <div className="mt-1.5 text-[10.5px] text-ink3">{t("blatt.barVsGoal")}</div>
       {letzte28}
       <div className="flex-1" />
-      <div className="mt-3 border-t border-line pt-2.5 text-[10.5px] leading-[1.6] text-ink3">
+      {onBericht && (
+        <div className="mt-3 border-t border-line">
+          <Weg onClick={onBericht}>{t(berichtUngelesen ? "wk.openNew" : "wk.open")}</Weg>
+        </div>
+      )}
+      <div
+        className={`text-[10.5px] leading-[1.6] text-ink3 ${
+          onBericht ? "border-t border-line pt-2.5" : "mt-3 border-t border-line pt-2.5"
+        }`}
+      >
         {t("blatt.measuredNote")}
       </div>
     </div>

@@ -17,6 +17,17 @@
  * die Übersicht; die fünf Tiefenreiter stehen in `blatt/insights/` und bringen
  * ihren eigenen Formularkopf mit — Kolumnentitel und Register sind Hülle und
  * bleiben hier.
+ *
+ * Zwei Dinge der gewöhnlichen Übersicht haben hier lange gefehlt und stehen
+ * jetzt am Fuß der linken Spalte:
+ *
+ * · Der Kurzbericht — zwei Sätze über die ganze Historie und die drei Zahlen,
+ *   auf denen sie stehen. Im Buchsatz ist das der Vorspann des Kapitels und
+ *   keine Karte.
+ * · Der Schlüsselmoment — die eine Stelle, an der eine Partie gekippt ist,
+ *   mit dem Weg dorthin. Er ist der einzige Griff auf diesem Blatt, der aus
+ *   den Insights hinausführt, und deshalb steht er als Weg und nicht als
+ *   Knopf.
  */
 import type { ReactNode } from "react";
 import { Sparkles } from "lucide-react";
@@ -29,6 +40,7 @@ import {
   Kolumnentitel,
   Kurve,
   Rubrik,
+  Weg,
   type Feld,
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
@@ -45,7 +57,8 @@ export interface DnaZeile {
 export interface Kennzahl {
   name: string;
   wert: string;
-  neben: string;
+  /** Woraus die Zahl kommt · fehlt, wo die Beschriftung schon alles sagt. */
+  neben?: string;
 }
 
 export interface InsightsReiter {
@@ -68,6 +81,17 @@ export interface InsightsBlattProps {
   dnaNote: string;
   /** Woraus das gerechnet ist · vier Kennzahlen nebeneinander. */
   grundlage: Kennzahl[];
+  /**
+   * Der Kurzbericht · zwei Sätze über die ganze Historie, darunter die drei
+   * Zahlen, auf denen sie stehen. `fokus` fehlt, solange keine Achse als
+   * schwächste feststeht.
+   */
+  bericht: { text: string; fokus: string | null; deckung: Kennzahl[] };
+  /**
+   * Der Schlüsselmoment · ohne ihn steht die Rubrik nicht da. Eine leere
+   * Rubrik ist kein Abschnitt.
+   */
+  schluesselmoment?: { text: string; weg: string; onWeg: () => void };
   /** Genauigkeit nach Phase · drei Kennzahlen. */
   phasen: Kennzahl[];
   /** Die Befunde · als fertige Blöcke von der Seite. */
@@ -118,6 +142,8 @@ export default function InsightsBlatt({
   dna,
   dnaNote,
   grundlage,
+  bericht,
+  schluesselmoment,
   phasen,
   befunde,
   genauigkeit,
@@ -262,6 +288,23 @@ export default function InsightsBlatt({
         <div>
           <Rubrik>{t("blatt.accuracyByPhase")}</Rubrik>
           <Kennzahlen zahlen={phasen} gross={17} />
+        </div>
+      )}
+      <div>
+        <Rubrik>{t("ins.reportTitle")}</Rubrik>
+        <div className="buch mt-2 text-[14px] leading-[1.55] text-ink2">{bericht.text}</div>
+        {bericht.fokus && (
+          <div className="buch mt-1.5 text-[13.5px] leading-[1.55] text-ink3">{bericht.fokus}</div>
+        )}
+        {bericht.deckung.length > 0 && <Kennzahlen zahlen={bericht.deckung} gross={15} />}
+      </div>
+      {schluesselmoment && (
+        <div>
+          <Rubrik>{t("ins.spotlightTitle")}</Rubrik>
+          <div className="mt-2 text-[12.5px] leading-[1.6] text-ink3">
+            {schluesselmoment.text}
+          </div>
+          <Weg onClick={schluesselmoment.onWeg}>{schluesselmoment.weg}</Weg>
         </div>
       )}
     </div>

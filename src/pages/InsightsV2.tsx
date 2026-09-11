@@ -291,6 +291,47 @@ export default function InsightsV2({
               neben: t("ins.scoreRate"),
             },
           ]}
+          // Der Kurzbericht · dieselben zwei Sätze und dieselben drei Zahlen
+          // wie in der gewöhnlichen Übersicht (siehe insights/Overview.tsx).
+          bericht={{
+            text: t("ins.reportBody", {
+              n: deInt(live.totalGames),
+              p: de(live.scoreRate),
+              acc: live.avgAccuracy == null ? "—" : de(live.avgAccuracy),
+            }),
+            fokus: (() => {
+              const schwach = weakestAxis(dna);
+              return schwach
+                ? t("ins.reportFocus", {
+                    axis: t(`dna.${schwach.key}` as Key),
+                    v: schwach.value,
+                    detail: schwach.detail,
+                  })
+                : null;
+            })(),
+            deckung: [
+              { name: t("ins.covAnalyzed"), wert: deInt(deepData.coverage.analyzed) },
+              { name: t("ins.covClocks"), wert: deInt(deepData.coverage.with_clocks) },
+              { name: t("ins.covMoves"), wert: deInt(deepData.coverage.moves_judged) },
+            ],
+          }}
+          schluesselmoment={
+            deepData.spotlight
+              ? {
+                  text: t(
+                    deepData.spotlight.kind === "missed_win"
+                      ? "ins.spotlightMissedWin"
+                      : "ins.spotlightCollapse",
+                    {
+                      m: de(deepData.spotlight.magnitude),
+                      move: Math.ceil(deepData.spotlight.ply / 2),
+                    }
+                  ),
+                  weg: t("ins.spotlightOpen"),
+                  onWeg: () => openAnalysis(deepData.spotlight!.game_id),
+                }
+              : undefined
+          }
           phasen={live.phaseAccuracy.map((phase) => ({
             name: t(`ins.phase.${phase.phase}` as Key),
             wert: phase.accuracy != null ? `${de(phase.accuracy)} %` : "—",
@@ -343,6 +384,7 @@ export default function InsightsV2({
                   <OpeningsBlatt
                     mobile={mobile}
                     deep={deepData}
+                    live={live}
                     desktop={desktop}
                     onOpenRepertoire={toRepertoire}
                   />
@@ -351,7 +393,12 @@ export default function InsightsV2({
                   <PatternsBlatt mobile={mobile} deep={deepData} live={live} />
                 )}
                 {tab === "training" && (
-                  <TrainingBlatt mobile={mobile} deep={deepData} puzzles={puzzleData} />
+                  <TrainingBlatt
+                    mobile={mobile}
+                    desktop={desktop}
+                    deep={deepData}
+                    puzzles={puzzleData}
+                  />
                 )}
               </PlusLock>
             )

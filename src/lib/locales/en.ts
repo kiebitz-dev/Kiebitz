@@ -1868,6 +1868,7 @@ export const en: Record<Key, string> = {
   "blatt.severityNote": "Severity is not a grade but a ranking: it says which finding comes first.",
   "blatt.curvesNote": "Two quantities, two pictures: accuracy in percent and blunders per hundred moves have different scales and therefore share no axis.",
   "blatt.monthsNote": "monthly values",
+  "blatt.weeksNote": "weekly values",
   "blatt.inTheDatabase": "in the database",
   "blatt.analysedShort": "{p} % analysed",
   "blatt.gamesN": "{n} games",

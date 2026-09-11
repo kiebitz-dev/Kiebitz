@@ -1861,6 +1861,7 @@ export const fr: Record<Key, string> = {
   "blatt.severityNote": "La gravité n’est pas une note mais un classement : elle dit quel constat passe en premier.",
   "blatt.curvesNote": "Deux grandeurs, deux images : la précision en pourcent et les gaffes pour cent coups ont des échelles différentes et ne partagent donc pas d’axe.",
   "blatt.monthsNote": "valeurs mensuelles",
+  "blatt.weeksNote": "valeurs hebdomadaires",
   "blatt.inTheDatabase": "dans la base",
   "blatt.analysedShort": "{p} % analysées",
   "blatt.gamesN": "{n} parties",

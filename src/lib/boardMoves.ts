@@ -39,26 +39,44 @@ export function lastMoveStyles(
   return { [move.from]: lastMoveStyle, [move.to]: lastMoveStyle };
 }
 
+/** Ein legales Zielfeld · ob dort etwas steht, entscheidet über die Marke. */
+export interface MoveTarget {
+  to: string;
+  capture: boolean;
+}
+
 /**
- * Stile für alle legalen Zielfelder von `from`. Leeres Objekt, wenn dort kein
- * eigener Stein steht oder die Stellung ungültig ist.
+ * Alle legalen Zielfelder von `from`. Leere Liste, wenn dort kein eigener
+ * Stein steht oder die Stellung ungültig ist.
+ *
+ * Die Felder selbst und nicht ihre Stile: Das Brett malt Punkte und Ringe,
+ * das gedruckte Diagramm malt sie anders (siehe components/blatt/Diagramm),
+ * und beide sollen dieselben Felder markieren.
  */
-export function moveTargetStyles(fen: string, from: string | null): Record<string, CSSProperties> {
-  if (!from) return {};
+export function moveTargets(fen: string, from: string | null): MoveTarget[] {
+  if (!from) return [];
   try {
     const chess = new Chess(fen);
     const moves = chess.moves({ square: from as never, verbose: true }) as {
       to: string;
       captured?: string;
     }[];
-    const styles: Record<string, CSSProperties> = {};
-    for (const move of moves) {
-      styles[move.to] = move.captured ? captureStyle : quietStyle;
-    }
-    return styles;
+    return moves.map((move) => ({ to: move.to, capture: move.captured != null }));
   } catch {
-    return {};
+    return [];
   }
+}
+
+/**
+ * Stile für alle legalen Zielfelder von `from`. Leeres Objekt, wenn dort kein
+ * eigener Stein steht oder die Stellung ungültig ist.
+ */
+export function moveTargetStyles(fen: string, from: string | null): Record<string, CSSProperties> {
+  const styles: Record<string, CSSProperties> = {};
+  for (const target of moveTargets(fen, from)) {
+    styles[target.to] = target.capture ? captureStyle : quietStyle;
+  }
+  return styles;
 }
 
 /** Gewähltes Feld plus seine Zielfelder · der übliche Aufruf in den Seiten. */

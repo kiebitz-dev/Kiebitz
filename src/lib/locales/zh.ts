@@ -1861,6 +1861,7 @@ export const zh: Record<Key, string> = {
   "blatt.severityNote": "严重度不是分数而是排序：它说明哪个发现最先处理。",
   "blatt.curvesNote": "两个量、两幅图：百分比准确率与每百着失误数量纲不同，因此不共用坐标轴。",
   "blatt.monthsNote": "逐月数值",
+  "blatt.weeksNote": "逐周数值",
   "blatt.inTheDatabase": "在数据库中",
   "blatt.analysedShort": "已分析 {p} %",
   "blatt.gamesN": "{n} 局",

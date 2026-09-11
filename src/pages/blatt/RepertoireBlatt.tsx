@@ -7,9 +7,18 @@
  * Punktlinie, und rechts die Zahl. Die Zahl ist bewusst nicht die Länge der
  * Variante, sondern was heute fällig ist; die Fußnote sagt das.
  *
- * In der Mitte die Buchstellung als gedrucktes Diagramm — nicht als Brett,
- * denn hier wird gelesen, nicht gezogen. Erst im Training wird daraus ein
- * Brett mit den Feldfarben des Themas.
+ * In der Mitte die Buchstellung als gedrucktes Diagramm — die gedämpften
+ * Feldfarben der Nebenbretter, nicht die des Themas. Ein Brett wird daraus
+ * erst im Training.
+ *
+ * Gezogen wird trotzdem daran, und zwar aus demselben Grund wie drüben: Ein
+ * Zug auf der Buchstellung ist eine Absichtserklärung — hier soll etwas ins
+ * Buch —, und statt ihn verpuffen zu lassen, öffnet er den Baukasten mit genau
+ * diesem Zug als erstem Schritt. In der gewöhnlichen Fassung gibt es das seit
+ * jeher (`startFromMove` in pages/Repertoire.tsx); im Modus fehlte es, und das
+ * war wieder keine Satzentscheidung, sondern ein Weg weniger. Beide Gesten
+ * sind da, tippen–tippen und ziehen; der Abdruck markiert dabei gedruckt, mit
+ * Rahmen, Punkt und Ring (siehe components/blatt/Diagramm).
  *
  * ── Was am Verzeichnis zu tun ist ──────────────────────────────────────────
  *
@@ -44,6 +53,7 @@ import {
 } from "react";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
+import { moveTargets, useBoardSelection } from "../../lib/boardMoves";
 import {
   Balken,
   Ergebniskasten,
@@ -118,6 +128,12 @@ export interface RepertoireBlattProps {
   onLoeschen?: (key: string) => void;
   onHinzufuegen: () => void;
   onTraining: () => void;
+  /**
+   * Ein Zug auf der Buchstellung · liefert zurück, ob er zulässig war. Ohne
+   * ihn bleibt das Diagramm ein reiner Abdruck (die Web-Vorschau etwa hat
+   * keinen Baukasten, in den er führen könnte).
+   */
+  onZugSpielen?: (von: string, nach: string) => boolean;
 }
 
 /** Was gerade am Zeiger hängt · Teil, Herkunft, Ziel und der Weg dorthin. */
@@ -156,8 +172,13 @@ export default function RepertoireBlatt({
   onLoeschen,
   onHinzufuegen,
   onTraining,
+  onZugSpielen,
 }: RepertoireBlattProps) {
   const { t } = useI18n();
+  // Tippen–tippen liegt im selben Haken wie am Brett der gewöhnlichen Fassung
+  // · eine zweite Auswahllogik für dieselbe Geste gäbe es sonst zweimal.
+  const auswahl = useBoardSelection(fen, onZugSpielen ?? (() => false), onZugSpielen != null);
+  const ziele = onZugSpielen ? moveTargets(fen, auswahl.selected) : [];
   const knopfRefs = useRef(new Map<string, HTMLButtonElement>());
   const [ziehen, setZiehen] = useState<Ziehen | null>(null);
   const zeilenHoehe = mobile ? 46 : 44;
@@ -363,7 +384,21 @@ export default function RepertoireBlatt({
   // die Hülle gibt sie vor, und die Bildunterschrift folgt ihr.
   const diagrammBlock = (
     <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
-      <Diagramm fen={fen} orientation={seite} />
+      <Diagramm
+        fen={fen}
+        orientation={seite}
+        zug={
+          onZugSpielen
+            ? {
+                gewaehlt: auswahl.selected,
+                ziele: ziele.map((ziel) => ziel.to),
+                schlaege: ziele.filter((ziel) => ziel.capture).map((ziel) => ziel.to),
+                onFeld: auswahl.onSquareClick,
+                onZiehen: onZugSpielen,
+              }
+            : undefined
+        }
+      />
       <Bildunterschrift
         nummer={unterschrift[0]}
         zeilen={unterschrift.slice(1)}
@@ -372,6 +407,13 @@ export default function RepertoireBlatt({
           text: amZug === "white" ? t("sh.whiteToMove") : t("sh.blackToMove"),
         }}
       />
+      {/* Derselbe Satz wie unter dem Brett drüben · er ist der einzige
+          Hinweis darauf, dass der Abdruck hier ein Handgriff ist. */}
+      {onZugSpielen && (
+        <div className="mt-2.5 text-[11px] leading-[1.55] text-ink3" style={{ marginInlineStart: 15 }}>
+          {t("rep.playToAdd")}
+        </div>
+      )}
     </div>
   );
 

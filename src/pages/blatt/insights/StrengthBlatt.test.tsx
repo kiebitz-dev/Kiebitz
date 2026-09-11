@@ -26,6 +26,8 @@ import type { LiveInsights } from "../../../lib/stats";
 vi.mock("../../../lib/i18n", () => ({
   useI18n: () => ({ locale: "de", t: (key: string) => key }),
   useT: () => (key: string) => key,
+  // `tcLabel` übersetzt ohne Haken · die Formattabelle geht darüber.
+  translator: () => (key: string) => key,
 }));
 
 // Die Lückenliste holt sich das Blatt selbst · im Test antwortet niemand.
@@ -42,8 +44,12 @@ const live = {
   byWeekday: [],
   byTimeSlot: [],
   byLength: [],
+  byOppStrength: [],
+  byTimeControl: [],
+  openings: [],
   resultTrend: [],
   activity: { days: [], slots: [], values: [] },
+  bounceBack: { games: 0, scorePct: 0 },
 } as unknown as LiveInsights;
 
 describe("Stärke", () => {
@@ -85,6 +91,7 @@ describe("Eröffnungen", () => {
       <OpeningsBlatt
         mobile={false}
         deep={demoDeepInsights()}
+        live={live}
         desktop={false}
         onOpenRepertoire={vi.fn()}
       />
@@ -98,6 +105,7 @@ describe("Eröffnungen", () => {
       <OpeningsBlatt
         mobile={false}
         deep={demoDeepInsights()}
+        live={live}
         desktop={false}
         onOpenRepertoire={vi.fn()}
       />
@@ -128,7 +136,7 @@ describe("Zeit", () => {
 
 describe("Training", () => {
   it("kommt ohne Puzzle-Auswertung aus", () => {
-    render(<TrainingBlatt mobile={false} deep={demoDeepInsights()} puzzles={null} />);
+    render(<TrainingBlatt mobile={false} desktop={false} deep={demoDeepInsights()} puzzles={null} />);
     // Der Kopf steht, die Puzzle-Rubrik fällt weg.
     expect(screen.getByText("ins.pzRating")).toBeTruthy();
     expect(screen.queryByText("ins.tabPuzzles")).toBeNull();
@@ -136,7 +144,7 @@ describe("Training", () => {
 
   it("setzt die Lernkurve je Motiv, sobald es Puzzles gibt", () => {
     render(
-      <TrainingBlatt mobile={false} deep={demoDeepInsights()} puzzles={demoPuzzleInsights()} />
+      <TrainingBlatt mobile={false} desktop={false} deep={demoDeepInsights()} puzzles={demoPuzzleInsights()} />
     );
     expect(screen.getByText("ins.trThemeCurve")).toBeTruthy();
     expect(screen.getByText("ins.tabPuzzles")).toBeTruthy();
@@ -159,7 +167,7 @@ describe("Training", () => {
       },
     };
     const { container } = render(
-      <TrainingBlatt mobile={false} deep={luecke} puzzles={null} />
+      <TrainingBlatt mobile={false} desktop={false} deep={luecke} puzzles={null} />
     );
     expect(container.textContent).not.toMatch(/NaN|undefined|Infinity/);
   });

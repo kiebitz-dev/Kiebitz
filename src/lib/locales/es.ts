@@ -1861,6 +1861,7 @@ export const es: Record<Key, string> = {
   "blatt.severityNote": "La gravedad no es una nota sino un orden: dice qué hallazgo va primero.",
   "blatt.curvesNote": "Dos magnitudes, dos imágenes: la precisión en por ciento y los errores por cien jugadas tienen escalas distintas y por eso no comparten eje.",
   "blatt.monthsNote": "valores mensuales",
+  "blatt.weeksNote": "valores semanales",
   "blatt.inTheDatabase": "en la base de datos",
   "blatt.analysedShort": "{p} % analizadas",
   "blatt.gamesN": "{n} partidas",

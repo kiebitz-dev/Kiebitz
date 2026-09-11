@@ -1861,6 +1861,7 @@ export const ar: Record<Key, string> = {
   "blatt.severityNote": "الشدة ليست درجة بل ترتيب: تقول أي نتيجة تأتي أولًا.",
   "blatt.curvesNote": "كميتان وصورتان: الدقة بالنسبة المئوية والأخطاء لكل مئة نقلة لهما مقياسان مختلفان، لذا لا يتشاركان محورًا.",
   "blatt.monthsNote": "قيم شهرية",
+  "blatt.weeksNote": "قيم أسبوعية",
   "blatt.inTheDatabase": "في قاعدة البيانات",
   "blatt.analysedShort": "{p} % محلَّلة",
   "blatt.gamesN": "{n} مباريات",
