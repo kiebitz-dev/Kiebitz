@@ -409,8 +409,42 @@ function TrainerView({
     }
   };
 
+  /**
+   * Den Tipp holen · das zählt wie ein Fehlversuch.
+   *
+   * Vorher war der Tipp folgenlos: Er markierte das Ausgangsfeld des richtigen
+   * Zuges, und wer ihn nahm und dann zog, bekam denselben Ratinggewinn wie
+   * jemand, der die Aufgabe selbst gesehen hat. Damit maß das Puzzle-Rating
+   * nicht mehr die Fähigkeit, sondern die Bereitschaft, den Knopf zu drücken.
+   *
+   * Gebucht wird deshalb sofort und nicht erst beim Zug danach: Der Versuch
+   * ist in dem Augenblick entschieden, in dem die Hilfe angenommen wird — was
+   * danach noch auf dem Brett passiert, ändert daran nichts. `failedRef` sorgt
+   * wie beim falschen Zug dafür, dass genau ein Versuch je Aufgabe in die
+   * Datenbank geht, und dass am Ende „mit Hilfe gelöst" dasteht und nicht
+   * „Richtig".
+   */
+  const takeHint = () => {
+    setShowHint(true);
+    if (!puzzle || failedRef.current) return;
+    failedRef.current = true;
+    finish(false);
+  };
+
+  /**
+   * Die Lösung zeigen · ebenfalls ein Fehlversuch.
+   *
+   * Sie buchte bisher gar nichts, solange vorher kein falscher Zug kam: Eine
+   * so abgeschlossene Aufgabe tauchte in keiner Statistik auf, weder als
+   * gelöst noch als gescheitert. Das war das größere der beiden Löcher — der
+   * bequemste Weg war zugleich der folgenlose.
+   */
   const revealSolution = () => {
     if (!puzzle) return;
+    if (!failedRef.current) {
+      failedRef.current = true;
+      finish(false);
+    }
     const step = () => {
       if (idxRef.current >= puzzle.moves.length) {
         setStatus("solved");
@@ -699,7 +733,7 @@ function TrainerView({
       {actionShell(
         <span className="text-[13.5px] text-loss">{t("pz.wrong", { d: delta })}</span>,
         <>
-          <Button onClick={() => setShowHint(true)}>
+          <Button onClick={takeHint}>
             <Lightbulb size={15} /> {t("pz.hint")}
           </Button>
           <Button onClick={revealSolution}>
@@ -767,7 +801,7 @@ function TrainerView({
                   : t("pz.findBest")}
             </span>,
             status === "playing" && (
-              <Button onClick={() => setShowHint(true)}>
+              <Button onClick={takeHint}>
                 <Lightbulb size={15} /> {t("pz.hint")}
               </Button>
             )
@@ -873,7 +907,7 @@ function TrainerView({
           }
           brett={puzzleBoard("puzzle")}
           schalter={[
-            { label: t("pz.hint"), onClick: status === "playing" ? () => setShowHint(true) : undefined },
+            { label: t("pz.hint"), onClick: status === "playing" ? takeHint : undefined },
             { label: t("pz.solution"), onClick: status === "playing" || wrong ? revealSolution : undefined },
             { label: t("common.next"), betont: true, onClick: () => load() },
           ]}

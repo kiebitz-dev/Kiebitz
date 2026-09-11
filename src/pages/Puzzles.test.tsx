@@ -217,6 +217,65 @@ describe("Puzzle training", () => {
     expect(rows()).toHaveLength(4);
   });
 
+  /**
+   * Hilfe kostet · dieselbe Wertung wie ein falscher Zug.
+   *
+   * Die Zeilen unter dem Brett stehen alle vier im Baum und halten nur die
+   * Höhe frei (siehe `actionShell`); sichtbar ist immer eine. Für den Test ist
+   * das gleichgültig — geprüft wird, was der Griff auslöst, nicht welche Zeile
+   * ihn gerade trägt. Deshalb der erste Treffer und kein `getByRole`.
+   */
+  const griff = (name: string) => screen.getAllByRole("button", { name })[0];
+
+  /** Warten, bis die Aufgabe wirklich steht · vorher ist noch nichts zu holen. */
+  const bereit = async () => {
+    const brett = await screen.findByTestId("puzzle-board");
+    await waitFor(() => expect(brett.dataset.draggable).toBe("true"));
+  };
+
+  it("books a hint as a failed attempt, before the move that follows it", async () => {
+    render(<LocaleProvider><Puzzles /></LocaleProvider>);
+    await bereit();
+
+    fireEvent.click(griff("Tipp"));
+    // Der Versuch ist mit der Hilfe entschieden · gebucht wird sofort und
+    // nicht erst, wenn der Zug danach kommt.
+    await waitFor(() => expect(mocks.recordAttempt).toHaveBeenCalledWith("test-puzzle", false));
+
+    fireEvent.click(griff("play e4"));
+    // Der richtige Zug danach bucht nichts nach und macht aus dem Versuch
+    // keinen gelösten.
+    expect(mocks.recordAttempt).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAttempt).not.toHaveBeenCalledWith("test-puzzle", true);
+  });
+
+  it("books the revealed solution too, instead of counting nothing at all", async () => {
+    render(<LocaleProvider><Puzzles /></LocaleProvider>);
+    await bereit();
+
+    fireEvent.click(griff("Lösung"));
+    await waitFor(() => expect(mocks.recordAttempt).toHaveBeenCalledWith("test-puzzle", false));
+  });
+
+  it("leaves a puzzle solved without help at full value", async () => {
+    // Eine Aufgabe aus einem Zug · das Brett der Testumgebung kennt nur e2e4.
+    mocks.nextPuzzle.mockResolvedValue({
+      id: "one-mover",
+      fen: initialFen,
+      moves: ["e2e4"],
+      rating: 1500,
+      themes: ["fork"],
+      source: "own",
+      source_game_id: 1,
+      setup_plies: 0,
+    });
+    render(<LocaleProvider><Puzzles /></LocaleProvider>);
+    await bereit();
+
+    fireEvent.click(griff("play e4"));
+    await waitFor(() => expect(mocks.recordAttempt).toHaveBeenCalledWith("one-mover", true));
+  });
+
   it("keeps the theme covered until it is tapped", async () => {
     mocks.getSettings.mockResolvedValue({ locale: "de", puzzle_goal: 10, puzzle_hide_theme: true });
     mocks.nextPuzzle.mockResolvedValue({
