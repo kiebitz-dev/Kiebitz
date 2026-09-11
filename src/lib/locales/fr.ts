@@ -1587,8 +1587,6 @@ export const fr: Record<Key, string> = {
   "plan.hygieneSlot": "Entre {best} tu marques {p} %, entre {worst} seulement {o} %.",
   "plan.hygieneClock": "À partir du coup {m} tu tombes régulièrement en zeitnot ({p} % de tes coups).",
   "plan.ratingDelta": "{d} Elo",
-  "plan.ratingNoise": "dans le bruit",
-  "plan.ratingPools": "sur {n} pools",
   "plan.ratingExact": "Converti sur une échelle commune (points d'ancrage mesurés).",
   "plan.ratingApprox": "Converti sur une échelle commune · estimé pour cette cadence.",
   "plan.ratingWindow": "Mesuré sur les {d} derniers jours.",

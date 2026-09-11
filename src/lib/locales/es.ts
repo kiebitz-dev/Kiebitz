@@ -1587,8 +1587,6 @@ export const es: Record<Key, string> = {
   "plan.hygieneSlot": "Entre {best} puntúas un {p} %; entre {worst}, solo un {o} %.",
   "plan.hygieneClock": "A partir de la jugada {m} entras con regularidad en apuro de tiempo (el {p} % de tus jugadas).",
   "plan.ratingDelta": "{d} de elo",
-  "plan.ratingNoise": "dentro del ruido",
-  "plan.ratingPools": "en {n} grupos",
   "plan.ratingExact": "Convertido a una escala común (puntos de anclaje medidos).",
   "plan.ratingApprox": "Convertido a una escala común · estimado para este ritmo.",
   "plan.ratingWindow": "Medido sobre los últimos {d} días.",

@@ -1587,8 +1587,6 @@ export const ar: Record<Key, string> = {
   "plan.hygieneSlot": "بين {best} تحصد {p} %، وبين {worst} لا تحصد سوى {o} %.",
   "plan.hygieneClock": "من النقلة {m} فصاعدًا تقع بانتظام في ضيق الوقت ({p} % من نقلاتك).",
   "plan.ratingDelta": "{d} إيلو",
-  "plan.ratingNoise": "ضمن الضجيج",
-  "plan.ratingPools": "عبر {n} تجمّعات",
   "plan.ratingExact": "مُحوَّل إلى مقياس موحد (نقاط ارتكاز مقيسة).",
   "plan.ratingApprox": "مُحوَّل إلى مقياس موحد · مقدَّر لهذا النظام.",
   "plan.ratingWindow": "مقيس على آخر {d} يومًا.",

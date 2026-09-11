@@ -1587,8 +1587,6 @@ export const zh: Record<Key, string> = {
   "plan.hygieneSlot": "在{best}你得分 {p} %，在{worst}只有 {o} %。",
   "plan.hygieneClock": "从第 {m} 着起你经常陷入时间紧张（占你着法的 {p} %）。",
   "plan.ratingDelta": "{d} 分",
-  "plan.ratingNoise": "在噪声范围内",
-  "plan.ratingPools": "跨 {n} 个池",
   "plan.ratingExact": "已折算到统一标尺（实测锚点）。",
   "plan.ratingApprox": "已折算到统一标尺 · 该时限为估计值。",
   "plan.ratingWindow": "按最近 {d} 天测得。",

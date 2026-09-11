@@ -59,7 +59,7 @@ import {
   type Prescription,
   type TrainingPlan,
 } from "../lib/plan";
-import { measureRating, ratingNoise, type RatingEffect } from "../lib/effect";
+import { measureRating, type RatingEffect } from "../lib/effect";
 import { buildWeekBudget, lastWeekDeficit, weekStartOf, type WeekBudget } from "../lib/week";
 import {
   areaRuns,
@@ -944,6 +944,11 @@ export default function Study({
     const wochentage = (state?.program?.days ?? []).slice(-7);
     return (
       <Suspense fallback={<LeereSeite />}>
+        {/* Der Wochenbericht ist im Blatt derselbe Dialog wie drüben · nur
+            sein Inhalt ist neu gesetzt (siehe components/WeeklyReportDialog
+            und pages/blatt/Wochenblatt). Der Weg zu ihm steht am Fuß der
+            Wochenspalte, weil der Kolumnentitel keinen Symbolknopf trägt. */}
+        {weeklyDialog}
         <StudyBlatt
           mobile={mobile}
           desktop={desktop}
@@ -1028,6 +1033,8 @@ export default function Study({
             t(tip.key, localizeFindingParams(tip.params, t, locale))
           )}
           hygieneLeer={t("plan.hygieneEmpty")}
+          onBericht={weekly ? openReport : undefined}
+          berichtUngelesen={reportUnread}
           vorschlag={proposalBox}
           vorschlagAktion={proposalAction}
           suggestMinutes={suggestMinutes}
@@ -1059,21 +1066,21 @@ export default function Study({
             sähen die beiden Kennzahlen sonst auch nach Knöpfen aus.
 
             Mobil ist das dieselbe eine Zeile und nicht mehr zwei: Der Bericht
-            ist dort nur noch sein Symbol, die Leiste nimmt den Rest der Breite,
-            und wenn es eng wird, gibt der Zusatz nach („über 4 Pools"), nicht
-            die Zahl davor. Zwei Zeilen kosteten oben genau den Platz, den auf
-            dem Handy „Jetzt dran" braucht. */}
+            ist dort nur noch sein Symbol, die Leiste nimmt den Rest der Breite.
+            Zwei Zeilen kosteten oben genau den Platz, den auf dem Handy
+            „Jetzt dran" braucht.
+
+            Hinter der Zahl steht nichts mehr. Der Zusatz („über 4 Pools", „im
+            Rauschen") war das, was mobil als erstes abgeschnitten wurde, und ein
+            halber Satz beantwortet die Frage, die er beantworten soll, nicht.
+            Wie gemessen wurde, sagt weiterhin der Titel des Feldes. */}
         <div className={`flex items-center gap-2 ${mobile ? "w-full" : "flex-wrap"}`}>
         {weekly && <WeeklyReportButton unread={reportUnread} onClick={openReport} />}
         {(state?.rating || (data && data.streak_days > 0)) && (
-          <div
-            className={`flex items-stretch overflow-hidden rounded-lg border border-line bg-panel ${
-              mobile ? "min-w-0 flex-1" : ""
-            }`}
-          >
+          <div className="flex items-stretch overflow-hidden rounded-lg border border-line bg-panel">
             {state?.rating && (
               <div
-                className={`flex min-w-0 items-center text-[13px] ${
+                className={`flex items-center text-[13px] ${
                   mobile ? "gap-1.5 px-2.5 py-1.5" : "gap-2 px-3 py-1.5"
                 }`}
                 title={`${t(
@@ -1081,15 +1088,10 @@ export default function Study({
                 )} ${t("plan.ratingWindow", { d: deInt(state.window.days) })}`}
               >
                 <Gauge size={15} className="shrink-0 text-violet" />
-                <span className="shrink-0 font-medium tabular-nums">
+                <span className="font-medium tabular-nums">
                   {t("plan.ratingDelta", {
                     d: `${state.rating.delta > 0 ? "+" : ""}${deInt(state.rating.delta)}`,
                   })}
-                </span>
-                <span className={`min-w-0 truncate text-ink3 ${mobile ? "text-[12px]" : ""}`}>
-                  {Math.abs(state.rating.delta) <= ratingNoise(state.rating.games)
-                    ? t("plan.ratingNoise")
-                    : t("plan.ratingPools", { n: state.rating.pools })}
                 </span>
               </div>
             )}

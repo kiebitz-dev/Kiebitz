@@ -1587,8 +1587,6 @@ export const hi: Record<Key, string> = {
   "plan.hygieneSlot": "{best} के बीच आप {p} % अंक लेते हैं, {worst} के बीच केवल {o} %।",
   "plan.hygieneClock": "चाल {m} से आप नियमित रूप से समय-संकट में आते हैं (आपकी चालों का {p} %)।",
   "plan.ratingDelta": "{d} ईलो",
-  "plan.ratingNoise": "शोर के भीतर",
-  "plan.ratingPools": "{n} पूलों में",
   "plan.ratingExact": "एक साझा पैमाने पर बदला गया (मापे गए लंगर-बिंदु)।",
   "plan.ratingApprox": "एक साझा पैमाने पर बदला गया · इस प्रारूप के लिए अनुमानित।",
   "plan.ratingWindow": "पिछले {d} दिनों पर मापा गया।",

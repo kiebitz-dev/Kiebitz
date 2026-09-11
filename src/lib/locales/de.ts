@@ -1614,8 +1614,6 @@ export const de = {
   "plan.hygieneSlot": "Zwischen {best} Uhr spielst du {p} %, zwischen {worst} Uhr nur {o} %.",
   "plan.hygieneClock": "Ab Zug {m} gerätst du regelmäßig in Zeitnot ({p} % deiner Züge).",
   "plan.ratingDelta": "{d} Elo",
-  "plan.ratingNoise": "im Rauschen",
-  "plan.ratingPools": "über {n} Pools",
   "plan.ratingExact": "Auf eine gemeinsame Skala umgerechnet (gemessene Stützstellen).",
   "plan.ratingApprox": "Auf eine gemeinsame Skala umgerechnet · für dieses Format nur geschätzt.",
   "plan.ratingWindow": "Gemessen über die letzten {d} Tage.",

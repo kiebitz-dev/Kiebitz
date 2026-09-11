@@ -1596,8 +1596,6 @@ export const en: Record<Key, string> = {
   "plan.hygieneSlot": "Between {best} you score {p} %, between {worst} only {o} %.",
   "plan.hygieneClock": "From move {m} on you regularly run into time trouble ({p} % of your moves).",
   "plan.ratingDelta": "{d} Elo",
-  "plan.ratingNoise": "within the noise",
-  "plan.ratingPools": "across {n} pools",
   "plan.ratingExact": "Converted onto one common scale (measured anchor points).",
   "plan.ratingApprox": "Converted onto one common scale · estimated for this format.",
   "plan.ratingWindow": "Measured over the last {d} days.",
