@@ -623,6 +623,26 @@ function TrainerView({
    * Auf der Seite bleibt sie rechtsbündig: Dort schließt sie mit dem
    * Fokus-Griff an der Kante ab.
    */
+  /**
+   * Teilen und Fokus · die beiden Nebengriffe zum Brett.
+   *
+   * Sie stehen für sich, weil zwei Leisten sie tragen: die Verlaufsreihe der
+   * gewöhnlichen Fassung und die Haarlinienreihe des Blattes (`griffe` in
+   * pages/blatt/PuzzlesBlatt.tsx). Im Blatt fehlten sie bis 1.4 ganz — dort
+   * kam man weder an das Teilen noch an den Fokus heran, und das ist kein
+   * Satz mehr, sondern eine Fassung, die weniger kann.
+   *
+   * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
+   */
+  const nebengriffe = (inFocus: boolean) => (
+    <>
+      <Button onClick={openShare} title={t("sh.title")} disabled={!puzzle} compact>
+        <Share2 size={14} />
+      </Button>
+      {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+    </>
+  );
+
   const puzzleHistory = (inFocus: boolean) => (
     <div
       className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-line bg-panel px-3 py-2 ${
@@ -650,10 +670,7 @@ function TrainerView({
         <Button onClick={() => goToPly(lastPly)} title={t("pz.currentPosition")} compact>
           <ChevronLast size={14} />
         </Button>
-        <Button onClick={openShare} title={t("sh.title")} disabled={!puzzle} compact>
-          <Share2 size={14} />
-        </Button>
-        {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+        {nebengriffe(inFocus)}
       </div>
     </div>
   );
@@ -917,6 +934,7 @@ function TrainerView({
             { label: "›", titel: t("pz.nextPosition"), onClick: () => goToPly(viewPly + 1) },
             { label: "⏭", titel: t("pz.currentPosition"), onClick: () => goToPly(lastPly) },
           ]}
+          griffe={nebengriffe(false)}
           verlaufNote={t("blatt.historyNote")}
           heute={stats.today_attempts}
           ziel={goal}
@@ -929,6 +947,25 @@ function TrainerView({
           history={history}
           geloest={stats.solved}
         />
+        {/* Zwei Dialoge und kein Satz · sie gehören in beide Fassungen
+            unverändert. Bis 1.4 standen sie nur im `return` der gewöhnlichen
+            Fassung, und damit kostete der Modus zwei Wege. */}
+        {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
+        <FocusBoard
+          open={focused}
+          onClose={() => setFocused(false)}
+          title={t("pz.title")}
+          subtitle={puzzle ? `Rating ${puzzle.rating}` : undefined}
+          above={puzzleHead(true)}
+          below={
+            <>
+              {puzzleHistory(true)}
+              {puzzleActions(true)}
+            </>
+          }
+        >
+          {puzzleBoard("puzzle-focus")}
+        </FocusBoard>
       </Suspense>
     );
   }

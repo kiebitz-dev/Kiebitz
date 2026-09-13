@@ -582,9 +582,18 @@ export function Balken({
 /**
  * Eine Reihe gleichwertiger Schaltflächen unter dem Brett · Haarlinien oben
  * und unten, senkrechte Trennstriche dazwischen, 44 px hoch.
+ *
+ * `griffe` sind die Nebengriffe zum Brett — teilen, Fokus —, und sie stehen
+ * am Ende der Reihe statt in ihr: Sie sind keine gleichwertige fünfte
+ * Schaltfläche, sondern Zeichenknöpfe, die die Seite fertig hereinreicht.
+ * Dieselbe Bauart wie die Zählleiste in `pages/blatt/AnalysisBlatt.tsx` ·
+ * `.blatt-formular` nimmt den gewöhnlichen Knöpfen ihre Rundung und ihre
+ * Fläche, sodass sie in der Haarlinienreihe stehen können, ohne ein zweites
+ * Mal gebaut zu werden.
  */
 export function Schalterreihe({
   eintraege,
+  griffe,
 }: {
   eintraege: {
     label: ReactNode;
@@ -592,6 +601,7 @@ export function Schalterreihe({
     betont?: boolean;
     titel?: string;
   }[];
+  griffe?: ReactNode;
 }) {
   return (
     <div className="flex items-center border-y border-line">
@@ -609,6 +619,11 @@ export function Schalterreihe({
           {eintrag.label}
         </button>
       ))}
+      {griffe && (
+        <span className="blatt-formular flex h-11 flex-none items-center gap-1 border-s border-line px-1.5">
+          {griffe}
+        </span>
+      )}
     </div>
   );
 }

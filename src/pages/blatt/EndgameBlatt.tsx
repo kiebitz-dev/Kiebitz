@@ -62,6 +62,12 @@ export interface EndgameBlattProps {
   gemeistert: number;
   gesamt: number;
   schalter: { label: ReactNode; onClick?: () => void; betont?: boolean }[];
+  /**
+   * Die Nebengriffe zum Brett · teilen und der Fokus. Sie kommen fertig von
+   * der Seite herein, wie in der Analyse: Der Modus soll die beiden Wege nicht
+   * kosten, und ein zweites Mal gebaut gehören sie schon gar nicht.
+   */
+  griffe?: ReactNode;
   /** Die Zufallsstellung als eigener Block unter der Bedienung. */
   zufall?: { titel: string; text: string; knopf: string; onClick: () => void };
   onWaehlen: (id: string) => void;
@@ -82,6 +88,7 @@ export default function EndgameBlatt({
   gemeistert,
   gesamt,
   schalter,
+  griffe,
   zufall,
   onWaehlen,
 }: EndgameBlattProps) {
@@ -105,7 +112,7 @@ export default function EndgameBlatt({
         <span className="text-[12.5px] text-accent">{stand}</span>
       </div>
       <div className="mt-3">
-        <Schalterreihe eintraege={schalter} />
+        <Schalterreihe eintraege={schalter} griffe={griffe} />
       </div>
       {zufall && (
         <>

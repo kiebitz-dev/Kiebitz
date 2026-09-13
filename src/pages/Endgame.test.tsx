@@ -92,6 +92,21 @@ function mateInOne() {
   mocks.drop = { from: "b2", to: "b8" };
 }
 
+/**
+ * Patt in einem Zug · der kürzeste Weg zu einer verlorenen Aufgabe.
+ *
+ * Dg2–g6 nimmt dem König auf h8 g8, g7 und h7, ohne ihn anzugreifen. Bei
+ * einer Gewinnaufgabe ist das kein Remis, das man hält, sondern eines, das
+ * man sich einhandelt.
+ */
+function staleMateInOne() {
+  mocks.drill = {
+    ...mocks.drill,
+    fen: "7k/8/8/8/8/8/6Q1/7K w - - 0 1",
+  };
+  mocks.drop = { from: "g2", to: "g6" };
+}
+
 describe("Endgame trainer", () => {
   it("starts with a random position by default", () => {
     render(<Endgame />);
@@ -189,6 +204,28 @@ describe("Endgame trainer", () => {
     const kasten = weiter.closest("div.rounded-lg")!;
     expect(kasten.className).not.toContain("flex-col");
     expect(kasten.className).toContain("justify-between");
+  });
+
+  /**
+   * Der Weg nach vorn steht auch unter einer verpatzten Aufgabe.
+   *
+   * Bis 1.4 hätte man von hier aus nur „Nochmal" gehabt: Wer eine
+   * Gewinnstellung nur remis gehalten hatte, kam zur nächsten Zufallsstellung
+   * allein über das Verzeichnis. Eine gescheiterte Aufgabe ist aber genau der
+   * Moment, in dem man weiterziehen will.
+   */
+  it("offers the next random position after a lost drill too", () => {
+    staleMateInOne();
+    render(<Endgame />);
+
+    fireEvent.click(screen.getByTestId("endgame-board"));
+
+    const weiter = screen.getByRole("button", { name: "eg.randomNext" });
+    const kasten = weiter.closest("div.rounded-lg")!;
+    // Der Schlusssatz sagt, dass es schiefging · und daneben steht trotzdem
+    // der Weg zur nächsten Stellung.
+    expect(kasten.textContent).toContain("eg.failedWin");
+    expect(screen.getByRole("button", { name: /eg.retry/ })).toBeTruthy();
   });
 
   it("keeps both handles side by side on the desktop", () => {

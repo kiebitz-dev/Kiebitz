@@ -51,9 +51,12 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { GripVertical, Pencil, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Share2, Trash2 } from "lucide-react";
+import { Button } from "../../components/ui";
+import FocusBoard, { FocusButton } from "../../components/FocusBoard";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { moveTargets, useBoardSelection } from "../../lib/boardMoves";
+import { Notizfeld } from "../../components/blatt/Notizfeld";
 import {
   Balken,
   Ergebniskasten,
@@ -110,6 +113,11 @@ export interface RepertoireBlattProps {
   angaben: { label: string; wert: ReactNode }[];
   notiz: string;
   notizPlatzhalter: string;
+  /**
+   * Die Notiz schreiben · fehlt, wo es keinen Knoten gibt, an dem sie hinge
+   * (die Grundstellung, die Web-Vorschau). Dann bleibt das Feld ein Abdruck.
+   */
+  onNotiz?: (text: string) => void | Promise<void>;
   abdeckung: number | null;
   abdeckungNote: string;
   abdeckungUnter: string;
@@ -128,6 +136,12 @@ export interface RepertoireBlattProps {
   onLoeschen?: (key: string) => void;
   onHinzufuegen: () => void;
   onTraining: () => void;
+  /**
+   * Die Stellung teilen · fehlt in der Web-Vorschau, die keinen Dialog dafür
+   * aufstellt. Der Fokus steht daneben und gehört diesem Blatt selbst: Was er
+   * zeigt, ist der Abdruck, und den baut diese Datei.
+   */
+  onTeilen?: () => void;
   /**
    * Ein Zug auf der Buchstellung · liefert zurück, ob er zulässig war. Ohne
    * ihn bleibt das Diagramm ein reiner Abdruck (die Web-Vorschau etwa hat
@@ -160,6 +174,7 @@ export default function RepertoireBlatt({
   angaben,
   notiz,
   notizPlatzhalter,
+  onNotiz,
   abdeckung,
   abdeckungNote,
   abdeckungUnter,
@@ -172,6 +187,7 @@ export default function RepertoireBlatt({
   onLoeschen,
   onHinzufuegen,
   onTraining,
+  onTeilen,
   onZugSpielen,
 }: RepertoireBlattProps) {
   const { t } = useI18n();
@@ -181,6 +197,8 @@ export default function RepertoireBlatt({
   const ziele = onZugSpielen ? moveTargets(fen, auswahl.selected) : [];
   const knopfRefs = useRef(new Map<string, HTMLButtonElement>());
   const [ziehen, setZiehen] = useState<Ziehen | null>(null);
+  /** Abdruck allein · siehe components/FocusBoard.tsx. */
+  const [fokus, setFokus] = useState(false);
   const zeilenHoehe = mobile ? 46 : 44;
 
   /** Alle Varianten in der Reihenfolge, in der sie im Verzeichnis stehen. */
@@ -382,8 +400,8 @@ export default function RepertoireBlatt({
   // `--board-edge` ist dasselbe Maß, das dort die Spalte deckelt. Ohne `size`
   // nimmt das Diagramm die Breite, die es bekommt, und bleibt quadratisch;
   // die Hülle gibt sie vor, und die Bildunterschrift folgt ihr.
-  const diagrammBlock = (
-    <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
+  const abdruck = (
+    <>
       <Diagramm
         fen={fen}
         orientation={seite}
@@ -414,6 +432,46 @@ export default function RepertoireBlatt({
           {t("rep.playToAdd")}
         </div>
       )}
+    </>
+  );
+
+  /**
+   * Teilen und Fokus · die beiden Griffe, die unter dem Brett der gewöhnlichen
+   * Fassung stehen (`browseMoves` in pages/Repertoire.tsx).
+   *
+   * Im Modus fehlten sie bis 1.4 ganz: Wer das Buch als Buch las, kam an das
+   * Teilen einer Stellung und an den Abdruck in ganzer Größe nicht mehr heran.
+   * Das ist keine Satzentscheidung, sondern ein Weg weniger — dieselbe Regel,
+   * nach der die Analyse ihre Nebengriffe hereingereicht bekommt. Gesetzt wird
+   * die Reihe als Haarlinienreihe; die Knöpfe selbst sind die gewöhnlichen,
+   * `.blatt-formular` nimmt ihnen Rundung und Fläche.
+   *
+   * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
+   */
+  const brettGriffe = (imFokus: boolean) => (
+    <div className="blatt-formular flex h-11 items-center justify-end gap-1 border-y border-line px-1.5">
+      {onTeilen && (
+        <Button onClick={onTeilen} title={t("sh.title")} label={t("sh.title")} compact>
+          <Share2 size={14} />
+        </Button>
+      )}
+      {!imFokus && <FocusButton onClick={() => setFokus(true)} />}
+    </div>
+  );
+
+  const diagrammBlock = (
+    <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
+      {abdruck}
+      <div className="mt-3">{brettGriffe(false)}</div>
+      <FocusBoard
+        open={fokus}
+        onClose={() => setFokus(false)}
+        title={t("blatt.repertoireTitle")}
+        subtitle={linie}
+        below={brettGriffe(true)}
+      >
+        {abdruck}
+      </FocusBoard>
     </div>
   );
 
@@ -437,15 +495,28 @@ export default function RepertoireBlatt({
         </div>
         <div className="mt-3.5">
           <Feldname>{t("rep.note")}</Feldname>
-          <div
-            className={`buch mt-1.5 text-[14px] leading-[1.85] ${notiz ? "text-ink2" : "text-ink3"}`}
-            style={{
-              background:
-                "repeating-linear-gradient(to bottom, transparent 0, transparent 24px, var(--color-line) 24px, var(--color-line) 25px)",
-            }}
-          >
-            {notiz || notizPlatzhalter}
-          </div>
+          {onNotiz ? (
+            // Der Schlüssel ist der aufgeschlagene Halbzug · schlägt man eine
+            // andere Stelle auf, beginnt das Feld bei deren Notiz und nicht
+            // beim angefangenen Satz zur vorigen.
+            <Notizfeld
+              key={`${aktiv ?? ""}:${aktivZug}`}
+              notiz={notiz}
+              platzhalter={notizPlatzhalter}
+              onSpeichern={onNotiz}
+            />
+          ) : (
+            <div
+              className={`buch mt-1.5 text-[14px] ${notiz ? "text-ink2" : "text-ink3"}`}
+              style={{
+                lineHeight: "25px",
+                background:
+                  "repeating-linear-gradient(to bottom, transparent 0, transparent 24px, var(--color-line) 24px, var(--color-line) 25px)",
+              }}
+            >
+              {notiz || notizPlatzhalter}
+            </div>
+          )}
         </div>
       </div>
 

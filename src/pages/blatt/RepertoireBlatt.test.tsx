@@ -80,6 +80,63 @@ const zeile = (name: string) => screen.getByRole("button", { name: new RegExp(`^
 const griff = (name: string) =>
   screen.getByRole("button", { name: `rep.reorderHandle ${name}` });
 
+describe("Die Notiz zur Stellung", () => {
+  it("nimmt eine Notiz entgegen und schreibt sie auf Zuruf", async () => {
+    const onNotiz = vi.fn();
+    zeichne({ notiz: "", onNotiz });
+
+    const feld = screen.getByRole("textbox", { name: "rep.note" });
+    // Solange nichts geändert ist, steht kein Weg darunter.
+    expect(screen.queryByRole("button", { name: "common.save" })).toBeNull();
+
+    fireEvent.change(feld, { target: { value: "Immer c3 und d4 vorbereiten." } });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    expect(onNotiz).toHaveBeenCalledWith("Immer c3 und d4 vorbereiten.");
+  });
+
+  it("nimmt einen angefangenen Satz auch wieder zurück", () => {
+    const onNotiz = vi.fn();
+    zeichne({ notiz: "Alter Satz.", onNotiz });
+
+    const feld = screen.getByRole("textbox", { name: "rep.note" }) as HTMLTextAreaElement;
+    fireEvent.change(feld, { target: { value: "Neuer Satz." } });
+    fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
+
+    expect(feld.value).toBe("Alter Satz.");
+    expect(onNotiz).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "common.save" })).toBeNull();
+  });
+
+  it("bleibt ein Abdruck, wo es keinen Knoten zum Schreiben gibt", () => {
+    // Die Grundstellung hat keinen Knoten, an dem eine Notiz hängen könnte ·
+    // dann steht der Platzhalter da und kein Feld.
+    zeichne({ notiz: "", onNotiz: undefined });
+
+    expect(screen.queryByRole("textbox", { name: "rep.note" })).toBeNull();
+    expect(screen.getByText("rep.notePlaceholder")).toBeTruthy();
+  });
+});
+
+describe("Die Griffe am Abdruck", () => {
+  it("teilt die aufgeschlagene Stellung", () => {
+    const onTeilen = vi.fn();
+    zeichne({ onTeilen });
+
+    fireEvent.click(screen.getByRole("button", { name: "sh.title" }));
+    expect(onTeilen).toHaveBeenCalledTimes(1);
+  });
+
+  it("stellt den Fokus auf, auch ohne Teilen-Dialog", () => {
+    zeichne();
+
+    // Der Griff beschriftet sich selbst · gesperrt führt er in die Erklärung,
+    // offen in den Fokus. Beides ist eine Schaltfläche, und genau die fehlte.
+    expect(screen.getByRole("button", { name: /^board\.focus/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "sh.title" })).toBeNull();
+  });
+});
+
 describe("Das Buch im Diagramm-Modus", () => {
   it("blättert mit den Pfeiltasten durch die Züge der aufgeschlagenen Variante", () => {
     const onZug = vi.fn();

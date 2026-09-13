@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import {
   Check,
@@ -14,9 +14,11 @@ import {
   repDue,
   repFreeItems,
   repReview,
+  repSetNote,
   type DueItem,
   type RepNode,
 } from "../lib/repertoire";
+import { errorMessage } from "../lib/errors";
 import Board from "./Board";
 import { BOARD_MAX } from "../lib/boardLayout";
 import CapturedPieces from "./CapturedPieces";
@@ -24,10 +26,18 @@ import { capturedFromFen } from "../lib/captured";
 import { useBoardSelection } from "../lib/boardMoves";
 import { Button, Card } from "./ui";
 import FocusBoard, { FocusButton } from "./FocusBoard";
+import RepertoireNote from "./RepertoireNote";
 import { useT } from "../lib/i18n";
 import { fenAfter, replaySans } from "../lib/position";
 import { useBackendInfo } from "../lib/backend";
 import { maybeRequestPlayReview } from "../lib/reviewPrompt";
+import { useDiagramMode } from "../lib/diagramMode";
+import { useMobileShell } from "./MobileShell";
+import { Notizfeld } from "./blatt/Notizfeld";
+
+/** Der Übungsbogen kommt nach · siehe pages/blatt/TrainerBlatt.tsx. */
+import { LeereSeite } from "./blatt/LeereSeite";
+const TrainerBlatt = lazy(() => import("../pages/blatt/TrainerBlatt"));
 
 /** Wie lange die gelöste Stellung stehen bleibt, bevor die nächste Karte kommt. */
 const ADVANCE_MS = 1000;
@@ -115,6 +125,8 @@ export default function RepertoireTrainer({
 }) {
   const backend = useBackendInfo();
   const t = useT();
+  const diagramMode = useDiagramMode();
+  const mobile = useMobileShell();
   const [items, setItems] = useState<DueItem[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [state, setState] = useState<"ask" | "correct" | "wrong">("ask");
@@ -127,6 +139,20 @@ export default function RepertoireTrainer({
   const [played, setPlayed] = useState<string[]>([]);
   /** Buchzüge, die an der aktuellen Stelle zählen. */
   const [answers, setAnswers] = useState<Answer[]>([]);
+  /**
+   * Der Knoten, an dem die Notiz hängt · die Stelle, nach der gerade gefragt
+   * wird, und nach der Antwort der Zug, der tatsächlich gezogen wurde.
+   */
+  const [noteId, setNoteId] = useState<number | null>(null);
+  /** Aufgedeckt, obwohl die Frage noch offen ist · siehe `noteCovered`. */
+  const [noteOpen, setNoteOpen] = useState(false);
+  /**
+   * Was seit dem Start dieser Sitzung geschrieben wurde. Der Baum kommt als
+   * Eigenschaft herein und wird hier nicht neu geladen · ohne diese Ablage
+   * stünde nach dem Speichern wieder der alte Satz im Feld.
+   */
+  const [noteEdits, setNoteEdits] = useState<Record<number, string>>({});
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   const failedRef = useRef(false);
   const askedAtRef = useRef(0);
@@ -228,6 +254,8 @@ export default function RepertoireTrainer({
         ? alternatives.map((n) => ({ id: n.id, san: n.san }))
         : [{ id: item.node_id, san: item.expected_san }]
     );
+    setNoteId(alternatives[0]?.id ?? item.node_id);
+    setNoteOpen(false);
   }, [item, byId, childrenOf, clearTimers]);
 
   useEffect(() => {
@@ -286,6 +314,8 @@ export default function RepertoireTrainer({
         }
         chainRef.current += 1;
         setAnswers(mine.map((n) => ({ id: n.id, san: n.san })));
+        setNoteId(mine[0].id);
+        setNoteOpen(false);
         setState("ask");
         failedRef.current = false;
         askedAtRef.current = Date.now();
@@ -302,6 +332,7 @@ export default function RepertoireTrainer({
       // dieser Sitzung noch einmal drankommen.
       answeredRef.current.add(answer.id);
     }
+    setNoteId(answer.id);
     setState("correct");
     show(san);
     continueLine(answer.id, side);
@@ -387,22 +418,44 @@ export default function RepertoireTrainer({
   if (items == null) return null;
   if (!item) {
     const answered = doneCount.ok + doneCount.fail > 0;
+    const endeTitel = answered
+      ? t("rep.trainingDone")
+      : free
+        ? t("rep.freeEmpty")
+        : t("rep.nothingDue");
+    const endeText = answered
+      ? t(free ? "rep.freeResult" : "rep.sessionResult", {
+          ok: doneCount.ok,
+          fail: doneCount.fail,
+        })
+      : free
+        ? t("rep.freeEmptyHint")
+        : t("rep.allLearned");
+    if (diagramMode) {
+      return (
+        <Suspense fallback={<LeereSeite />}>
+          <TrainerBlatt
+            mobile={mobile}
+            kopfRechts={t("rep.nLeft", { n: 0 })}
+            ende={{
+              titel: endeTitel,
+              text: endeText,
+              schalter: [
+                { label: t("rep.backToRep"), betont: true, onClick: onExit },
+                ...(onFreeTraining && !free
+                  ? [{ label: t("rep.freeTraining"), onClick: onFreeTraining }]
+                  : []),
+              ],
+            }}
+          />
+        </Suspense>
+      );
+    }
     return (
       <div className="mx-auto max-w-[480px] rounded-xl border border-line bg-panel px-6 py-10 text-center">
         <GraduationCap size={28} className="mx-auto text-accent" />
-        <div className="mt-3 text-[17px] font-semibold">
-          {answered ? t("rep.trainingDone") : free ? t("rep.freeEmpty") : t("rep.nothingDue")}
-        </div>
-        <div className="mt-1.5 text-[13px] text-ink3">
-          {answered
-            ? t(free ? "rep.freeResult" : "rep.sessionResult", {
-                ok: doneCount.ok,
-                fail: doneCount.fail,
-              })
-            : free
-              ? t("rep.freeEmptyHint")
-              : t("rep.allLearned")}
-        </div>
+        <div className="mt-3 text-[17px] font-semibold">{endeTitel}</div>
+        <div className="mt-1.5 text-[13px] text-ink3">{endeText}</div>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <Button primary onClick={onExit}>
             {t("rep.backToRep")}
@@ -425,6 +478,18 @@ export default function RepertoireTrainer({
     ? `${Math.ceil(askPly / 2)}${askPly % 2 === 1 ? "." : "…"}${previousSan}`
     : t("rep.startPos");
   const expectedLabel = answers.map((a) => a.san).join(" / ");
+  /**
+   * Die Notiz zur gefragten Stellung · sichtbar, sobald die Karte beantwortet
+   * ist.
+   *
+   * Verdeckt, solange die Frage offen ist, und zwar aus einem Grund, der sich
+   * beim ersten Versuch von selbst zeigt: In einer Notiz steht „hier immer
+   * c3 und d4", und damit stünde die Antwort neben der Frage. Geschrieben
+   * werden darf trotzdem jederzeit — ein Blick auf den eigenen Satz deckt ihn
+   * auf, und wer das tut, hat die Karte ohnehin nicht gewusst.
+   */
+  const storedNote = noteId != null ? (noteEdits[noteId] ?? byId.get(noteId)?.note ?? "") : "";
+  const noteCovered = state === "ask" && !noteOpen && storedNote.trim() !== "";
   const playedSan = played[played.length - 1] ?? expectedLabel;
   const captured = capturedFromFen(fen);
 
@@ -567,6 +632,181 @@ export default function RepertoireTrainer({
     </>
   );
 
+  /**
+   * Das Notizfeld, fertig gesetzt · verdeckt oder offen, je nach Zustand.
+   *
+   * Beide Fassungen zeigen dasselbe Feld, nur anders gesetzt: das Blatt auf
+   * liniertem Papier, die gewöhnliche Fassung im Kasten. Die Regel darüber —
+   * verdeckt, solange die Frage offen ist — steht einmal hier und nicht
+   * zweimal in den beiden Ansichten.
+   */
+  const notizDeckel = (
+    <button
+      type="button"
+      onClick={() => setNoteOpen(true)}
+      className={
+        diagramMode
+          ? "flex w-full items-center gap-2.5 border-b border-line py-2.5 text-start"
+          : "flex w-full items-center gap-2.5 rounded-lg border border-dashed border-line2 px-3 py-2.5 text-start transition-colors hover:border-line"
+      }
+    >
+      <span
+        aria-hidden
+        className={diagramMode ? "h-3 flex-1 bg-line2" : "h-3 flex-1 rounded-sm bg-panel3"}
+      />
+      <span className="shrink-0 text-[11.5px] text-ink3">{t("blatt.covered")}</span>
+    </button>
+  );
+
+  const notizBlatt =
+    noteId == null ? null : noteCovered ? (
+      <>
+        {notizDeckel}
+        <p className="mt-2 text-[11.5px] leading-[1.55] text-ink3">{t("rep.noteHidden")}</p>
+      </>
+    ) : (
+      <Notizfeld
+        key={noteId}
+        notiz={storedNote}
+        platzhalter={t("rep.notePlaceholder")}
+        onSpeichern={async (text) => {
+          try {
+            await repSetNote(noteId, text);
+            setNoteEdits((current) => ({ ...current, [noteId]: text }));
+            setNoteError(null);
+          } catch (e) {
+            setNoteError(errorMessage(e));
+          }
+        }}
+      />
+    );
+
+  if (diagramMode) {
+    const eigenerName = item.side === "white" ? t("common.white") : t("common.black");
+    const gegenName = item.side === "white" ? t("common.black") : t("common.white");
+    return (
+      <Suspense fallback={<LeereSeite />}>
+        <TrainerBlatt
+          mobile={mobile}
+          kopfRechts={t("rep.nLeft", { n: items.length - idx })}
+          aufgabe={{
+            felder: [
+              {
+                label: t("blatt.variant"),
+                wert: item.line || t("rep.fallbackLine"),
+                gross: true,
+              },
+              {
+                label: t("blatt.youPlay"),
+                wert: (
+                  <span className="inline-flex items-center gap-[7px]">
+                    <span
+                      aria-hidden
+                      className="inline-block h-2.5 w-2.5 flex-none border border-ink"
+                      style={{
+                        background: item.side === "black" ? "var(--color-ink)" : "transparent",
+                      }}
+                    />
+                    {eigenerName}
+                  </span>
+                ),
+              },
+              {
+                label: t("blatt.cardNo"),
+                wert: (
+                  <>
+                    <span className="blatt-zahl">{idx + 1}</span>
+                    <span className="text-ink3"> / {items.length}</span>
+                  </>
+                ),
+              },
+              {
+                label: t("blatt.category"),
+                wert: free ? t("rep.freeTraining") : item.is_new ? t("rep.new") : t("rep.due"),
+              },
+            ],
+            stand: `${doneCount.ok} : ${doneCount.fail}`,
+            oben: { name: gegenName, farbe: item.side === "white" ? "black" : "white" },
+            unten: { name: eigenerName, farbe: item.side },
+            brett: trainBoard("rep-train"),
+            meldung:
+              state === "correct"
+                ? t("rep.correct", { san: playedSan })
+                : state === "wrong"
+                  ? t("rep.bookMoveIs", { san: expectedLabel })
+                  : t("rep.whatToPlay", {
+                      n: moveNo,
+                      side: item.side === "white" ? t("common.white") : t("common.black"),
+                    }),
+            tonart: state === "correct" ? "richtig" : state === "wrong" ? "falsch" : "offen",
+            // Beide Wege stehen immer da, und der, der gerade gilt, ist der
+            // bedienbare · sonst spränge die Reihe bei jeder Antwort um.
+            schalter: [
+              {
+                label: t("rep.reveal"),
+                titel: t("rep.revealShortcut"),
+                onClick: state === "ask" ? reveal : undefined,
+              },
+              {
+                label: t("rep.showAndNext"),
+                betont: true,
+                titel: t("rep.revealShortcut"),
+                onClick: state === "wrong" ? revealAndNext : undefined,
+              },
+            ],
+            griffe: <FocusButton onClick={() => setFocused(true)} />,
+            verlaufSchalter: [
+              { label: "⏮", titel: t("rep.firstPosition"), onClick: () => setViewPly(0) },
+              {
+                label: "‹",
+                titel: t("rep.previousPosition"),
+                onClick: () => setViewPly((value) => Math.max(0, value - 1)),
+              },
+              {
+                label: "›",
+                titel: t("rep.nextPosition"),
+                onClick: () => setViewPly((value) => Math.min(lineSans.length, value + 1)),
+              },
+              {
+                label: "⏭",
+                titel: t("rep.promptPosition"),
+                onClick: () => setViewPly(lineSans.length),
+              },
+            ],
+            verlaufZaehler: t("blatt.plyOf", { n: viewPly, total: lineSans.length }),
+            verlaufNote: t("rep.lastMove", { move: previousMove }),
+            fortschritt: (idx / items.length) * 100,
+            zahlen: [
+              { name: t("rep.rightLabel"), wert: String(doneCount.ok) },
+              { name: t("rep.wrongLabel"), wert: String(doneCount.fail) },
+              { name: t("rep.leftLabel"), wert: String(items.length - idx) },
+            ],
+            tiefe: chainRef.current > 0 ? t("rep.lineDepth", { n: chainRef.current + 1 }) : null,
+            freiNote: free ? t("rep.freeNote") : null,
+            notiz: (
+              <>
+                {notizBlatt}
+                {noteError && <p className="mt-2 text-[12px] text-loss">{noteError}</p>}
+              </>
+            ),
+            hinweis: t("rep.trainerHint"),
+            onBeenden: onExit,
+          }}
+        />
+        <FocusBoard
+          open={focused}
+          onClose={() => setFocused(false)}
+          title={t("rep.trainerTitle")}
+          subtitle={item.line || t("rep.fallbackLine")}
+          above={trainHead}
+          below={trainControls(true)}
+        >
+          {trainBoard("rep-train-focus")}
+        </FocusBoard>
+      </Suspense>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 gap-6 min-[1180px]:grid-cols-[minmax(0,var(--board-edge))_minmax(0,1fr)]">
       <div className="max-w-[var(--board-edge)]">
@@ -610,6 +850,28 @@ export default function RepertoireTrainer({
             </div>
           )}
         </Card>
+        {noteId != null && (
+          <Card title={t("rep.note")}>
+            {noteCovered ? (
+              <>
+                {notizDeckel}
+                <p className="mt-2 text-[12px] leading-relaxed text-ink3">{t("rep.noteHidden")}</p>
+              </>
+            ) : (
+              <RepertoireNote
+                key={noteId}
+                nodeId={noteId}
+                note={storedNote}
+                onSaved={(text) => {
+                  setNoteEdits((current) => ({ ...current, [noteId]: text }));
+                  setNoteError(null);
+                }}
+                onError={setNoteError}
+              />
+            )}
+            {noteError && <p className="mt-2 text-[12px] text-loss">{noteError}</p>}
+          </Card>
+        )}
         <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
           {t("rep.trainerHint")}
         </div>

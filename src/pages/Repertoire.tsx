@@ -57,6 +57,7 @@ import { chessdbQuery, getSettings, type ChessDbResult } from "../lib/settings";
 import { useTrainingSession } from "../lib/session";
 import Board from "../components/Board";
 import LiveEngine from "../components/LiveEngine";
+import RepertoireNote from "../components/RepertoireNote";
 import RepertoireTrainer from "../components/RepertoireTrainer";
 import ShareDialog, { type ShareSubject } from "../components/ShareDialog";
 import { useMobileShell } from "../components/MobileShell";
@@ -1012,12 +1013,18 @@ function LiveRepertoire() {
                 ? t("rep.stability", { n: de(Math.max(selected.stability, 0)) })
                 : t("rep.opponentMove")}
             </div>
-            <NoteEditor
-              key={selected.id}
-              node={selected}
-              onSaved={reload}
-              onError={(e) => setNotice(e)}
-            />
+            <div className="mt-3 border-t border-line pt-3">
+              <label className="text-[11.5px] text-ink3">{t("rep.note")}</label>
+              <div className="mt-1.5">
+                <RepertoireNote
+                  key={selected.id}
+                  nodeId={selected.id}
+                  note={selected.note}
+                  onSaved={reload}
+                  onError={(e) => setNotice(e)}
+                />
+              </div>
+            </div>
             {twinsOf(selected).length > 0 && (
               <div className="mt-3 flex gap-2 rounded-lg border border-gold-dim bg-gold-soft px-3 py-2 text-[12px] leading-relaxed text-gold">
                 <Shuffle size={14} className="mt-0.5 shrink-0" />
@@ -1276,6 +1283,21 @@ function LiveRepertoire() {
             ]}
             notiz={selected?.note.trim() ?? ""}
             notizPlatzhalter={t("rep.notePlaceholder")}
+            /* Geschrieben wird über denselben Befehl wie im `NoteEditor` der
+               gewöhnlichen Fassung · eine Notiz gehört an einen Knoten, und
+               auf der Grundstellung gibt es keinen. */
+            onNotiz={
+              selected
+                ? async (text) => {
+                    try {
+                      await repSetNote(selected.id, text);
+                      reload();
+                    } catch (e) {
+                      setNotice(errorMessage(e));
+                    }
+                  }
+                : undefined
+            }
             abdeckung={stats ? stats.coverage_pct : null}
             abdeckungNote={t("rep.coverageNote")}
             abdeckungUnter={
@@ -1322,6 +1344,9 @@ function LiveRepertoire() {
               setMode("add");
             }}
             onTraining={() => setMode(dueTotal > 0 || freeTotal === 0 ? "train" : "free")}
+            // Derselbe Dialog wie unter dem Brett drüben · er steht am Ende
+            // dieser Seite und gilt für beide Fassungen.
+            onTeilen={openShare}
             // Derselbe Griff wie unter dem Brett der gewöhnlichen Fassung ·
             // ein Zug auf der Buchstellung öffnet den Baukasten mit genau
             // diesem Zug als erstem Schritt.
@@ -1434,58 +1459,6 @@ function RepertoireGrid({
       <div className="order-3 min-[1180px]:col-start-1 min-[1180px]:row-start-2 min-[1480px]:col-start-1 min-[1480px]:row-start-1 min-[1480px]:row-span-2">
         {tree}
       </div>
-    </div>
-  );
-}
-
-/** Freitext zur Stellung · Plan, Idee, Falle. */
-function NoteEditor({
-  node,
-  onSaved,
-  onError,
-}: {
-  node: RepNode;
-  onSaved: () => void;
-  onError: (message: string) => void;
-}) {
-  const t = useT();
-  const [text, setText] = useState(node.note);
-  const [busy, setBusy] = useState(false);
-  const dirty = text.trim() !== node.note.trim();
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await repSetNote(node.id, text);
-      onSaved();
-    } catch (e) {
-      onError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mt-3 border-t border-line pt-3">
-      <label className="text-[11.5px] text-ink3">{t("rep.note")}</label>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={3}
-        placeholder={t("rep.notePlaceholder")}
-        className="mt-1.5 w-full resize-y rounded-lg border border-line bg-panel2 px-3 py-2 text-[12.5px] leading-relaxed text-ink placeholder:text-ink3 focus:border-accent-dim focus:outline-none"
-      />
-      {dirty && (
-        <div className="mt-2 flex justify-end gap-2">
-          <Button onClick={() => setText(node.note)} disabled={busy}>
-            {t("common.cancel")}
-          </Button>
-          <Button primary onClick={save} disabled={busy}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {t("common.save")}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

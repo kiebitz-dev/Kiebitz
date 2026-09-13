@@ -62,6 +62,11 @@ export interface PuzzlesBlattProps {
   schalter: { label: ReactNode; onClick?: () => void; betont?: boolean }[];
   /** Der Stellungsverlauf · vier Griffe zum Zurückblättern. */
   verlaufSchalter: { label: ReactNode; onClick?: () => void; titel?: string }[];
+  /**
+   * Teilen und der Fokus · sie stehen am Ende der Verlaufsreihe, weil sie in
+   * der gewöhnlichen Fassung genau dort stehen. Fertig von der Seite herein.
+   */
+  griffe?: ReactNode;
   verlaufNote: string;
   /** Versuche heute, Ziel, und die Nummer der laufenden Aufgabe. */
   heute: number;
@@ -84,6 +89,7 @@ export default function PuzzlesBlatt({
   brett,
   schalter,
   verlaufSchalter,
+  griffe,
   verlaufNote,
   heute,
   ziel,
@@ -121,7 +127,7 @@ export default function PuzzlesBlatt({
       <div className="mt-3 border-t border-line pt-3">
         <Feldname>{t("pz.positionHistory")}</Feldname>
         <div className="mt-2">
-          <Schalterreihe eintraege={verlaufSchalter} />
+          <Schalterreihe eintraege={verlaufSchalter} griffe={griffe} />
         </div>
         <p className="mt-2 text-[11px] leading-[1.55] text-ink3">{verlaufNote}</p>
       </div>

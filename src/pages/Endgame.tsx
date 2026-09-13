@@ -420,13 +420,19 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
                 <RotateCcw size={14} /> {t("eg.retry")}
               </Button>
               {nebenaktionen(inFocus)}
-              {/* Nach einer Zufallsaufgabe kommt die nächste Zufallsaufgabe. */}
-              {status === "solved" && drill.category === "random" && (
+              {/* Nach einer Zufallsaufgabe kommt die nächste Zufallsaufgabe ·
+                  und zwar auch dann, wenn die eben nicht geklappt hat. Der Weg
+                  nach vorn stand bis 1.4 nur unter einem Haken: Wer „nur Remis"
+                  gehalten hatte, kam von hier allein zurück auf dieselbe
+                  Stellung. „Nochmal" steht daneben und bleibt der Weg für den,
+                  der es wirklich noch einmal wissen will; wer weiterziehen
+                  will, soll nicht erst über das Verzeichnis müssen. */}
+              {drill.category === "random" && (
                 <Button primary className={mobile ? "ms-auto" : ""} onClick={() => start(randomDrill())}>
                   <Shuffle size={15} /> {t(mobile ? "eg.nextShort" : "eg.randomNext")}
                 </Button>
               )}
-              {status === "solved" && drill.category !== "random" && nextUnsolved() && (
+              {drill.category !== "random" && nextUnsolved() && (
                 <Button primary className={mobile ? "ms-auto" : ""} onClick={() => start(nextUnsolved()!)}>
                   <SkipForward size={15} /> {t(mobile ? "eg.nextShort" : "eg.nextDrill")}
                 </Button>
@@ -523,6 +529,7 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
               onClick: nextUnsolved() ? () => start(nextUnsolved()!) : undefined,
             },
           ]}
+          griffe={nebenaktionen(false)}
           zufall={{
             titel: t("eg.randomTitle"),
             text: t("eg.randomHint"),
@@ -534,6 +541,20 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
             if (gewaehlt) start(gewaehlt);
           }}
         />
+        {/* Teilen und Fokus sind zwei Dialoge und kein Satz · sie gehören in
+            beide Fassungen unverändert. Bis 1.4 standen sie nur im `return`
+            der gewöhnlichen, und damit kostete der Modus zwei Wege. */}
+        {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
+        <FocusBoard
+          open={focused}
+          onClose={() => setFocused(false)}
+          title={t("eg.title")}
+          subtitle={drillText(drill.name, locale)}
+          above={drillHead}
+          below={drillActions(true)}
+        >
+          {drillBoard("endgame-focus")}
+        </FocusBoard>
       </Suspense>
     );
   }

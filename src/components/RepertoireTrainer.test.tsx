@@ -6,6 +6,12 @@
  * nicht. Ein richtiger Zug darf eine Karte nicht wegschieben, ein falscher sie
  * nicht zurückwerfen. Genau das prüft dieser Test · und nebenher, dass der
  * Stapel überhaupt aus dem Buch kommt und nicht aus `rep_due`.
+ *
+ * Dazu die Notiz zur Stellung: Sie steht seit 1.4 auch im Training, und zwar
+ * verdeckt, solange die Frage offen ist — in einer Notiz steht „hier immer
+ * c3", und damit stünde die Antwort neben der Frage. Und der Diagramm-Modus:
+ * Der Trainer war die eine Stelle, an der er in die gewöhnliche Fassung
+ * zurückfiel.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -25,6 +31,10 @@ vi.mock("../lib/repertoire", async (importOriginal) => {
 vi.mock("../lib/backend", () => ({
   useBackendInfo: () => ({ mode: "desktop", info: { platform: "windows" } }),
 }));
+
+/** Welche der beiden Fassungen gerade geprüft wird. */
+const modus = vi.hoisted(() => ({ diagramm: false }));
+vi.mock("../lib/diagramMode", () => ({ useDiagramMode: () => modus.diagramm }));
 
 vi.mock("../lib/i18n", () => ({
   useI18n: () => ({ locale: "en", t: (key: string) => key }),
@@ -68,6 +78,7 @@ const BOOK: RepNode[] = [
 beforeEach(() => {
   repDue.mockClear();
   repReview.mockClear();
+  modus.diagramm = false;
 });
 
 afterEach(cleanup);
@@ -95,5 +106,79 @@ describe("RepertoireTrainer · free practice", () => {
     // Ohne fällige Karten bleibt das Schlussbild · mit dem Ausweg ins freie Üben.
     expect(await screen.findByText("rep.nothingDue")).toBeTruthy();
     expect(screen.getByRole("button", { name: /rep.freeTraining/ })).toBeTruthy();
+  });
+});
+
+/**
+ * Dasselbe Buch, aber mit einem Satz an jeder gefragten Stellung.
+ *
+ * An *jeder*, weil `repFreeItems` den Stapel würfelt: Würde nur eine der
+ * beiden Karten einen Satz tragen, prüfte der Test mal ihn und mal die andere.
+ */
+const NOTIZ = "Immer mit Tempo entwickeln.";
+const BOOK_MIT_NOTIZ: RepNode[] = [
+  node({
+    id: 1,
+    parent_id: 0,
+    san: "e4",
+    my_move: true,
+    name: "Open games",
+    depth: 1,
+    note: NOTIZ,
+  }),
+  node({ id: 2, parent_id: 1, san: "e5", depth: 2 }),
+  node({ id: 3, parent_id: 2, san: "Nf3", my_move: true, depth: 3, note: NOTIZ }),
+];
+
+describe("RepertoireTrainer · die Notiz zur Stellung", () => {
+  it("steht gleich offen da, wo es nichts zu verraten gibt", async () => {
+    render(<RepertoireTrainer nodes={BOOK} free onExit={() => {}} />);
+    await screen.findByTestId("board");
+
+    // Ein leeres Feld verrät keinen Zug · also gibt es auch nichts zuzudecken.
+    expect(screen.getByRole("textbox", { name: "rep.note" })).toBeTruthy();
+    expect(screen.queryByText("blatt.covered")).toBeNull();
+  });
+
+  it("hält einen vorhandenen Satz zu, solange die Frage offen ist", async () => {
+    render(<RepertoireTrainer nodes={BOOK_MIT_NOTIZ} free onExit={() => {}} />);
+    await screen.findByTestId("board");
+
+    // In einer Notiz steht der Plan, und der nennt oft genug den Zug selbst.
+    expect(screen.getByText("blatt.covered")).toBeTruthy();
+    expect(screen.getByText("rep.noteHidden")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "rep.note" })).toBeNull();
+  });
+
+  it("deckt ihn auf Wunsch auf", async () => {
+    render(<RepertoireTrainer nodes={BOOK_MIT_NOTIZ} free onExit={() => {}} />);
+    await screen.findByTestId("board");
+
+    fireEvent.click(screen.getByText("blatt.covered"));
+
+    const feld = screen.getByRole("textbox", { name: "rep.note" }) as HTMLTextAreaElement;
+    expect(feld.value).toBe(NOTIZ);
+  });
+});
+
+describe("RepertoireTrainer · im Diagramm-Modus", () => {
+  it("setzt die Sitzung als Bogen und nicht als Karten", async () => {
+    modus.diagramm = true;
+    render(<RepertoireTrainer nodes={BOOK} free onExit={() => {}} />);
+
+    // Der Kolumnentitel ist das Zeichen, dass wirklich das Blatt dasteht.
+    expect(await screen.findByText("blatt.trainerTitle")).toBeTruthy();
+    // Und die Bedienung ist die Haarlinienreihe, nicht die Knopfzeile.
+    expect(screen.getByRole("button", { name: "rep.reveal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "rep.endTraining" })).toBeTruthy();
+  });
+
+  it("setzt auch den leeren Stapel als Seite des Buches", async () => {
+    modus.diagramm = true;
+    render(<RepertoireTrainer nodes={BOOK} onExit={() => {}} onFreeTraining={() => {}} />);
+
+    expect(await screen.findByText("blatt.trainerTitle")).toBeTruthy();
+    expect(screen.getByText("rep.nothingDue")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "rep.backToRep" })).toBeTruthy();
   });
 });

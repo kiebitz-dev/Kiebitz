@@ -103,6 +103,24 @@ Its rules:
   them is a question the mode stopped answering; each is set the way the mode
   sets things, and none of them is a new number.
 
+  The same sweep reached the three pages you actually play on. **Sharing a
+  position and the focus board** existed only in the ordinary version of the
+  repertoire, the puzzles and the endgames — two ways the mode simply did not
+  have, which is the one thing a second layout must not cost. They are the
+  ordinary buttons, handed to the variant and re-set: `Schalterreihe` takes a
+  `griffe` slot that closes the hairline row with a `.blatt-formular` group,
+  exactly as the ply counter in `AnalysisBlatt` already did. The repertoire's
+  print owns its focus itself, because it is the sheet that builds that print.
+  The **note on a position** was set but not writable — a field that looked
+  like a field and swallowed every keystroke; it is the same textarea now, on
+  the same ruled paper (`components/blatt/Notizfeld.tsx`). And the **opening
+  trainer** had no sheet at all: tapping "start training" dropped the reader
+  out of the book and into cards and buttons. `pages/blatt/TrainerBlatt.tsx`
+  sets it as the drill sheet its two neighbours already are, in both its
+  states — the card and the empty deck. The state machine did not move:
+  `components/RepertoireTrainer.tsx` still holds the stack, the grades and the
+  schedule, and picks a presentation.
+
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template
   library — neither copying it nor handing it back works. Its state moves out
@@ -137,6 +155,7 @@ German, like the design vocabulary they carry: `Kolumnentitel`, `Rubrik`,
 | Composition pieces, type | `src/components/blatt/`, `blatt.css` |
 | State shared by both settings | `src/components/plantafel.ts` |
 | Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx`, the five Insights tabs in `src/pages/blatt/insights/` |
+| Shared field both modes write | `src/components/RepertoireNote.tsx` (ordinary), `src/components/blatt/Notizfeld.tsx` (sheet) |
 
 Each page renders its regular version and lazy-loads its `*Blatt.tsx` variant
 when the mode is on — Dashboard mode must not pay for type and layout it never
