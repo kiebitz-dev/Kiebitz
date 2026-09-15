@@ -121,7 +121,12 @@ Its rules:
   `components/RepertoireTrainer.tsx` still holds the stack, the grades and the
   schedule, and picks a presentation.
 
-  A fourth closed two more. The repertoire's **note on a position** printed
+  A fourth closed three. The analysis got the **recommended line as a handle**
+  — every move of it a button that plays the variation up to there — and a
+  layout that showed it only on one side would have cost the other the one
+  thing the reader asked for. The page builds the lines, each mode sets them:
+  small buttons over there, a line of book notation under the game text here
+  (`varianten` in `AnalysisBlatt`). The repertoire's **note on a position** printed
   the invitation to write one even where no position was chosen — a field that
   looked like it was waiting for an entry while nothing could hang on it; the
   em dash of the fields above it stands there now, and the invitation stays

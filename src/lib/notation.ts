@@ -20,7 +20,7 @@
  * jeder Sprache.
  */
 import type { Locale } from "./i18n";
-import { notationText } from "./share/notation";
+import { notationText, notationTokens } from "./share/notation";
 
 /**
  * Ein einzelner Zug, fertig gesetzt.
@@ -60,6 +60,26 @@ export function notationLine(
   continuing = false
 ): string {
   return notationText(
+    sans.map((san) => translateSan(san, locale)),
+    offset,
+    continuing
+  );
+}
+
+/**
+ * Dieselbe Zugfolge, aber Zug für Zug · für eine Variante, die man anklickt.
+ *
+ * Gesetzt wird wie in `notationLine` und mit derselben Nummerierung: Was der
+ * Leser als Text sieht und was er anfassen kann, soll auf den Buchstaben
+ * gleich sein.
+ */
+export function notationParts(
+  sans: readonly string[],
+  locale: Locale,
+  offset = 0,
+  continuing = false
+): string[] {
+  return notationTokens(
     sans.map((san) => translateSan(san, locale)),
     offset,
     continuing

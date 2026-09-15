@@ -95,9 +95,10 @@ import {
 } from "../lib/clocks";
 import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
-import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug } from "../lib/erklaerung";
+import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug, LINIE } from "../lib/erklaerung";
 import { fortsetzung } from "../lib/folge";
 import { zugfakten } from "../lib/zugfakten";
+import VariationLine, { aktiveZuege, type Variante } from "../components/VariationLine";
 import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
@@ -373,7 +374,12 @@ function commentFor(
   ply: number,
   seed: string,
   row?: MoveEvalRow,
-  next?: MoveEvalRow
+  next?: MoveEvalRow,
+  /**
+   * Steht die Linie nebenan als anklickbare Zeile? Dann nennt der Satz nur
+   * noch den besseren Zug · siehe `ohneLinien` in lib/erklaerung.ts.
+   */
+  ohneLinien = false
 ): string | null {
   if (!m.judgment) return null;
   const bemaengelt = istBemaengelt(m.judgment);
@@ -414,6 +420,7 @@ function commentFor(
       // fünf Halbzüge, die im Text stehen · sonst endete die Zählung mitten in
       // einem Abtausch. Siehe lib/folge.ts.
       folge: bemaengelt ? fortsetzung(sansBefore, m.san, next?.pv) : null,
+      ohneLinien,
     }
   );
 }
@@ -536,7 +543,18 @@ export default function Analysis({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [scratchSans, setScratchSans] = useState<string[]>([]);
   const [scratchSelected, setScratchSelected] = useState<string | null>(null);
-  const [variation, setVariation] = useState<{ basePly: number; sans: string[] } | null>(null);
+  /**
+   * Die Nebenvariante auf dem Brett · Abzweig, Züge und der Zug, um den es
+   * dabei geht.
+   *
+   * `anker` steht nur dort, wo die Variante aus einer Empfehlung kommt: Die
+   * Fortsetzung nach einem Fehler zweigt *hinter* dem Fehler ab, und ohne den
+   * Anker wanderten die Zeilen beim ersten Klick zum nächsten Halbzug weiter —
+   * genau weg von dem Zug, den man gerade verstehen will.
+   */
+  const [variation, setVariation] = useState<
+    { basePly: number; sans: string[]; anker?: number } | null
+  >(null);
   const [rows, setRows] = useState<MoveEvalRow[] | null>(null);
   const [ply, setPly] = useState(0);
   const [liveEval, setLiveEval] = useState<{ cp: number | null; mate: number | null } | null>(null);
@@ -1125,7 +1143,10 @@ export default function Analysis({
         ply,
         `${game?.id}:${ply}`,
         rowsByPly.get(ply),
-        rowsByPly.get(ply + 1)
+        rowsByPly.get(ply + 1),
+        // Die Linien stehen als anklickbare Zeile darunter · zweimal dieselbe
+        // Notation, einmal zum Lesen und einmal zum Anfassen, wäre eine zu viel.
+        true
       );
     }
     const row = rowsByPly.get(ply);
@@ -1145,6 +1166,85 @@ export default function Analysis({
     const grund = begruendeZug(row, { t, locale });
     return [satz, grund].filter(Boolean).join(" ") || null;
   }, [scratch, variation, live, currentMove, ply, sans, viewMoves, t, locale, game?.id, game?.color, nurEigene, rowsByPly]);
+
+  /**
+   * Der Halbzug, um den es gerade geht.
+   *
+   * In einer Variante ist das nicht der Halbzug auf dem Brett, sondern der,
+   * von dem sie abzweigt: Wer die Empfehlung anspielt, steht danach in ihr
+   * drin — und soll die Zeile, aus der er kommt, weiter vor sich haben, um
+   * den nächsten Zug anzutippen. Ohne diesen Anker verschwände sie beim
+   * ersten Klick.
+   */
+  const ankerPly = variation ? (variation.anker ?? variation.basePly + 1) : ply;
+  /** Der Zug an diesem Anker · in der Partie, nicht in der Variante. */
+  const ankerMove = ankerPly > 0 ? viewMoves[ankerPly - 1] : null;
+
+  /**
+   * Die Varianten zum aufgeschlagenen Zug · zum Anklicken statt zum Lesen.
+   *
+   * Zwei, und beide stehen ohnehin schon in der Datenbank: die Hauptvariante
+   * *vor* dem Zug — das ist die Empfehlung — und die *nach* ihm, also das,
+   * was der Gegner mit einem Fehler anfängt (docs/EXPLANATIONS.md). Gekürzt
+   * auf dieselben fünf Halbzüge, die auch die Anmerkung zeigt.
+   *
+   * Die Fortsetzung nur zu einem bemängelten Zug: Nach einem guten Zug ist
+   * sie die Partie selbst, und die steht nebenan in der Zugliste.
+   */
+  const varianten = useMemo((): Variante[] => {
+    if (!live || scratch) return [];
+    const san = sans[ankerPly - 1];
+    if (!san || !zeigtUrteil(ankerPly)) return [];
+    const row = rowsByPly.get(ankerPly);
+    const out: Variante[] = [];
+    const davor = (row?.pv ?? []).slice(0, LINIE);
+    if (davor.length >= 2) {
+      out.push({
+        basePly: ankerPly - 1,
+        sans: davor,
+        label: t(davor[0] === san ? "an.lineMain" : "an.lineBetter"),
+      });
+    }
+    const danach = (rowsByPly.get(ankerPly + 1)?.pv ?? []).slice(0, LINIE);
+    if (danach.length >= 2 && istBemaengelt(row?.judgment ?? "")) {
+      out.push({ basePly: ankerPly, sans: danach, label: t("an.lineReply") });
+    }
+    return out;
+  }, [live, scratch, sans, ankerPly, rowsByPly, t, game?.color, nurEigene]);
+
+  /** Eine Empfehlung bis zu ihrem n-ten Halbzug aufs Brett legen. */
+  const spieleVariante = (variante: Variante, halbzuege: number) => {
+    setVariation({
+      basePly: variante.basePly,
+      sans: variante.sans.slice(0, halbzuege),
+      anker: ankerPly,
+    });
+    setScratchSelected(null);
+    setLiveEval(null);
+    setLiveBestUci(null);
+  };
+
+  /**
+   * Die Zeilen, fertig gesetzt · beide Fassungen bekommen dieselben.
+   *
+   * Gebaut hier und nicht im Blatt: Was eine Variante ist und wie sie aufs
+   * Brett kommt, weiß diese Seite; wie sie aussieht, entscheidet der Satz.
+   * Dieselbe Regel, nach der das Blatt auch den Motor hereingereicht bekommt.
+   */
+  const variantenZeilen = (blatt: boolean) =>
+    varianten.length === 0 ? null : (
+      <>
+        {varianten.map((variante) => (
+          <VariationLine
+            key={`${variante.basePly}:${variante.label}`}
+            variante={variante}
+            aktiv={aktiveZuege(variante, variation)}
+            onPlay={(halbzuege) => spieleVariante(variante, halbzuege)}
+            blatt={blatt}
+          />
+        ))}
+      </>
+    );
 
   /**
    * Die Anmerkung zu einem beliebigen Zug · dieselbe Regel wie für den
@@ -1171,7 +1271,11 @@ export default function Analysis({
       index + 1,
       `${game?.id}:${index + 1}`,
       rowsByPly.get(index + 1),
-      rowsByPly.get(index + 2)
+      rowsByPly.get(index + 2),
+      // Nur die Anmerkung zu dem Zug, auf dem der Leser steht, gibt ihre
+      // Notation an die Zeile darunter ab · die vier anderen im Satz haben
+      // keine Zeile daneben und behalten sie deshalb im Wortlaut.
+      index === ply - 1
     );
   };
 
@@ -2317,6 +2421,10 @@ export default function Analysis({
           }}
           brett={boardRow("blatt")}
           griffe={boardExtras(false)}
+          // Dieselben Varianten wie drüben, im Satz des Blattes · die
+          // Anmerkung im Fließsatz nennt den besseren Zug, hier steht seine
+          // Linie zum Antippen.
+          varianten={variantenZeilen(true)}
           zuege={viewMoves.map((move, index) => ({
             san: move.san,
             nag: move.judgment && MARKED_IN_LIST.includes(move.judgment) ? NAG[move.judgment] : undefined,
@@ -2621,13 +2729,18 @@ export default function Analysis({
                   {t("an.notAnalyzed")}
                 </div>
               )}
-              {currentComment && (
+              {/* Der Kasten steht auch während einer Variante · sonst wäre
+                  die Zeile mit dem ersten Klick verschwunden, und nachspielen
+                  hieße: einen Zug ansehen. Was darin steht, gehört dann zu
+                  dem Zug, von dem die Variante abzweigt. */}
+              {(currentComment || varianten.length > 0) && (
                 <div className="mt-3 rounded-lg border-l-2 bg-panel2 px-3 py-2 text-[12.5px] leading-relaxed text-ink2"
-                  style={{ borderColor: currentMove?.judgment ? JUDGMENT_COLOR[currentMove.judgment] : "var(--color-accent)" }}>
-                  <span className="font-medium" style={{ color: currentMove?.judgment ? JUDGMENT_COLOR[currentMove.judgment] : "var(--color-accent)" }}>
-                    {Math.ceil(ply / 2)}.{ply % 2 === 0 ? ".." : ""} {currentMove?.san}{currentMove?.nag}
+                  style={{ borderColor: ankerMove?.judgment ? JUDGMENT_COLOR[ankerMove.judgment] : "var(--color-accent)" }}>
+                  <span className="font-medium" style={{ color: ankerMove?.judgment ? JUDGMENT_COLOR[ankerMove.judgment] : "var(--color-accent)" }}>
+                    {Math.ceil(ankerPly / 2)}.{ankerPly % 2 === 0 ? ".." : ""} {ankerMove?.san}{ankerMove?.nag}
                   </span>{" "}
                   {currentComment}
+                  {variantenZeilen(false)}
                 </div>
               )}
             </div>

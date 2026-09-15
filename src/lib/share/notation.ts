@@ -49,14 +49,28 @@ export function notationText(
   offset = 0,
   continuing = false
 ): string {
-  return sans
-    .map((san, i) => {
-      const ply = offset + i;
-      if (ply % 2 === 0) return `${ply / 2 + 1}.${san}`;
-      if (i === 0 && !continuing) return `${(ply + 1) / 2}...${san}`;
-      return san;
-    })
-    .join(" ");
+  return notationTokens(sans, offset, continuing).join(" ");
+}
+
+/**
+ * Dieselbe Zeile, aber in ihre Züge zerlegt.
+ *
+ * Gebraucht, wo jeder Zug für sich anzufassen sein muss · eine anklickbare
+ * Variante in der Analyse. Die Nummerierung steht deshalb hier und nicht dort:
+ * Eine zweite Fassung derselben Regel liefe irgendwann auseinander, und dann
+ * trüge die Zeile zum Lesen eine andere Zugnummer als die zum Anklicken.
+ */
+export function notationTokens(
+  sans: readonly string[],
+  offset = 0,
+  continuing = false
+): string[] {
+  return sans.map((san, i) => {
+    const ply = offset + i;
+    if (ply % 2 === 0) return `${ply / 2 + 1}.${san}`;
+    if (i === 0 && !continuing) return `${(ply + 1) / 2}...${san}`;
+    return san;
+  });
 }
 
 /**

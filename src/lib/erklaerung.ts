@@ -430,12 +430,15 @@ function folgeSatz(
 /**
  * So viele Halbzüge einer Variante kommen in eine Anmerkung.
  *
+ * Dieselbe Zahl gilt für die anklickbare Zeile daneben (`VariationLine`) ·
+ * die Empfehlung zum Lesen und die zum Nachspielen sind eine Linie.
+ *
  * Fünf sind zweieinhalb Züge und damit gerade so viel, dass die Absicht
  * sichtbar wird — „4…Lg4 5.Le2 Sd4" zeigt, worauf Schwarz aus ist. Die ganze
  * Linie stünde am Ende bei zwölf Halbzügen, und ab dem sechsten ist sie
  * Engine-Prosa: Wer so weit rechnet, liest keine Anmerkung mehr.
  */
-const LINIE = 5;
+export const LINIE = 5;
 
 /** Die Urteile, zu denen es überhaupt etwas zu bemängeln gibt. */
 const BEMAENGELT = ["inaccuracy", "mistake", "blunder"];
@@ -510,6 +513,20 @@ export function kommentiereZug(
      * Schach nach. Siehe `fortsetzung` in lib/folge.ts.
      */
     folge?: Fortsetzung | null;
+    /**
+     * Die Varianten stehen als Notation daneben und nicht im Satz.
+     *
+     * Die Analyseseite setzt sie seit 1.4 als anklickbare Zeile unter die
+     * Anmerkung: Wer liest „Besser war axb3: 13…axb3 14.Rxa5 Dxa5 15.Qxb3",
+     * will das nicht buchstabieren, sondern sehen — gemeldet worden ist genau
+     * das. Stünde die Linie dann zweimal da, einmal zum Lesen und einmal zum
+     * Anfassen, wäre der Gewinn wieder verspielt. Also sagt der Satz hier nur
+     * noch, *welcher* Zug besser war, und die Zeile darunter zeigt ihn.
+     *
+     * Ohne das Kennzeichen bleibt alles, wie es war · das Startblatt und jeder
+     * andere Leser bekommen weiter den ganzen Satz.
+     */
+    ohneLinien?: boolean;
   }
 ): string {
   const { t, locale, urteil, bemaengelt } = options;
@@ -529,17 +546,19 @@ export function kommentiereZug(
   const davor = (options.linieDavor ?? []).slice(0, LINIE);
   const danach = (options.linieDanach ?? []).slice(0, LINIE);
 
+  const ohneLinien = options.ohneLinien ?? false;
+
   if (bemaengelt) {
     // Die Fortsetzung im Wortlaut nur dort, wo weder Motiv noch Kostensatz
     // schon erzählt haben, was in ihr passiert · sonst stünde dieselbe Linie
     // zweimal, einmal als Satz und einmal als Notation.
-    if (!motiv && !kosten && danach.length >= 2) {
+    if (!motiv && !kosten && danach.length >= 2 && !ohneLinien) {
       saetze.push(t("expl.replyLine", { line: notationLine(danach, locale, row.ply) }));
     }
     // Und was besser war. Die Linie beginnt beim besseren Zug selbst; ist sie
     // nur dieser eine Zug, bleibt der kurze Satz von früher.
     const besserSan = davor[0] ?? options.besser;
-    if (davor.length >= 2 && davor[0] !== row.san) {
+    if (davor.length >= 2 && davor[0] !== row.san && !ohneLinien) {
       saetze.push(
         t("expl.betterLine", {
           san: translateSan(davor[0], locale),
@@ -549,7 +568,7 @@ export function kommentiereZug(
     } else if (besserSan && besserSan !== row.san) {
       saetze.push(t("an.commentBetter", { san: translateSan(besserSan, locale) }));
     }
-  } else if (davor.length >= 2 && davor[0] === row.san) {
+  } else if (davor.length >= 2 && davor[0] === row.san && !ohneLinien) {
     // Der Zug *ist* die Hauptvariante · dann ist ihre Fortsetzung die Antwort
     // auf „und was ist daran gut?".
     saetze.push(t("expl.mainLine", { line: notationLine(davor, locale, row.ply - 1) }));

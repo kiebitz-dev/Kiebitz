@@ -248,6 +248,16 @@ export interface AnalysisBlattProps {
    * auf dem freien. Ein Modus, der eine Funktion kostet, ist kein Modus.
    */
   motor?: ReactNode;
+  /**
+   * Die Varianten zum aufgeschlagenen Zug · anklickbar, von der Seite gesetzt.
+   *
+   * Sie stehen unter dem Partietext, weil sie zu dem Zug gehören, auf dem der
+   * Leser steht, und nicht zu der Stellung, die gerade auf dem Brett liegt —
+   * beim Nachspielen sind das zwei verschiedene Dinge. Gebaut werden sie in
+   * `pages/Analysis.tsx`: Was eine Variante ist, weiß die Seite; wie sie
+   * aussieht, entscheidet der Satz. Dieselbe Regel wie beim Motor darüber.
+   */
+  varianten?: ReactNode;
   /** Züge aus einer geteilten Stellung · sie stehen vor den eigenen. */
   vorlauf?: string | null;
   /** Kopfzeile rechts · Partienummer und Engine, von der Seite gesetzt. */
@@ -471,6 +481,7 @@ export default function AnalysisBlatt({
   mobile,
   frei,
   laufleiste,
+  varianten,
   meldung,
   motor,
   vorlauf,
@@ -683,6 +694,10 @@ export default function AnalysisBlatt({
       {/* Sagt, dass da noch mehr ist und wie man drankommt · sonst sähe eine
           Partie mit zwanzig Fehlern aus wie eine mit fünf. */}
       {zurueckgehalten && <Fussnote>{t("blatt.notesTrimmed")}</Fussnote>}
+      {/* Die Varianten unmittelbar unter dem Satz · die Anmerkung darüber
+          nennt den besseren Zug, hier steht seine Linie und lässt sich
+          antippen. Eine Haarlinie darüber, kein Kasten. */}
+      {varianten && <div className="mt-3 border-t border-line pt-2">{varianten}</div>}
       {analyse}
     </div>
   );

@@ -255,6 +255,42 @@ Hauptvariante. Die Engine rechnet weiter mit …" against "Rxe2 trifft die
 Hauptvariante." Two versions of one sentence are not two modes. `currentComment`
 in `pages/Analysis.tsx` now follows the same split `blattKommentar` always did.
 
+## The line you can play
+
+The annotation names the better move and its line — and until 1.4 that line
+was dead text. A reader who wanted to see it had to spell it out and push the
+pieces around by hand; the engine lines beside it were no help, since clicking
+one plays its *first* move and nothing else. That was reported, and it was
+right.
+
+The line now stands once and is a handle. Each of its moves is a button
+(`components/VariationLine.tsx`); tapping the *n*-th puts the variation on the
+board up to that point, so tapping along the line is how you play through it.
+What is already on the board is marked, otherwise you lose your place after
+the third tap.
+
+Once, not twice: where the clickable line stands, `kommentiereZug` leaves the
+notation out of the sentence (`ohneLinien`) and the sentence says only *which*
+move was better. Only the move the reader is standing on trades its notation
+that way — the other four annotations in the game text of diagram mode have no
+line beside them and keep theirs in full.
+
+Two lines are offered, and both are already in the database: `move_evals.pv`
+of the row is the engine's line *before* the move — the recommendation — and
+the `pv` of the row after it is what the opponent does with a mistake. The
+second one only appears under a faulted move; after a good move that line is
+the game itself, and the game is in the move list next to it.
+
+The lines hang on the move the reader is standing on, not on the position on
+the board — which stops being the same thing the moment you play one. That
+anchor (`ankerPly` in `pages/Analysis.tsx`) is what keeps the line on screen
+while you are inside it; without it the first tap would make it disappear and
+"replaying" would mean seeing one move.
+
+Both modes, again: the page builds the lines and each layout sets them — small
+buttons on the dashboard, a line of book notation under the game text in
+diagram mode (`varianten` in `AnalysisBlatt`).
+
 A note on the **notation**: moves are set in English SAN everywhere — `Rxe2`,
 not `Txe2`. `translateSan` in `lib/notation.ts` swapped the piece letters into
 the interface language until 1.4, but only in the analysis sentences and the

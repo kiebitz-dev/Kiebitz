@@ -249,6 +249,37 @@ const bestMoveRows = [
   { ply: 4, san: "Nc6", eval_cp: 20, mate_in: null, best_uci: "b8c6", judgment: "", phase: "opening" },
 ];
 
+/**
+ * Ein Patzer mit gespeicherter Empfehlung · die Linie, die sich nachspielen
+ * lassen soll. `pv` der Zeile ist die Hauptvariante *vor* dem Zug, also genau
+ * das, was besser gewesen wäre (docs/EXPLANATIONS.md).
+ */
+const betterLineRows = [
+  { ply: 1, san: "e4", eval_cp: 20, mate_in: null, best_uci: "e2e4", judgment: "", phase: "opening" },
+  { ply: 2, san: "e5", eval_cp: 20, mate_in: null, best_uci: "e7e5", judgment: "", phase: "opening" },
+  {
+    ply: 3,
+    san: "Nf3",
+    eval_cp: -300,
+    mate_in: null,
+    best_uci: "f1c4",
+    judgment: "blunder",
+    phase: "opening",
+    pv: ["Bc4", "Nc6", "Nf3"],
+  },
+  // Die Hauptvariante *nach* dem Patzer · das, was der Gegner damit anfängt.
+  {
+    ply: 4,
+    san: "Nc6",
+    eval_cp: -300,
+    mate_in: null,
+    best_uci: "b8c6",
+    judgment: "",
+    phase: "opening",
+    pv: ["Nc6", "Bc4", "Bc5"],
+  },
+];
+
 describe("Analysis page", () => {
   it("opens a playable new game when entered without a target", async () => {
     render(<LocaleProvider><Analysis targetGameId={null} /></LocaleProvider>);
@@ -283,13 +314,59 @@ describe("Analysis page", () => {
     await gameOnBoard("7");
     fireEvent.click(await screen.findByRole("button", { name: /^Nf3/ }));
 
-    const satz = await screen.findByText(/Hauptvariante|Engine wählt/);
+    // „Hauptvariante" steht seit 1.4 zweimal auf der Seite: im Satz und als
+    // Beschriftung der anklickbaren Zeile darunter · gesucht ist der Satz.
+    const satz = await screen.findByText(/trifft die Hauptvariante|Engine wählt/);
     // Der Satz selbst · in englischem SAN, wie überall in der App.
     expect(satz.textContent).toContain("Nf3");
     // Und nichts davor und dahinter: weder das Urteil als Wort noch die
     // Fortsetzung, die der Diagramm-Modus an dieser Stelle auch nicht zeigt.
     expect(satz.textContent).not.toContain("Buchzug");
     expect(satz.textContent).not.toContain("Die Engine rechnet weiter mit");
+  });
+
+  /**
+   * Gemeldet worden ist, dass die empfohlene Linie nur dasteht und sich nicht
+   * nachspielen lässt. Sie steht jetzt Zug für Zug als Griff da, und ein Tipp
+   * legt sie bis dorthin aufs Brett.
+   */
+  it("plays the recommended line onto the board", async () => {
+    mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+    render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+
+    await gameOnBoard("7");
+    fireEvent.click(await screen.findByRole("button", { name: /^Nf3/ }));
+
+    // Der Satz nennt den besseren Zug · die Linie dazu steht daneben und
+    // nicht ein zweites Mal im Text.
+    expect(await screen.findByText(/Besser war Bc4\./)).toBeTruthy();
+
+    // Bis zum zweiten Halbzug der Empfehlung: 1.e4 e5 2.Bc4 Nc6.
+    fireEvent.click(screen.getByRole("button", { name: "Variante bis Nc6 nachspielen" }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("analysis-board")[0].dataset.fen).toContain(
+        "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w"
+      )
+    );
+    // Eine Variante ist keine Partie · das Brett sagt es.
+    expect(screen.getAllByTestId("analysis-board")[0].dataset.muted).toBe("true");
+
+    // Und die Zeile bleibt stehen, sonst wäre der nächste Zug nicht mehr zu
+    // erreichen · sie hängt am Zug, von dem sie abzweigt, nicht am Brett.
+    expect(screen.getByRole("button", { name: "Variante bis 3.Nf3 nachspielen" })).toBeTruthy();
+
+    // Auch die Fortsetzung des Gegners lässt sich anspielen · sie zweigt
+    // *hinter* dem Patzer ab.
+    fireEvent.click(screen.getByRole("button", { name: "Variante bis 3.Bc4 nachspielen" }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("analysis-board")[0].dataset.fen).toContain(
+        "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b"
+      )
+    );
+    // Und der Anker wandert dabei nicht mit: Zur Frage steht weiter derselbe
+    // Zug, also stehen auch weiter beide Zeilen da.
+    expect(screen.getByRole("button", { name: "Variante bis 3.Nf3 nachspielen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Variante bis 3.Bc4 nachspielen" })).toBeTruthy();
   });
 
   describe("navigation", () => {
@@ -939,6 +1016,29 @@ describe("Analysis page", () => {
 
       expect(await screen.findByRole("button", { name: "1.e4" })).toBeTruthy();
       expect(screen.queryByText(/Zu passiv/)).toBeNull();
+    });
+
+    /**
+     * Die anklickbare Variante gehört in beide Fassungen · ein Modus, der
+     * eine Funktion kostet, ist kein Modus (docs/design.md).
+     */
+    it("offers the recommended line on the sheet as well", async () => {
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+
+      await screen.findByText("Kiebitz · Analyse");
+      // Im Satz trägt jeder Zug seine Nummer und sein Urteilszeichen · Nf3 ist
+      // der zweite weiße Zug, und er ist der Patzer.
+      fireEvent.click(await screen.findByRole("button", { name: /^2\.Nf3/ }));
+
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Variante bis Nc6 nachspielen" })
+      );
+      await waitFor(() =>
+        expect(screen.getAllByTestId("analysis-board")[0].dataset.fen).toContain(
+          "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w"
+        )
+      );
     });
 
     it("keeps the commented game on a chosen game", async () => {
