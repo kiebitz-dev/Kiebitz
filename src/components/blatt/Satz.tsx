@@ -137,11 +137,40 @@ export function Ergebniskasten({
   children,
   hoehe = 32,
   gross = 15,
+  wort = false,
+  maxBreite,
 }: {
   children: ReactNode;
   hoehe?: number;
   gross?: number;
+  /**
+   * Im Kasten steht ein Wort und keine Zahl · dann misst er sich am Wort.
+   *
+   * Ein Ergebnis ist zwei Zeichen lang und passt in jeden Kasten; „Verwertung"
+   * oder ein Eröffnungsname passt in keinen festen. Bis 1.4 stand deshalb
+   * „Verwertu…" im Kopf der Insights — eine Angabe, die nichts mehr sagt. Mit
+   * `wort` gibt der Kasten seine feste Breite auf: Er wird so breit wie sein
+   * Inhalt, höchstens `maxBreite`, und bricht dann auf eine zweite Zeile,
+   * statt zu kürzen. Die Spalte, in der er steht, darf dafür keine Breite
+   * vorgeben.
+   */
+  wort?: boolean;
+  /** Ab hier bricht das Wort um · nur mit `wort`. */
+  maxBreite?: number;
 }) {
+  if (wort) {
+    return (
+      <div
+        className="flex items-center justify-center border border-ink px-2 py-[3px] text-center font-medium tracking-[0.04em] text-ink"
+        style={{ minHeight: hoehe, fontSize: gross, maxWidth: maxBreite }}
+      >
+        {/* Zwei Zeilen und nicht beliebig viele: Der Kasten steht auf der
+            Grundlinie des Formularkopfs und wächst nach oben · drei Zeilen
+            schöben die Kolumne. */}
+        <span className="line-clamp-2 leading-[1.2] [overflow-wrap:anywhere]">{children}</span>
+      </div>
+    );
+  }
   return (
     <div
       className="blatt-zahl flex items-center justify-center border border-ink font-medium tracking-[0.06em] text-ink"

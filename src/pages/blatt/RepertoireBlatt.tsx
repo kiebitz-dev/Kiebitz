@@ -366,7 +366,11 @@ export default function RepertoireBlatt({
   };
 
   const buch = (
-    <div className={mobile ? "flex flex-col" : "flex w-[330px] flex-none flex-col"}>
+    <div
+      className={
+        mobile ? "flex flex-col" : "flex min-w-[264px] flex-auto basis-[330px] flex-col"
+      }
+    >
       <Rubrik weg={t("rep.addLine")} onWeg={onHinzufuegen}>
         {t("blatt.theBook")}
       </Rubrik>
@@ -502,7 +506,13 @@ export default function RepertoireBlatt({
   );
 
   const diagrammBlock = (
-    <div className={mobile ? "" : "w-[var(--board-edge)] max-w-full flex-none"}>
+    <div
+      className={
+        mobile
+          ? ""
+          : "min-w-[292px] max-w-[var(--board-edge)] flex-[2_1_292px]"
+      }
+    >
       {abdruck}
       <div className="mt-3">{brettGriffe(false)}</div>
       <FocusBoard
@@ -518,7 +528,11 @@ export default function RepertoireBlatt({
   );
 
   const rechts = (
-    <div className="flex min-w-0 flex-1 flex-col justify-between gap-6">
+    <div
+      className={`@container flex flex-col justify-between gap-6 ${
+        mobile ? "" : "min-w-[330px] flex-auto basis-[340px]"
+      }`}
+    >
       <div>
         <Rubrik>{t("blatt.theLine")}</Rubrik>
         <div className="mt-[11px]">
@@ -527,7 +541,10 @@ export default function RepertoireBlatt({
             <Zugfolge gross={15}>{linie}</Zugfolge>
           </div>
         </div>
-        <div className="mt-3.5 grid grid-cols-2 gap-x-5">
+        {/* Zwei Spalten im Apparat, vier, sobald er unter Verzeichnis und
+            Abdruck über die ganze Breite steht · vier halbleere Zeilen sind
+            kein Formular. */}
+        <div className="mt-3.5 grid grid-cols-2 gap-x-5 @[780px]:grid-cols-4">
           {angaben.map((angabe) => (
             <div key={angabe.label} className="border-b border-line py-[5px]">
               <Feldname>{angabe.label}</Feldname>
@@ -631,9 +648,28 @@ export default function RepertoireBlatt({
   return (
     <div className="mx-auto flex min-h-full max-w-[1560px] flex-col px-10 pb-[22px] pt-6">
       {kopf}
-      <div className="flex min-h-0 flex-1 gap-8 pt-5">
-        {buch}
-        {diagrammBlock}
+      {/* Drei Spalten, solange drei Spalten Platz haben.
+          Das Fenster der App ist schmaler als ein Browser auf demselben
+          Schirm, und in einem gestauchten Fenster blieben für den Apparat
+          rechts hundertvierzig Pixel: „Die Linie" kürzte zu „Die…", und die
+          Angaben darunter standen als Wortfetzen übereinander. Ein Buchsatz,
+          der nicht mehr lesbar ist, ist kein Buchsatz.
+
+          Jede Spalte nennt deshalb die Breite, unter der sie nichts mehr
+          taugt. Reicht die Zeile dafür nicht, bricht der Apparat als letzte
+          Spalte um und steht über die ganze Breite unter Verzeichnis und
+          Abdruck — dieselbe Reihenfolge wie auf dem Telefon, nur zwei Schritte
+          später. Verzeichnis und Abdruck geben bis dahin nach, statt zu
+          springen. */}
+      <div className="flex min-h-0 flex-1 flex-wrap gap-8 pt-5">
+        {/* Verzeichnis und Abdruck bleiben zusammen · sie sind die Seite, der
+            Apparat ist die Marginalie. Umbrechen darf deshalb nur er, und
+            zwar als Ganzes: Ein Fensterrand, der erst den Abdruck und dann
+            den Apparat abkoppelt, ergäbe drei Zeilen für drei Spalten. */}
+        <div className="flex min-w-0 flex-auto basis-[860px] gap-8">
+          {buch}
+          {diagrammBlock}
+        </div>
         {rechts}
       </div>
       {pgnBereich}

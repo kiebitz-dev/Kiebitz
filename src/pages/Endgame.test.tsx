@@ -228,6 +228,29 @@ describe("Endgame trainer", () => {
     expect(screen.getByRole("button", { name: /eg.retry/ })).toBeTruthy();
   });
 
+  /**
+   * Der Hinweis ist die Theorie zur Aufgabe · wer ihn beim ersten Hinsehen
+   * mitliest, übt nicht, sondern liest. Er liegt deshalb verdeckt, und mit der
+   * nächsten Aufgabe fällt er wieder zu — sonst stünde die Lösung der zweiten
+   * Stellung da, bevor man sie gesehen hat.
+   */
+  it("keeps the hint covered until it is asked for", () => {
+    render(<Endgame />);
+
+    expect(screen.queryByText("Hint")).toBeNull();
+    const knopf = screen.getByRole("button", { name: /eg\.hintTitle/ });
+    expect(knopf.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(knopf);
+    expect(screen.getByText("Hint")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /eg\.hintTitle/ }).getAttribute("aria-expanded")).toBe(
+      "true"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "eg.randomStart" }));
+    expect(screen.queryByText("Hint")).toBeNull();
+  });
+
   it("keeps both handles side by side on the desktop", () => {
     render(<Endgame />);
     expect(screen.getByTitle("sh.title")).toBeTruthy();

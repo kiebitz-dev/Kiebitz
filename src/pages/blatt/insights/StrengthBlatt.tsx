@@ -182,7 +182,12 @@ export default function StrengthBlatt({
             ),
         },
       ]}
-      kasten={{ label: t("blatt.weakest"), wert: phasenname(schwaechstePhase), gross: 12 }}
+      kasten={{
+        label: t("blatt.weakest"),
+        wert: phasenname(schwaechstePhase),
+        gross: 12,
+        wort: true,
+      }}
     />
   );
 

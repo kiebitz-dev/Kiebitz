@@ -237,6 +237,7 @@ export default function TimeBlatt({ mobile, deep }: { mobile: boolean; deep: Dee
         label: t("ins.tmTroubleStart"),
         wert: t("ins.tmMoveNo", { n: de(time.trouble.first_move) }),
         gross: 12,
+        wort: true,
       }}
     />
   );

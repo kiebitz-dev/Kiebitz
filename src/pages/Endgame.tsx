@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import {
   CheckCircle2,
+  ChevronDown,
   Crown,
   Lightbulb,
   Loader2,
@@ -81,6 +82,16 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [hintMove, setHintMove] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
+  /**
+   * Ob der Hinweistext zur Stellung aufgedeckt ist.
+   *
+   * Verdeckt ist der Normalfall: Der Text sagt, wie das Endspiel technisch
+   * geht, und wer ihn beim ersten Hinsehen mitliest, übt nichts. Er steht in
+   * beiden Fassungen an derselben Stelle im Ablauf, deshalb liegt der Stand
+   * hier und nicht in der Darstellung · mit der nächsten Aufgabe (`start`)
+   * fällt er wieder zu.
+   */
+  const [hintOpen, setHintOpen] = useState(false);
   const [shake, setShake] = useState(false);
   const [stats, setStats] = useState<Record<string, DrillStat>>({});
   const [sharing, setSharing] = useState<ShareSubject | null>(null);
@@ -180,6 +191,7 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
     setError(null);
     setSelected(null);
     setHintMove(null);
+    setHintOpen(false);
     // Ist die Gegenseite am Zug (z. B. Opposition-Drill), beginnt die Engine.
     const engineFirst = d.fen.split(" ")[1] !== (d.side === "white" ? "w" : "b");
     if (engineFirst) setTimeout(() => engineTurn(d), 400);
@@ -457,9 +469,37 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
               </Button>
               {nebenaktionen(inFocus)}
             </div>
-            <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink3">
-              {drillText(drill.hint, locale)}
-            </p>
+            {/* Die Theorie hinter der Stellung · verdeckt, bis man sie
+                verlangt. Sie stand bis hierher offen unter dem Brett, und
+                damit las man beim ersten Hinsehen mit, wie das Endspiel geht,
+                statt es zu rechnen. Dieselbe Entscheidung wie im Blatt, im
+                Register dieser Fassung gesetzt: eine Fläche mit Rand, ein
+                Knopf mit Winkel, der Text darunter. */}
+            <div className="mt-2.5 rounded-lg border border-line bg-panel2">
+              <button
+                type="button"
+                onClick={() => setHintOpen((offen) => !offen)}
+                aria-expanded={hintOpen}
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left hover:bg-panel3"
+              >
+                <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink2">
+                  <Lightbulb size={14} className="shrink-0 text-gold" />
+                  <span className="truncate">{t("eg.hintTitle")}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-ink3">
+                  {t(hintOpen ? "eg.hintHide" : "eg.hintShow")}
+                  <ChevronDown
+                    size={15}
+                    className={`transition-transform ${hintOpen ? "rotate-180" : ""}`}
+                  />
+                </span>
+              </button>
+              {hintOpen && (
+                <p className="border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed text-ink3">
+                  {drillText(drill.hint, locale)}
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -505,6 +545,8 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
           }
           brett={drillBoard("endgame")}
           hinweis={drillText(drill.hint, locale)}
+          hinweisOffen={hintOpen}
+          onHinweis={() => setHintOpen((offen) => !offen)}
           fussnote={t("eg.engineNote")}
           gruppen={CATEGORY_ORDER.map((cat) => ({
             titel: t(CATEGORY_KEY[cat]),

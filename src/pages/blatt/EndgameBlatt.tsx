@@ -10,6 +10,9 @@
  * gegliedert. Die Zahl am Zeilenende ist das Ziel — 1 gewinnen, ½ Remis
  * halten —, dieselbe Schreibweise wie das Ergebnis in der Partienliste.
  *
+ * Der Hinweis rechts liegt verdeckt und wird aufgedeckt, nicht gelesen ·
+ * siehe `verzeichnis` weiter unten.
+ *
  * Der Entwurf ließ die Fortschrittszahl offen, weil die Demo-Daten keine
  * Endspiel-Statistik führen. Die App führt eine: `endgame_stats` weiß, welche
  * Aufgabe gelöst wurde, und daraus steht „x von 15 gemeistert" im Kopf.
@@ -55,6 +58,16 @@ export interface EndgameBlattProps {
   stand: ReactNode;
   brett: ReactNode;
   hinweis: string;
+  /**
+   * Ob der Hinweis aufgedeckt ist · verdeckt ist der Normalfall.
+   *
+   * Der Stand gehört der Seite und nicht diesem Blatt: Beide Fassungen zeigen
+   * denselben Hinweis, und wer den Modus mitten in einer Aufgabe umschaltet,
+   * soll ihn nicht ein zweites Mal aufdecken müssen. Mit der nächsten Aufgabe
+   * legt ihn die Seite wieder zu.
+   */
+  hinweisOffen: boolean;
+  onHinweis: () => void;
   /** Was mit den Tablebases anders wäre · der Satz der Seite, nicht erfunden. */
   fussnote: string;
   gruppen: EndgameGruppe[];
@@ -82,6 +95,8 @@ export default function EndgameBlatt({
   stand,
   brett,
   hinweis,
+  hinweisOffen,
+  onHinweis,
   fussnote,
   gruppen,
   aktiv,
@@ -135,10 +150,28 @@ export default function EndgameBlatt({
 
   const verzeichnis = (
     <div className="flex min-w-0 flex-1 flex-col">
-      <Rubrik>{t("blatt.theHint")}</Rubrik>
-      <div className="buch mt-2.5 border-s-2 border-line2 ps-3 text-[14.5px] leading-[1.55] text-ink2">
-        {`„${hinweis}“`}
-      </div>
+      {/* Der Hinweis liegt verdeckt · in einem Aufgabenbuch steht die Lösung
+          hinten und nicht neben der Stellung. Wer erst rechnet und dann liest,
+          lernt das Endspiel; wer es nebenbei mitliest, liest nur. Aufgedeckt
+          wird an der Rubrik oder auf dem verdeckten Feld selbst — dasselbe
+          Umschalten, damit der Griff dort liegt, wo der Leser hinsieht. */}
+      <Rubrik weg={t(hinweisOffen ? "eg.hintHide" : "eg.hintShow")} onWeg={onHinweis}>
+        {t("blatt.theHint")}
+      </Rubrik>
+      {hinweisOffen ? (
+        <div className="buch mt-2.5 border-s-2 border-line2 ps-3 text-[14.5px] leading-[1.55] text-ink2">
+          {`„${hinweis}“`}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onHinweis}
+          aria-expanded={false}
+          className="mt-2.5 flex min-h-11 w-full items-center border-s-2 border-line2 ps-3 text-start text-[12.5px] text-ink3 hover:text-ink2"
+        >
+          {t("eg.hintCovered")}
+        </button>
+      )}
       <div className="mt-2 text-[11px] leading-[1.55] text-ink3">{fussnote}</div>
       <div className="mt-4 min-h-0 flex-1">
         <Rubrik weg={t("eg.progress", { n: deInt(gemeistert), m: deInt(gesamt) })}>

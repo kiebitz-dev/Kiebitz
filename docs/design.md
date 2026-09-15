@@ -136,6 +136,29 @@ Its rules:
   (`buch` in `RepertoireBlatt`), behind a way at the foot of the index, where
   the week column already offers its report.
 
+  A fifth sweep was about *when* a thing is shown rather than whether it is.
+  The endgame hint is the theory behind the position — how the technique
+  actually goes — and it stood open next to the board in both layouts, so the
+  first look at a drill already gave the answer away. It lies covered now and
+  is uncovered on a tap, in both modes and from one piece of state on the page
+  (`hintOpen` in `pages/Endgame.tsx`): the sheet covers it with a ruled field
+  and puts REVEAL in the section rule, the dashboard with a bordered strip and
+  a chevron. The next drill covers it again. Which layout you read makes no
+  difference to what is covered, only to how the cover is set.
+
+  Two measurements were wrong rather than missing. A boxed value in a form head
+  is two characters wide when it is a result and twelve when it is a word, and
+  the head had a fixed width for both — the weakest axis of the Insights read
+  "Verwertu…", the weakest opening "Italian G…". `Ergebniskasten` takes `wort`
+  now: the box measures itself against its content, up to a maximum, and breaks
+  onto a second line instead of clipping. And the repertoire's three columns
+  only fit a window that is wider than the app's default: at 1440 × 900 the
+  apparatus on the right was left with about 200 points, which is a column of
+  word fragments. Each column names the width below which it is no longer
+  worth setting; where the line cannot carry all three, the apparatus breaks as
+  a whole and stands full width under the index and the print — the phone's
+  order, two steps later.
+
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template
   library — neither copying it nor handing it back works. Its state moves out

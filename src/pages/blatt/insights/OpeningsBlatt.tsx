@@ -133,7 +133,8 @@ export default function OpeningsBlatt({
       kasten={{
         label: t("blatt.weakest"),
         wert: schwaechste ? schwaechste.label : "—",
-        gross: 10,
+        gross: 11,
+        wort: true,
       }}
     />
   );

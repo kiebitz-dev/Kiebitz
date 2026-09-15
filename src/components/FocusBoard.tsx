@@ -40,7 +40,6 @@ import { useMobileShell } from "./MobileShell";
 import { useBackDismiss } from "../lib/backDismiss";
 import { openPlusDialog } from "../lib/plus/dialog";
 import { usePlusGate } from "../lib/plus/usePlus";
-import { PlusBadge } from "./PlusLock";
 import { Button, MenuItem } from "./ui";
 
 /** Die Feature-ID des Fokus-Bretts · steht hier, weil hier das Gate sitzt. */
@@ -97,7 +96,21 @@ export function FocusMenuItem({ onClick }: { onClick: () => void }) {
     <MenuItem onClick={() => (locked ? openPlusDialog(FOCUS_FEATURE) : onClick())}>
       <Maximize2 size={15} />
       {t("board.focus")}
-      {locked && <PlusBadge />}
+      {/* Gesperrt steht hier das Sternchen und keine Plakette.
+          In einer Menüzeile ist „Mit Plus" als gefüllte Pille das lauteste
+          Element des ganzen Menüs — lauter als die Handlung, neben der es
+          steht —, und im Diagramm-Modus gibt es gefüllte Pillen überhaupt
+          nicht. Dasselbe Zeichen markiert längst die gesperrten Reiter der
+          Analyse, der Insights und der Puzzles; es ist also nicht weniger
+          Auskunft, sondern dieselbe in der Schreibweise des Hauses. */}
+      {locked && (
+        <Sparkles
+          size={13}
+          role="img"
+          aria-label={t("plus.badge")}
+          className="shrink-0 text-accent"
+        />
+      )}
     </MenuItem>
   );
 }

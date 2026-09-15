@@ -20,8 +20,15 @@ export default function Reiterkopf({
 }: {
   mobile: boolean;
   felder: Feld[];
-  /** Der eingekastelte Wert rechts · die eine Antwort des Reiters. */
-  kasten: { label: string; wert: string; gross?: number };
+  /**
+   * Der eingekastelte Wert rechts · die eine Antwort des Reiters.
+   *
+   * `wort` sagt, dass dort ein Name steht und keine Zahl: die schwächste Phase,
+   * die schwächste Eröffnung. Der Kasten misst sich dann an seinem Inhalt und
+   * bricht um, statt ihn abzuschneiden — „Italian Game: Giuoco Piano" wurde in
+   * 112 Pixel gezwängt und las sich als „Italian G…".
+   */
+  kasten: { label: string; wert: string; gross?: number; wort?: boolean };
   spalten?: string;
 }) {
   return (
@@ -33,11 +40,24 @@ export default function Reiterkopf({
         />
       </div>
       <div
-        className={`flex-none border-s border-line ${mobile ? "w-[80px] ps-2.5" : "w-[112px] ps-3.5"}`}
+        className={`flex-none border-s border-line ${
+          kasten.wort
+            ? mobile
+              ? "ps-2.5"
+              : "ps-3.5"
+            : mobile
+              ? "w-[80px] ps-2.5"
+              : "w-[112px] ps-3.5"
+        }`}
       >
         <Feldname>{kasten.label}</Feldname>
-        <div className="mt-1.5">
-          <Ergebniskasten hoehe={mobile ? 27 : 32} gross={mobile ? 11 : (kasten.gross ?? 13)}>
+        <div className={`mt-1.5 ${kasten.wort ? (mobile ? "min-w-[78px]" : "min-w-[96px]") : ""}`}>
+          <Ergebniskasten
+            hoehe={mobile ? 27 : 32}
+            gross={mobile ? (kasten.wort ? 12 : 11) : (kasten.gross ?? 13)}
+            wort={kasten.wort}
+            maxBreite={kasten.wort ? (mobile ? 124 : 176) : undefined}
+          >
             {kasten.wert}
           </Ergebniskasten>
         </div>

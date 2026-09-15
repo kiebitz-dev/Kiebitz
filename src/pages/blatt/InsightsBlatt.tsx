@@ -247,10 +247,17 @@ export default function InsightsBlatt({
             spalten={mobile ? "1fr 1fr" : "1fr 1.2fr 1.4fr 1.4fr"}
           />
         </div>
-        <div className={`flex-none border-s border-line ${mobile ? "w-[80px] ps-2.5" : "w-[104px] ps-3.5"}`}>
+        {/* Die schwächste Achse ist ein Wort · der Kasten misst sich an ihm
+            und nicht an einer festen Breite, sonst steht dort „Verwertu…". */}
+        <div className={`flex-none border-s border-line ${mobile ? "ps-2.5" : "ps-3.5"}`}>
           <Feldname>{t("blatt.weakest")}</Feldname>
-          <div className="mt-1.5">
-            <Ergebniskasten hoehe={mobile ? 27 : 32} gross={13}>
+          <div className={`mt-1.5 ${mobile ? "min-w-[78px]" : "min-w-[96px]"}`}>
+            <Ergebniskasten
+              hoehe={mobile ? 27 : 32}
+              gross={mobile ? 12 : 13}
+              wort
+              maxBreite={mobile ? 124 : 168}
+            >
               {schwaechste}
             </Ergebniskasten>
           </div>
