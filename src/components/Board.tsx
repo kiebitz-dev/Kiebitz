@@ -117,6 +117,36 @@ export type BoardEndView = {
   dismissLabel: string;
 };
 
+/**
+ * Derselbe Stellungswechsel klingt einmal, auch wenn zwei Bretter ihn zeigen.
+ *
+ * Sieben Seiten stellen neben ihrem Brett ein zweites auf: das Fokus-Brett
+ * (`components/FocusBoard.tsx`) legt sich über die Seite, das Brett darunter
+ * bleibt aber im Baum stehen — es soll ja da sein, wenn der Fokus wieder
+ * zugeht. Beide bekommen dieselbe Stellung, beide sehen denselben Wechsel,
+ * und beide spielten bis 1.4 ihren Klang: Wer im Fokus zog, hörte jeden Zug
+ * doppelt.
+ *
+ * Gemerkt wird deshalb der Wechsel selbst und nicht das Brett. Zwei Bretter
+ * desselben Baums bekommen ihre neue Stellung in derselben Übergabe, ihre
+ * Effekte laufen also im selben Anlauf; das kurze Fenster reicht dafür
+ * bequem und ist zugleich zu kurz, um einen wirklich zweimal gespielten
+ * Wechsel zu verschlucken — dafür müsste jemand in einer Fünftelsekunde
+ * vor und wieder zurück blättern.
+ */
+const KLANGFENSTER_MS = 200;
+let letzterKlang: { wechsel: string; zeit: number } | null = null;
+
+function schonGeklungen(vorher: string, nachher: string): boolean {
+  const wechsel = `${vorher}→${nachher}`;
+  const jetzt = Date.now();
+  if (letzterKlang && letzterKlang.wechsel === wechsel && jetzt - letzterKlang.zeit < KLANGFENSTER_MS) {
+    return true;
+  }
+  letzterKlang = { wechsel, zeit: jetzt };
+  return false;
+}
+
 type BoardProps = {
   fen: string;
   /** Maximale Brettbreite in px; der Container kann sie unterschreiten. */
@@ -823,12 +853,16 @@ export default function Board({
    * klingen der eigene Zug, die Engine-Antwort, der Setup-Zug einer Aufgabe
    * und das Blättern in der Zugliste gleichermaßen · und jedes Brett der App
    * bekommt den Ton, ohne ihn selbst anzumelden.
+   *
+   * Geklungen wird je Stellungswechsel und nicht je Brett · siehe
+   * `schonGeklungen` oben.
    */
   const soundFenRef = useRef(fen);
   useEffect(() => {
     const previous = soundFenRef.current;
     soundFenRef.current = fen;
     if (silent) return;
+    if (schonGeklungen(previous, fen)) return;
     soundsForTransition(previous, fen).forEach((kind) => playBoardSound(kind));
   }, [fen, silent]);
 

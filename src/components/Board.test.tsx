@@ -2,6 +2,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Board from "./Board";
 
+const soundMock = vi.hoisted(() => ({ played: [] as string[] }));
+vi.mock("../lib/sound", () => ({
+  playBoardSound: (kind: string) => soundMock.played.push(kind),
+}));
+
 const boardMock = vi.hoisted(() => ({
   props: null as Record<string, unknown> | null,
   renders: 0,
@@ -44,6 +49,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   boardMock.props = null;
   boardMock.renders = 0;
+  soundMock.played = [];
 });
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -572,5 +578,41 @@ describe("Board shapes", () => {
       configurable: true,
       value: originalElementFromPoint,
     });
+  });
+});
+
+/**
+ * Der Klang gehört zum Zug und nicht zum Brett · und ein Zug ist einer, auch
+ * wenn zwei Bretter ihn zeigen. Genau das passiert, sobald das Fokus-Brett
+ * offen ist: Es legt sich über die Seite, das Brett darunter bleibt stehen,
+ * und beide sehen denselben Stellungswechsel.
+ */
+describe("Board sound", () => {
+  it("plays one sound per position change", () => {
+    const view = render(<Board boardId="single" fen={FEN} width={400} />);
+    view.rerender(<Board boardId="single" fen={FEN_AFTER_E4} width={400} />);
+    expect(soundMock.played).toEqual(["move"]);
+  });
+
+  it("plays it once even while a second board shows the same position", () => {
+    // Ein anderer Zug als in der Prüfung darüber · derselbe wäre für das
+    // Fenster von 200 ms womöglich derselbe Wechsel, und die Prüfung liefe
+    // dann gegen den Schutz statt gegen den Fehler.
+    const nachD4 = "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1";
+    const paar = (fen: string) => (
+      <>
+        <Board boardId="page" fen={fen} width={400} />
+        <Board boardId="focus" fen={fen} width={400} />
+      </>
+    );
+    const view = render(paar(FEN));
+    view.rerender(paar(nachD4));
+    expect(soundMock.played).toEqual(["move"]);
+  });
+
+  it("stays silent where the page asks for silence", () => {
+    const view = render(<Board boardId="quiet" fen={FEN} width={400} silent />);
+    view.rerender(<Board boardId="quiet" fen={FEN_AFTER_E4} width={400} silent />);
+    expect(soundMock.played).toEqual([]);
   });
 });

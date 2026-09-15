@@ -97,6 +97,7 @@ import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
 import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug } from "../lib/erklaerung";
 import { fortsetzung } from "../lib/folge";
+import { zugfakten } from "../lib/zugfakten";
 import { useDiagramMode } from "../lib/diagramMode";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
@@ -329,6 +330,26 @@ function acpl(moves: ViewMove[]): { white: number; black: number } {
   });
   const avg = (a: number[]) => (a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length) : 0);
   return { white: avg(losses.white), black: avg(losses.black) };
+}
+
+/**
+ * Die Stellung vor einem Halbzug · `null`, wo sich die Partie nicht bis dahin
+ * nachspielen lässt.
+ *
+ * Gebraucht wird sie für die Tatsachen unter dem ruhigen Zug
+ * (`lib/zugfakten.ts`). Das Blatt hat diese Stellungen schon, weil es ohnehin
+ * die ganze Partie durchgeht; der Kasten unter der Zugliste braucht genau eine
+ * und spielt deshalb nur bis dorthin — ein paar Dutzend Züge auf einen Klick,
+ * und nicht die volle Rechnung des Blattes für einen einzigen Satz.
+ */
+function stellungVor(sans: readonly string[], anzahl: number): string | null {
+  const brett = new Chess();
+  try {
+    for (const san of sans.slice(0, anzahl)) brett.move(san);
+  } catch {
+    return null;
+  }
+  return brett.fen();
 }
 
 /**
@@ -1111,11 +1132,15 @@ export default function Analysis({
     if (!row) return null;
     // Nur für diesen einen Halbzug nachgespielt · das Blatt rechnet die ganze
     // Partie durch, weil es alle Sätze zugleich zeigt. Hier steht einer.
+    const davor = stellungVor(sans, ply - 1);
     const satz = erklaereZug(row, {
       t,
       locale,
       seed: `${game?.id}:${ply}`,
       folge: fortsetzung(sans.slice(0, ply - 1), currentMove.san, rowsByPly.get(ply + 1)?.pv),
+      // Was der Zug getan hat · der Satz für die siebzig Züge, zu denen die
+      // Analyse weder ein Motiv noch ein Urteil hat (siehe lib/zugfakten.ts).
+      fakten: davor ? zugfakten(davor, currentMove.san, sans[ply - 2]) : null,
     });
     const grund = begruendeZug(row, { t, locale });
     return [satz, grund].filter(Boolean).join(" ") || null;
@@ -1212,6 +1237,7 @@ export default function Analysis({
           locale,
           seed: `${game.id}:${row.ply}`,
           folge: davor ? fortsetzung([], san, rowsByPly.get(index + 2)?.pv, davor) : null,
+          fakten: davor ? zugfakten(davor, san, sans[index - 1]) : null,
         }),
         grund: begruendeZug(row, { t, locale }),
         gewicht: row.loss_cp ?? null,

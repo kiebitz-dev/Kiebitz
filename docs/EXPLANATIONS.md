@@ -91,6 +91,61 @@ Four rules:
 keep the short form — the judgment, the motif, and " Besser war {san}."
 Nothing is invented for them; re-analysing the game fills the lines in.
 
+## The quiet move
+
+Everything above needs a judgment or a motif, and most half-moves have
+neither: a game has five of them and seventy-five others. Those seventy-five
+stood there without a word until 1.4, and that does not read as restraint —
+it reads as an analysis that failed. It was reported as exactly that.
+
+They speak now, and without breaking the rule the rest of the file stands on.
+Nothing is guessed: `lib/zugfakten.ts` replays the position with chess.js and
+reports what was actually there — what the move took, whether it gave check,
+whether the king left the centre, whether a knight or bishop left its home
+square for the first time, whether a pawn entered the centre, whether an enemy
+piece is now in the line of fire, whether the piece that moved was itself
+under attack and got out. `schlichterSatz` in `lib/erklaerung.ts` turns that
+into **one** sentence:
+
+```
+3.Bc4      Bishop c4 comes into play.
+8…Qe7      Queen e6 was under attack and moves away.
+6…Be6      Bishop e6 comes into play. It takes aim at bishop c4 along the way.
+10.a3      The engine finds nothing to fault in a3.
+```
+
+One, not a list. What a move does is a list; what is notable about it is a
+sentence, and a reader clicking through eighty half-moves wants the second.
+Only the threat may attach itself, because it points past the move instead of
+describing it.
+
+Two of these facts are deliberately narrow, and the narrowness is the point:
+
+- **A threat is only a threat where it wins something.** The target has to be
+  worth more than the attacker, or be undefended and at least a minor piece.
+  Without that, every bishop move would say "takes aim at f7" — and f7 is
+  covered by the king.
+- **Being attacked is not the same as being hit.** A knight on c6 attacked by
+  a bishop and defended by a pawn is not in danger; moving it is not an
+  escape. The cheapest attacker has to be worth less than the piece, or the
+  piece has to stand there undefended.
+
+Where nothing at all is left, the last sentence says the only thing still
+true: the engine has nothing against this move. That is not filler — it is
+what the missing mark next to the move already claims. It is the one sentence
+that repeats within a game, and it has two phrasings for that reason.
+
+This layer is in TypeScript and not, like the motifs, in Rust. It needs no
+engine and no new column, so it needs no second analysis run over fifteen
+hundred games — and the position it works from is already there wherever the
+page replays the game. The same reasoning put `lib/folge.ts` on this side.
+
+The page has to hand the facts over (`fakten`), and only two places do:
+the analysis board and its sheet, both of which replay the game anyway.
+`Dashboard.tsx` does not, on purpose — it keeps chess.js out of the startup
+bundle, and the one move it shows is a blunder, which has a motif of its own.
+Without `fakten` the function is silent exactly as it was before.
+
 ## The shape of it
 
 Rust detects and stores **facts**; TypeScript turns them into **sentences**.
@@ -103,6 +158,7 @@ text written in Rust speaks one of them.
 | Game verdict | `src-tauri/src/verdict.rs` | a list of `{key, params}` building blocks |
 | Wiring | `src-tauri/src/analysis.rs` | writes both during the analysis run |
 | Captures | `src/lib/folge.ts` | the opponent's first capture and the material tally of the line |
+| The quiet move | `src/lib/zugfakten.ts` | what the move did on the board |
 | Sentences | `src/lib/erklaerung.ts` | the finished text, per interface language |
 | Words | `src/lib/locales/*.ts` | `expl.*` and `verdict.*` |
 
@@ -187,9 +243,11 @@ move gets depends on the move, never on the mode:
   annotation: the indented paragraph in the game text of `AnalysisBlatt`, the
   coloured callout under the move list on the dashboard, whose border keeps
   saying which judgment it carries.
-- **Every other judged move** gets the sentence from the analysis
-  (`erklaereZug` plus its reason line) — the `AUS DER ANALYSE` block in diagram
-  mode, the same callout on the dashboard.
+- **Every other move** gets the sentence from the analysis (`erklaereZug` plus
+  its reason line) — the `AUS DER ANALYSE` block in diagram mode, the same
+  callout on the dashboard. Since 1.4 that is *every* other move and not only
+  the judged ones: where there is neither judgment nor motif, the sentence
+  comes from what the move did on the board (see "The quiet move" above).
 
 Until 1.4 the dashboard put the annotation under every judged move, so an
 approved one read differently on either side: "Bester Zug. Rxe2 trifft die

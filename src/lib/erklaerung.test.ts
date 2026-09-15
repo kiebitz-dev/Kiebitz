@@ -14,6 +14,7 @@ import {
   kommentiereZug,
   type Zugzeile,
 } from "./erklaerung";
+import { zugfakten } from "./zugfakten";
 import { loadLocale, translator } from "./locales/registry";
 import { setFormatLocale } from "./format";
 
@@ -140,6 +141,71 @@ describe("Erklärung eines Zuges", () => {
       { t: de(), locale: "de" }
     );
     expect(satz).not.toContain("expl.");
+  });
+});
+
+/**
+ * Der schlichte Satz · was ein unauffälliger Zug bekommt.
+ *
+ * Gemeldet worden ist genau das Gegenteil: Die meisten Züge bekamen gar nichts,
+ * und das las sich nicht nach Zurückhaltung, sondern nach einer ausgefallenen
+ * Analyse. Geprüft wird hier beides — dass jetzt etwas dasteht, und dass es
+ * nur das ist, was auf dem Brett auch zu sehen war.
+ */
+describe("Schlichter Satz zu einem unauffälligen Zug", () => {
+  const ITALIENISCH = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 4 3";
+  const satzZu = (fen: string, san: string, davor?: string) =>
+    erklaereZug(zeile({ san, judgment: "", motif: "" }), {
+      t: de(),
+      locale: "de",
+      fakten: zugfakten(fen, san, davor),
+    });
+
+  it("schweigt weiter, wo keine Stellung vorliegt", () => {
+    // Das Startblatt rechnet ohne chess.js · dort bleibt es beim Schweigen,
+    // statt einen Satz aus nichts zu bauen.
+    expect(erklaereZug(zeile({ judgment: "", motif: "" }), { t: de(), locale: "de" })).toBeNull();
+  });
+
+  it("sagt etwas zu dem Zug, zu dem bisher nichts dastand", () => {
+    // Genau der Zug aus der Meldung: 3.Lc4 im Vierspringerspiel.
+    expect(satzZu(ITALIENISCH, "Bc4")).toBe("Läufer c4 kommt ins Spiel.");
+  });
+
+  it("nennt die Figur beim Schlagen und das Feld beim Zurücknehmen", () => {
+    expect(satzZu(ITALIENISCH, "Nxe5", "Nc6")).toBe("Nxe5 schlägt einen Bauern.");
+    const nachSxe5 = "r1bqkbnr/pppp1ppp/2n5/4N3/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 0 3";
+    expect(satzZu(nachSxe5, "Nxe5", "Nxe5")).toBe("Nxe5 nimmt auf e5 zurück.");
+  });
+
+  it("hängt die Drohung an den ruhigen Zug, statt sie zu verschweigen", () => {
+    const italienisch = "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4";
+    expect(satzZu(italienisch, "d4")).toBe(
+      "d4 besetzt das Zentrum. Dabei gerät Läufer c5 ins Visier."
+    );
+  });
+
+  it("bleibt bei der Wahrheit, wo nichts weiter zu sagen ist", () => {
+    // Ein Randbauer, der nichts angreift und nichts entwickelt · dann steht da
+    // die einzige Auskunft, die stimmt. Welche der beiden Formulierungen es
+    // wird, hängt am Halbzug — geprüft wird, dass es eine davon ist.
+    expect(satzZu(ITALIENISCH, "h3")).toMatch(/(ruhiger Zug|nichts zu bemängeln)/);
+  });
+
+  it("nennt die gerettete Figur, statt den Zug ruhig zu nennen", () => {
+    const nachNg5 = "r3kb1r/pppp1ppp/2n1qn2/6N1/4P3/2N5/PPPP1PPP/R1BQR1K1 b kq - 5 8";
+    expect(satzZu(nachNg5, "Qe7")).toBe("Dame e6 stand im Feuer und geht aus dem Weg.");
+  });
+
+  it("lässt dem Motiv den Vortritt", () => {
+    // Ein erkanntes Motiv ist die bessere Auskunft · der schlichte Satz ist die
+    // Rückfallebene und nicht die Regel.
+    const satz = erklaereZug(
+      zeile({ san: "Bc4", judgment: "", motif: "best_move", motif_detail: JSON.stringify({ san: "Bc4" }) }),
+      { t: de(), locale: "de", fakten: zugfakten(ITALIENISCH, "Bc4") }
+    );
+    expect(satz).toContain("Bc4");
+    expect(satz).not.toContain("kommt ins Spiel");
   });
 });
 

@@ -66,6 +66,7 @@ import {
   Rubrik,
   Verzeichnisteil,
   Verzeichniszeile,
+  Weg,
   Zugfolge,
   type Feld,
 } from "../../components/blatt/Satz";
@@ -148,6 +149,18 @@ export interface RepertoireBlattProps {
    * keinen Baukasten, in den er führen könnte).
    */
   onZugSpielen?: (von: string, nach: string) => boolean;
+  /**
+   * Das Buch als PGN · derselbe Abschnitt wie die Karte „Buch" der
+   * gewöhnlichen Fassung, hereingereicht statt ein zweites Mal gebaut.
+   *
+   * Fehlt er, steht am Fuß des Verzeichnisses nichts · die Web-Vorschau hat
+   * keine Datei, aus der sie lesen oder in die sie schreiben könnte.
+   */
+  buch?: {
+    offen: boolean;
+    onUmschalten: () => void;
+    inhalt: ReactNode;
+  };
 }
 
 /** Was gerade am Zeiger hängt · Teil, Herkunft, Ziel und der Weg dorthin. */
@@ -189,6 +202,7 @@ export default function RepertoireBlatt({
   onTraining,
   onTeilen,
   onZugSpielen,
+  buch: buchAlsPgn,
 }: RepertoireBlattProps) {
   const { t } = useI18n();
   // Tippen–tippen liegt im selben Haken wie am Brett der gewöhnlichen Fassung
@@ -389,10 +403,38 @@ export default function RepertoireBlatt({
         </div>
       ))}
       <div className="flex-1" />
-      <div className="mt-3 border-t border-line pt-2.5 text-[10.5px] leading-[1.6] text-ink3">
+      {/* Der Weg zum PGN steht am Fuß der Spalte, deren Inhalt er ausgibt ·
+          dieselbe Stelle, an der die Wochenspalte ihren Bericht anbietet. In
+          der Rubrik oben ist kein Platz: Dort steht schon der eine Griff, den
+          ein Abschnitt hat (`weg` in Satz.tsx), und das ist „Variante
+          anlegen". */}
+      {buchAlsPgn && (
+        <div className="mt-3 border-t border-line">
+          <Weg onClick={buchAlsPgn.onUmschalten}>{t("rep.book")}</Weg>
+        </div>
+      )}
+      <div
+        className={`text-[10.5px] leading-[1.6] text-ink3 ${
+          buchAlsPgn ? "border-t border-line pt-2.5" : "mt-3 border-t border-line pt-2.5"
+        }`}
+      >
         {t("blatt.bookNumberNote")}
         <span className="mt-1 block">{t("rep.variationKeys")}</span>
       </div>
+    </div>
+  );
+
+  /**
+   * Der aufgeschlagene PGN-Abschnitt · quer unter den Spalten.
+   *
+   * `.blatt-formular` setzt die gewöhnlichen Bedienteile in den Satz des
+   * Blattes um — eckige Felder, Linien statt Flächen —, genau wie beim Import
+   * des Partieverzeichnisses. Gebaut wird hier nichts ein zweites Mal.
+   */
+  const pgnBereich = buchAlsPgn?.offen && (
+    <div className="blatt-formular mt-5 border-t border-ink pt-3">
+      <Rubrik>{t("rep.book")}</Rubrik>
+      <div className="mt-3">{buchAlsPgn.inhalt}</div>
     </div>
   );
 
@@ -505,17 +547,24 @@ export default function RepertoireBlatt({
               platzhalter={notizPlatzhalter}
               onSpeichern={onNotiz}
             />
-          ) : (
+          ) : notiz ? (
             <div
-              className={`buch mt-1.5 text-[14px] ${notiz ? "text-ink2" : "text-ink3"}`}
+              className="buch mt-1.5 text-[14px] text-ink2"
               style={{
                 lineHeight: "25px",
                 background:
                   "repeating-linear-gradient(to bottom, transparent 0, transparent 24px, var(--color-line) 24px, var(--color-line) 25px)",
               }}
             >
-              {notiz || notizPlatzhalter}
+              {notiz}
             </div>
+          ) : (
+            // Kein Knoten, also keine Notiz, die hier hinge · dann steht hier
+            // derselbe Gedankenstrich wie in den Feldern darüber und nicht die
+            // Aufforderung, eine Notiz zu schreiben. Ein Platzhalter auf
+            // liniertem Papier sieht aus wie ein Feld, das auf eine Eingabe
+            // wartet — an der Grundstellung wartet es auf nichts.
+            <div className="mt-[3px] text-[12.5px] text-ink">—</div>
           )}
         </div>
       </div>
@@ -574,6 +623,7 @@ export default function RepertoireBlatt({
         <div className="mt-3.5">{diagrammBlock}</div>
         <div className="mt-4">{rechts}</div>
         <div className="mt-4">{buch}</div>
+        {pgnBereich}
       </div>
     );
   }
@@ -586,6 +636,7 @@ export default function RepertoireBlatt({
         {diagrammBlock}
         {rechts}
       </div>
+      {pgnBereich}
     </div>
   );
 }

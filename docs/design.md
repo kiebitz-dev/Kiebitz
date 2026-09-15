@@ -121,6 +121,16 @@ Its rules:
   `components/RepertoireTrainer.tsx` still holds the stack, the grades and the
   schedule, and picks a presentation.
 
+  A fourth closed two more. The repertoire's **note on a position** printed
+  the invitation to write one even where no position was chosen — a field that
+  looked like it was waiting for an entry while nothing could hang on it; the
+  em dash of the fields above it stands there now, and the invitation stays
+  where it belongs, in the field you can actually type in. And the **book as
+  PGN** — reading a repertoire in and writing it out — existed only as a card
+  at the foot of the ordinary page. It is the same card, handed in and re-set
+  (`buch` in `RepertoireBlatt`), behind a way at the foot of the index, where
+  the week column already offers its report.
+
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template
   library — neither copying it nor handing it back works. Its state moves out

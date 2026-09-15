@@ -1972,6 +1972,22 @@ export const de = {
   "expl.cost.captureCheckGain": "{reply} schlägt {mat} mit Schach und gewinnt danach {gain}.",
   "expl.cost.only": "Die Fortsetzung kostet {mat}.",
   "expl.mainLine": "Die Engine rechnet weiter mit {line}.",
+  // Der schlichte Satz zu einem Zug ohne Motiv und ohne Urteil · siehe
+  // `schlichterSatz` in lib/erklaerung.ts. Eine Formulierung je Schlüssel und
+  // nicht zwei: Diese Sätze beschreiben, sie erzählen nicht.
+  "expl.plain.check": "{san} bietet Schach.",
+  "expl.plain.captureCheck": "{san} schlägt {mat} und bietet Schach.",
+  "expl.plain.capture": "{san} schlägt {mat}.",
+  "expl.plain.recapture": "{san} nimmt auf {square} zurück.",
+  "expl.plain.promotion": "{san} wandelt den Bauern um.",
+  "expl.plain.castle": "{san} bringt den König aus der Mitte und verbindet die Türme.",
+  "expl.plain.develop": "{piece} {square} kommt ins Spiel.",
+  "expl.plain.center": "{san} besetzt das Zentrum.",
+  "expl.plain.threat": "{san} nimmt {piece} {square} ins Visier.",
+  "expl.plain.alsoThreat": "Dabei gerät {piece} {square} ins Visier.",
+  "expl.plain.escape": "{piece} {square} stand im Feuer und geht aus dem Weg.",
+  "expl.plain.quiet.1": "{san} ist ein ruhiger Zug — die Engine hat nichts daran auszusetzen.",
+  "expl.plain.quiet.2": "An {san} findet die Engine nichts zu bemängeln.",
   "expl.motif.mate": "Matt",
   "expl.motif.missed_mate": "übersehenes Matt",
   "expl.motif.allowed_mate": "zugelassenes Matt",

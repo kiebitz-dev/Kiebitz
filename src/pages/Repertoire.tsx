@@ -512,6 +512,16 @@ function LiveRepertoire() {
    */
   const [editing, setEditing] = useState<VariationLine | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Ist der PGN-Abschnitt des Buchsatzes aufgeschlagen?
+   *
+   * Nur der Modus kennt die Frage: In der gewöhnlichen Fassung steht die Karte
+   * „Buch als PGN" ohnehin unten auf der Seite. Auf dem Blatt wäre ein
+   * dauerhaft stehender Abschnitt quer unter den drei Spalten eine vierte
+   * Spalte, die niemand aufgeschlagen hat — also steht er hinter einem Weg am
+   * Fuß des Verzeichnisses, wie der Import im Partieverzeichnis.
+   */
+  const [bookOpen, setBookOpen] = useState(false);
   const [limits, setLimits] = useState<{ due: number; fresh: number }>({ due: 20, fresh: 5 });
   const now = Math.floor(Date.now() / 1000);
 
@@ -1351,6 +1361,13 @@ function LiveRepertoire() {
             // ein Zug auf der Buchstellung öffnet den Baukasten mit genau
             // diesem Zug als erstem Schritt.
             onZugSpielen={startFromMove}
+            // Dieselbe Karte wie unten auf der gewöhnlichen Seite, nur ohne
+            // ihren Rahmen · einlesen und ausgeben gehören in beide Fassungen.
+            buch={{
+              offen: bookOpen,
+              onUmschalten: () => setBookOpen((offen) => !offen),
+              inhalt: <BookBody onDone={reload} onNotice={setNotice} />,
+            }}
           />
         </Suspense>
       ) : compact ? (
@@ -1472,6 +1489,30 @@ function BookCard({
   onNotice: (message: string) => void;
 }) {
   const t = useT();
+  return (
+    <Card title={t("rep.book")}>
+      <BookBody onDone={onDone} onNotice={onNotice} />
+    </Card>
+  );
+}
+
+/**
+ * Der Inhalt derselben Karte ohne ihren Rahmen · beide Fassungen setzen ihn.
+ *
+ * Die gewöhnliche Fassung stellt ihn in eine Karte, das Buch in einen
+ * Abschnitt mit Haarlinie (`buch` in pages/blatt/RepertoireBlatt.tsx). Zwei
+ * Wege zu einer Datei einzulesen wären zwei Wege, die auseinanderlaufen
+ * können — dieselbe Regel, nach der `GamesBlatt` seinen Import hereingereicht
+ * bekommt, statt ihn ein zweites Mal zu bauen.
+ */
+function BookBody({
+  onDone,
+  onNotice,
+}: {
+  onDone: () => void;
+  onNotice: (message: string) => void;
+}) {
+  const t = useT();
   const [side, setSide] = useState<"white" | "black">("white");
   const [name, setName] = useState("");
   const [pasted, setPasted] = useState("");
@@ -1531,7 +1572,7 @@ function BookCard({
   };
 
   return (
-    <Card title={t("rep.book")}>
+    <>
       <div className="flex flex-wrap gap-1.5">
         {(["white", "black"] as const).map((s) => (
           <Chip key={s} active={side === s} onClick={() => setSide(s)}>
@@ -1572,7 +1613,7 @@ function BookCard({
         </div>
       )}
       <p className="mt-3 text-[12px] leading-relaxed text-ink3">{t("rep.pgnNote")}</p>
-    </Card>
+    </>
   );
 }
 

@@ -108,13 +108,50 @@ describe("Die Notiz zur Stellung", () => {
     expect(screen.queryByRole("button", { name: "common.save" })).toBeNull();
   });
 
-  it("bleibt ein Abdruck, wo es keinen Knoten zum Schreiben gibt", () => {
+  it("setzt einen Gedankenstrich, wo es keinen Knoten zum Schreiben gibt", () => {
     // Die Grundstellung hat keinen Knoten, an dem eine Notiz hängen könnte ·
-    // dann steht der Platzhalter da und kein Feld.
+    // dann steht dort derselbe Strich wie in den Feldern darüber. Der
+    // Platzhalter gehört ins Feld, das auf eine Eingabe wartet, und hier
+    // wartet keins.
     zeichne({ notiz: "", onNotiz: undefined });
 
     expect(screen.queryByRole("textbox", { name: "rep.note" })).toBeNull();
-    expect(screen.getByText("rep.notePlaceholder")).toBeTruthy();
+    expect(screen.queryByText("rep.notePlaceholder")).toBeNull();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("hält das PGN hinter einem Weg am Fuß des Verzeichnisses", () => {
+    const onUmschalten = vi.fn();
+    zeichne({
+      buch: { offen: false, onUmschalten, inhalt: <div>PGN-Karte</div> },
+    });
+
+    // Zugeklappt steht nur der Weg da · der Abschnitt quer unter den Spalten
+    // wäre sonst eine vierte Spalte, die niemand aufgeschlagen hat.
+    expect(screen.queryByText("PGN-Karte")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "rep.book →" }));
+    expect(onUmschalten).toHaveBeenCalled();
+  });
+
+  it("setzt die PGN-Karte in den Satz des Blattes, statt sie neu zu bauen", () => {
+    const { container } = zeichne({
+      buch: { offen: true, onUmschalten: vi.fn(), inhalt: <div>PGN-Karte</div> },
+    });
+
+    expect(screen.getByText("PGN-Karte")).toBeTruthy();
+    expect(container.querySelector(".blatt-formular")).toBeTruthy();
+  });
+
+  it("lässt den Fuß ohne Weg, wo es kein Buch zum Ausgeben gibt", () => {
+    zeichne({ buch: undefined });
+
+    expect(screen.queryByRole("button", { name: "rep.book →" })).toBeNull();
+  });
+
+  it("zeigt eine geschriebene Notiz auch dort, wo nicht geschrieben wird", () => {
+    zeichne({ notiz: "Immer c3 und d4 vorbereiten.", onNotiz: undefined });
+
+    expect(screen.getByText("Immer c3 und d4 vorbereiten.")).toBeTruthy();
   });
 });
 

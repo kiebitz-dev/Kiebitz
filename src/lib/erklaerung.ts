@@ -21,6 +21,7 @@
  * sich verschieden.
  */
 import type { Fortsetzung, Materialstand } from "./folge";
+import type { Zugfakten } from "./zugfakten";
 import type { Key, Locale, TFunc } from "./i18n";
 import { notationLine, translateSan } from "./notation";
 import { de } from "./format";
@@ -217,12 +218,21 @@ export function erklaereZug(
      * Gerechnet wird sie dort, wo die Stellung steht · siehe lib/folge.ts.
      */
     folge?: Fortsetzung | null;
+    /**
+     * Was der Zug auf dem Brett getan hat · siehe lib/zugfakten.ts.
+     *
+     * Der Ausweg aus dem Schweigen: Ein Zug ohne Motiv und ohne Urteil ist
+     * nicht sprachlos, er ist nur unauffällig. Was er tut, steht trotzdem in
+     * der Stellung, und wo die Seite sie nachgespielt hat, bekommt auch er
+     * seinen Satz.
+     */
+    fakten?: Zugfakten | null;
   }
 ): string | null {
   const motiv = motivSatz(row, options);
   if (motiv) return motiv;
 
-  if (!row.judgment) return null;
+  if (!row.judgment) return schlichterSatz(row, options);
   const { t, locale } = options;
 
   // Kein Motiv · dann sagt die Fortsetzung, was sie einbringt. „Sxe5 kostet
@@ -248,6 +258,84 @@ export function erklaereZug(
     });
   }
   return t(pick("lossOnly"), { san: san(row.san) });
+}
+
+/**
+ * Der Satz zu einem Zug, an dem nichts auffällig war.
+ *
+ * Fünf Züge einer Partie bekommen ein Motiv, fünf ein Urteil, und die übrigen
+ * siebzig standen bis 1.4 ohne ein Wort da. Das liest sich nicht wie
+ * Zurückhaltung, sondern wie eine ausgefallene Analyse — so ist es auch
+ * gemeldet worden. Ein ruhiger Zug hat trotzdem etwas getan: Er hat
+ * geschlagen, Schach geboten, den König aus der Mitte gebracht, eine Figur ins
+ * Spiel gestellt oder eine gegnerische ins Visier genommen. All das steht in
+ * `lib/zugfakten.ts`, geprüft und nicht geraten.
+ *
+ * Gesagt wird davon **eine** Sache, nach der Reihenfolge hier. Was ein Zug
+ * alles tut, ist eine Liste; was an ihm auffällt, ist ein Satz — und die Liste
+ * wäre das Gegenteil dessen, was der Leser beim Durchklicken braucht. Nur die
+ * Drohung darf sich anhängen, weil sie über den ruhigen Zug hinausweist,
+ * statt ihn zu beschreiben.
+ *
+ * Und wo nichts davon zutrifft, steht die letzte wahre Auskunft: Die Engine
+ * hat an diesem Zug nichts auszusetzen. Das ist keine Füllung, sondern genau
+ * das, was die fehlende Marke daneben ohnehin behauptet.
+ */
+function schlichterSatz(
+  row: Zugzeile,
+  options: { t: TFunc; locale: Locale; seed?: string; fakten?: Zugfakten | null }
+): string | null {
+  const { t, locale, fakten } = options;
+  if (!fakten) return null;
+  const san = translateSan(row.san, locale);
+  const feld = fakten.feld;
+
+  const drohsatz = (schluessel: "expl.plain.threat" | "expl.plain.alsoThreat") =>
+    fakten.drohung
+      ? t(schluessel, {
+          san,
+          piece: pieceName(t, fakten.drohung.figur),
+          square: fakten.drohung.feld,
+        })
+      : null;
+
+  // Zuerst, was die Stellung verändert hat, dann was sie vorbereitet.
+  if (fakten.matt) return t("expl.mate.1", { san });
+  if (fakten.schlaegt && fakten.schach) {
+    return t("expl.plain.captureCheck", { san, mat: t(`expl.mat.${fakten.schlaegt}` as Key) });
+  }
+  if (fakten.schach) return t("expl.plain.check", { san });
+  if (fakten.umwandlung) return t("expl.plain.promotion", { san });
+  if (fakten.rochade) return t("expl.plain.castle", { san });
+  // Der Rückschlag steht vor dem Schlag: „schlägt einen Springer" ist über das
+  // Ende eines Abtauschs zwar wahr, liest sich aber wie ein Gewinn.
+  if (fakten.rueckschlag) return t("expl.plain.recapture", { san, square: feld });
+  if (fakten.schlaegt) {
+    return t("expl.plain.capture", { san, mat: t(`expl.mat.${fakten.schlaegt}` as Key) });
+  }
+
+  const ruhig = fakten.entwicklung
+    ? t("expl.plain.develop", { piece: pieceName(t, fakten.figur), square: feld })
+    : fakten.zentrum
+      ? t("expl.plain.center", { san })
+      : null;
+  if (ruhig) {
+    const dazu = drohsatz("expl.plain.alsoThreat");
+    return dazu ? `${ruhig} ${dazu}` : ruhig;
+  }
+  const gedroht = drohsatz("expl.plain.threat");
+  if (gedroht) return gedroht;
+  if (fakten.flucht) {
+    return t("expl.plain.escape", {
+      piece: pieceName(t, fakten.figur),
+      square: fakten.flucht,
+    });
+  }
+  // Der letzte Satz ist der einzige, der sich in einer Partie wiederholt · zwei
+  // Formulierungen, gewählt wie überall am Halbzug, damit acht ruhige Züge
+  // nicht achtmal wörtlich dasselbe sagen.
+  const seed = options.seed ?? `${row.ply}`;
+  return t(`expl.plain.quiet.${seedIndex(seed, VARIANTS) + 1}` as Key, { san });
 }
 
 /**
