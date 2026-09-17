@@ -18,7 +18,12 @@ const RUY_UCI =
  * after the move and the engine's pick before it. `evals` may be shorter than
  * the game; the remaining plies simply repeat the last value.
  */
-function rows(uci: string[], evals: Record<number, number>, best?: Record<number, string>): MoveEvalRow[] {
+function rows(
+  uci: string[],
+  evals: Record<number, number>,
+  best?: Record<number, string>,
+  judgments?: Record<number, MoveEvalRow["judgment"]>
+): MoveEvalRow[] {
   let letzte = 20;
   return uci.map((played, index) => {
     const ply = index + 1;
@@ -29,7 +34,7 @@ function rows(uci: string[], evals: Record<number, number>, best?: Record<number
       eval_cp: letzte,
       mate_in: null,
       best_uci: best?.[ply] ?? played,
-      judgment: "",
+      judgment: judgments?.[ply] ?? "",
       phase: "middlegame",
     };
   });
@@ -89,6 +94,37 @@ describe("move judgments", () => {
       rows(RUY_UCI, { 22: 10, 23: 8 }, { 23: "b1c3" })
     );
     expect(moves[22].judgment).toBe("excellent");
+  });
+
+  it("turns an error that follows an opponent blunder into a miss", () => {
+    // Black blunders on ply 20, White answers with a mistake on ply 21: the
+    // chance was there and went by. That is what the insights already count
+    // as an unpunished opponent error.
+    const moves = rowsToViewMoves(
+      RUY,
+      rows(RUY_UCI, {}, {}, { 20: "blunder", 21: "mistake" })
+    );
+    expect(moves[20].judgment).toBe("miss");
+    expect(moves[20].nag).toBe("✗");
+    // The opponent's blunder keeps its own name.
+    expect(moves[19].judgment).toBe("blunder");
+  });
+
+  it("leaves the same error a mistake when nothing was there to punish", () => {
+    const moves = rowsToViewMoves(RUY, rows(RUY_UCI, {}, {}, { 21: "mistake" }));
+    expect(moves[20].judgment).toBe("mistake");
+  });
+
+  it("counts a miss as an opening for the other side", () => {
+    // A miss stays an error in its own right, so the move after it can be a
+    // miss as well — otherwise the player who let the first one through would
+    // be let off by a relabelling.
+    const moves = rowsToViewMoves(
+      RUY,
+      rows(RUY_UCI, {}, {}, { 20: "blunder", 21: "blunder", 22: "mistake" })
+    );
+    expect(moves[20].judgment).toBe("miss");
+    expect(moves[21].judgment).toBe("miss");
   });
 
   it("shows a mark next to every judgment that has one", () => {

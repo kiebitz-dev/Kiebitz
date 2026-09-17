@@ -464,8 +464,13 @@ function folgeSatz(
  */
 export const LINIE = 5;
 
-/** Die Urteile, zu denen es überhaupt etwas zu bemängeln gibt. */
-const BEMAENGELT = ["inaccuracy", "mistake", "blunder"];
+/**
+ * Die Urteile, zu denen es überhaupt etwas zu bemängeln gibt.
+ *
+ * „Verpasst" gehört dazu: Es ist ein Fehler wie die anderen, nur einer, der
+ * auf einen Fehler des Gegners folgt · siehe `VERPASSBAR` in lib/urteil.ts.
+ */
+const BEMAENGELT = ["inaccuracy", "mistake", "blunder", "miss"];
 
 export function istBemaengelt(judgment: string | undefined): boolean {
   return BEMAENGELT.includes(judgment ?? "");
@@ -519,6 +524,15 @@ export function kommentiereZug(
     /** Ob dieses Urteil ein Mangel ist · Ungenauigkeit, Fehler, Patzer. */
     bemaengelt: boolean;
     /**
+     * Ob der Mangel eine verpasste Gelegenheit war.
+     *
+     * Dann steht vor allem anderen der Satz, der die Lage beschreibt: Der
+     * Gegner hat sich eben vertan, und dieser Zug gibt es wieder her. Ohne ihn
+     * läse sich die Anmerkung wie zu jedem anderen Fehler, und der Grund,
+     * warum der Zug besonders weh tut, stünde nirgends.
+     */
+    verpasst?: boolean;
+    /**
      * Der bessere Zug in englischem SAN, wo er nicht aus der Linie hervorgeht.
      *
      * Partien, die vor der Hauptvarianten-Spalte analysiert wurden, haben
@@ -557,6 +571,11 @@ export function kommentiereZug(
   const saetze: string[] = [];
 
   saetze.push(t("an.qualityComment", { judgment: urteil }));
+
+  if (options.verpasst) {
+    const seed = options.seed ?? `${row.ply}`;
+    saetze.push(t(`expl.missed_punish.${seedIndex(seed, VARIANTS) + 1}` as Key));
+  }
 
   const motiv = motivSatz(row, options);
   if (motiv) saetze.push(motiv);

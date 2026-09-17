@@ -34,6 +34,7 @@ export type MoveJudgment =
   | "best"
   | "excellent"
   | "good"
+  | "miss"
   | "inaccuracy"
   | "mistake"
   | "blunder";
@@ -46,6 +47,7 @@ export const NAG: Record<MoveJudgment, string> = {
   best: "★",
   excellent: "✓",
   good: "•",
+  miss: "✗",
   inaccuracy: "?!",
   mistake: "?",
   blunder: "??",
@@ -63,6 +65,7 @@ export const JUDGMENT_COLOR: Record<MoveJudgment, string> = {
   best: "var(--color-win)",
   excellent: "var(--color-accent)",
   good: "var(--color-draw)",
+  miss: "var(--color-violet)",
   inaccuracy: "var(--color-gold)",
   mistake: "var(--color-warn)",
   blunder: "var(--color-loss)",
@@ -80,6 +83,7 @@ export const MARKED_IN_LIST: MoveJudgment[] = [
   "brilliant",
   "great",
   "excellent",
+  "miss",
   "inaccuracy",
   "mistake",
   "blunder",
@@ -225,6 +229,21 @@ const WENDE_SPRUNG = 0.25;
 const FAST_BESTER = 0.02;
 
 /**
+ * Urteile, die zu einem „Verpasst" werden, wenn der Gegner gerade gepatzt hat.
+ *
+ * Die Gelegenheit selbst zählen die Insights schon: `punishment` in
+ * `src-tauri/src/insights/content.rs` nimmt jeden Fehler und Patzer des
+ * Gegners als Chance und hält sie für verpasst, sobald der eigene Zug danach
+ * mindestens zehn Prozentpunkte Gewinnwahrscheinlichkeit abgibt. Genau das ist
+ * die Schwelle, ab der die Analyse „Ungenauigkeit" schreibt — deshalb reicht
+ * hier die Liste der Urteile, und es braucht keine zweite Rechnung.
+ */
+const VERPASSBAR: MoveJudgment[] = ["inaccuracy", "mistake", "blunder"];
+
+/** Fehler des Gegners, die überhaupt eine Gelegenheit eröffnen. */
+const GELEGENHEIT = ["mistake", "blunder"];
+
+/**
  * Gewinnwahrscheinlichkeit zu Lage: verloren (0), offen (1), gewonnen (2).
  *
  * Die Grenzen liegen dort, wo aus „schlechter" ein „verloren" wird · 0,30 und
@@ -250,6 +269,13 @@ export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[]
   let prevEval = 20;
   let evalDavor = 20;
   let letztesZiel = "";
+  /**
+   * Das Urteil des Analyselaufs über den Halbzug davor · also über den Zug
+   * des Gegners. Absichtlich das gespeicherte und nicht das hier vergebene:
+   * Ein „Verpasst" bleibt für die Gegenseite ein Fehler und eröffnet ihr
+   * seinerseits eine Gelegenheit.
+   */
+  let letztesUrteil = "";
   return sans.map((san, i) => {
     const fenVor = chess.fen();
     const r = byPly.get(i + 1);
@@ -270,6 +296,12 @@ export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[]
     const engineJudgment = r?.judgment as MoveJudgment | "" | undefined;
     const isBest = !!r?.best_uci && r.best_uci.slice(0, playedUci.length) === playedUci;
     let judgment: MoveJudgment | undefined = engineJudgment || undefined;
+    // Der Gegner hat sich gerade vertan, und der eigene Zug gibt die
+    // Gelegenheit wieder her · das ist kein gewöhnlicher Fehler, sondern
+    // eine verpasste Chance, und sie bekommt ihre eigene Marke.
+    if (judgment && VERPASSBAR.includes(judgment) && GELEGENHEIT.includes(letztesUrteil)) {
+      judgment = "miss";
+    }
     if (r && !judgment) {
       const vorzeichen = weiss ? 1 : -1;
       const meinWp = (e: number) => (weiss ? winProb(e) : 100 - winProb(e)) / 100;
@@ -304,6 +336,7 @@ export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[]
     evalDavor = prevEval;
     prevEval = currentEval;
     letztesZiel = gezogen?.to ?? "";
+    letztesUrteil = r?.judgment ?? "";
     return {
       san,
       evalCp: r ? r.eval_cp : null,

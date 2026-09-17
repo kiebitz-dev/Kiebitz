@@ -277,6 +277,15 @@ describe("Anmerkung zu einem Zug", () => {
     expect(text).toContain("Ne2");
   });
 
+  it("sagt bei einer verpassten Gelegenheit, was sie war", () => {
+    const text = kommentiereZug(
+      zeile({ ply: 21, san: "Nd2", judgment: "mistake", motif: "none" }),
+      umstand({ urteil: "Verpasst", verpasst: true })
+    );
+    expect(text).toContain("Verpasst");
+    expect(text).toMatch(/Gegner/);
+  });
+
   it("nennt keine Bewertungszahlen mehr", () => {
     setFormatLocale("de-DE");
     const text = kommentiereZug(

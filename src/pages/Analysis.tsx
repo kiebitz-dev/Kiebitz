@@ -145,6 +145,7 @@ function judgmentLabel(t: TFunc, judgment: string): string {
     best: "an.best",
     excellent: "an.excellent",
     good: "an.good",
+    miss: "an.miss",
     inaccuracy: "an.inaccuracy",
     mistake: "an.mistake",
     blunder: "an.blunder",
@@ -312,6 +313,7 @@ function commentFor(
       seed,
       urteil: judgmentLabel(t, m.judgment),
       bemaengelt,
+      verpasst: m.judgment === "miss",
       besser,
       linieDavor: row?.pv,
       linieDanach: next?.pv,
@@ -1315,6 +1317,7 @@ export default function Analysis({
       best: 0,
       excellent: 0,
       good: 0,
+      miss: 0,
       inaccuracy: 0,
       mistake: 0,
       blunder: 0,
@@ -2386,7 +2389,7 @@ export default function Analysis({
           onPly={goToPly}
           kurve={evalSeries.map((point) => point.eval)}
           bewertung={shownEval / 100}
-          bilanz={(["brilliant", "great", "excellent", "inaccuracy", "mistake", "blunder"] as const)
+          bilanz={(["brilliant", "great", "excellent", "miss", "inaccuracy", "mistake", "blunder"] as const)
             .filter((key) => summary[key] > 0)
             .map((key) => ({
               name: judgmentLabel(t, key),
@@ -2771,7 +2774,7 @@ export default function Analysis({
           {!scratch && (
           <Card title={live ? t("an.myMoves") : t("an.autoAnnotation")}>
             <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
-              {(["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder"] as MoveJudgment[]).map((quality) => (
+              {(["brilliant", "great", "best", "excellent", "good", "book", "miss", "inaccuracy", "mistake", "blunder"] as MoveJudgment[]).map((quality) => (
                 <li key={quality} className="flex min-w-0 justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1 truncate" style={{ color: JUDGMENT_COLOR[quality] }}>
                     {judgmentMark(quality, 13)} <span className="truncate">{judgmentLabel(t, quality)}</span>
