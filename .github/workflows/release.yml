@@ -15,6 +15,14 @@ on:
   push:
     tags:
       - "v*"
+  # Erneuter Lauf eines Tags von Hand (`gh workflow run release.yml --ref vX.Y.Z
+  # -f android=false`), z. B. wenn die signierte APK schon anders verteilt ist.
+  workflow_dispatch:
+    inputs:
+      android:
+        description: "Signierte Android-APK bauen und anhängen"
+        type: boolean
+        default: true
 
 permissions:
   contents: write # nötig, damit die Action das Release anlegen darf
@@ -267,7 +275,10 @@ jobs:
       - name: Keystore vorhanden?
         id: guard
         run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+          if [ "${{ inputs.android }}" = "false" ]; then
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Android-APK per workflow_dispatch abgewählt."
+          elif [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "has_keystore=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_keystore=false" >> "$GITHUB_OUTPUT"
@@ -297,6 +308,11 @@ jobs:
       - name: Android-SDK/NDK einrichten
         if: steps.guard.outputs.has_keystore == 'true'
         uses: android-actions/setup-android@v4
+        with:
+          # Der Default „tools platform-tools“ scheitert, seit Google das
+          # veraltete Paket `tools` aus dem SDK-Repository entfernt hat.
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: NDK + Plattform installieren
         if: steps.guard.outputs.has_keystore == 'true'
