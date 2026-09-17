@@ -55,6 +55,12 @@ it("preloads and plays every recorded board sound while respecting settings", ()
   expect(instances.every((audio) => audio.currentTime === 0)).toBe(true);
   expect(instances.every((audio) => audio.volume > 0 && audio.volume < 0.5)).toBe(true);
 
+  // Die gerechneten Töne laden nichts nach · ohne Web Audio bleiben sie
+  // still, und kein weiteres Audio-Element entsteht.
+  playBoardSound("moment");
+  playBoardSound("glanz");
+  expect(instances).toHaveLength(KINDS.length);
+
   setBoardSoundEnabled(false);
   const played = instances.reduce((sum, audio) => sum + audio.play.mock.calls.length, 0);
   playBoardSound("move");

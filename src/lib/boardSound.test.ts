@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
-import { fenSquares, soundsForTransition } from "./boardSound";
+import { fenSquares, soundForMoment, soundsForTransition } from "./boardSound";
 
 /** FEN nach einer Zugfolge · dieselbe Quelle wie die Bretter selbst. */
 function after(sans: string[]): string {
@@ -99,5 +99,14 @@ describe("soundsForTransition", () => {
   it("does not announce check again when stepping backwards", () => {
     const checked = after(["e4", "f5", "Qh5"]);
     expect(soundsForTransition(checked, after(["e4", "f5"]))).toEqual(["move"]);
+  });
+});
+
+describe("soundForMoment", () => {
+  it("separates a moment worth hearing from one worth wincing at", () => {
+    expect(soundForMoment("brilliant")).toBe("glanz");
+    expect(soundForMoment("great")).toBe("glanz");
+    expect(soundForMoment("blunder")).toBe("moment");
+    expect(soundForMoment("miss")).toBe("moment");
   });
 });

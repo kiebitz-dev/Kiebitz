@@ -25,6 +25,16 @@ export interface ViewMove {
   bestUci?: string;
   playedUci?: string;
   judgment?: MoveJudgment;
+  /**
+   * Was der Zug gekostet hat · Gewinnwahrscheinlichkeit aus Sicht des
+   * Ziehenden, 0 bis 1.
+   *
+   * Dieselbe Zahl, aus der auch das Urteil entsteht. Sie steht hier, weil der
+   * Durchgang die Momente der Partie nach ihrem Gewicht sortieren muss und
+   * dafür sonst die halbe Kaskade noch einmal rechnen müsste
+   * (`lib/durchgang.ts`).
+   */
+  verlust?: number;
 }
 
 export type MoveJudgment =
@@ -345,6 +355,7 @@ export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[]
       bestUci: r?.best_uci,
       playedUci,
       judgment,
+      verlust: r ? drop : undefined,
     };
   });
 }

@@ -93,7 +93,22 @@ const BADGE_SIZE = 6.5;
 const END_MARK_SIZE = 7.5;
 
 type BoardArrow = [string, string, string?];
-type BoardBadge = { square: string; label: ReactNode; color: string; title?: string };
+type BoardBadge = {
+  square: string;
+  label: ReactNode;
+  color: string;
+  title?: string;
+  /**
+   * Der Marker soll beim Erscheinen kurz aufgehen · für „!!" und „!".
+   *
+   * Dieselbe Zurückhaltung wie beim Partieende (`board-end-mark`): ein
+   * Aufziehen und ein Ring, der verklingt. Wer Bewegung abbestellt hat,
+   * bekommt den Marker ohne den Weg dorthin (siehe index.css).
+   */
+  glanz?: boolean;
+  /** Eigener Schlüssel, damit derselbe Marker erneut aufgehen kann. */
+  id?: string;
+};
 
 /**
  * Fertig aufbereitetes Partieende · das Brett übersetzt nichts und entscheidet
@@ -1158,9 +1173,11 @@ export default function Board({
         {overlay}
         {badges.map((badge, index) => (
           <span
-            key={`${badge.square}-${index}`}
+            key={badge.id ?? `${badge.square}-${index}`}
             title={badge.title}
-            className="pointer-events-none absolute z-20 flex min-h-4 min-w-4 items-center justify-center rounded-full border border-white/85 text-[clamp(7px,1.05vw,11px)] font-extrabold leading-none text-white shadow-md"
+            className={`pointer-events-none absolute z-20 flex min-h-4 min-w-4 items-center justify-center rounded-full border border-white/85 text-[clamp(7px,1.05vw,11px)] font-extrabold leading-none text-white shadow-md${
+              badge.glanz ? " board-badge-glanz" : ""
+            }`}
             style={{
               ...badgePosition(badge.square, BADGE_SIZE),
               height: `${BADGE_SIZE}%`,

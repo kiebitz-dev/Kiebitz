@@ -107,3 +107,16 @@ export function soundsForTransition(previous: string, next: string): BoardSoundK
   if (changed.length === 4) return ["castle"];
   return ["move"];
 }
+
+/**
+ * Der Klang zu einem Halt im Durchgang durch die Partie.
+ *
+ * Der Brettklang selbst kommt weiterhin aus `soundsForTransition` — das Brett
+ * meldet ja eine neue Stellung wie bei jedem Blättern. Darüber liegt der Ton
+ * des Durchgangs, und der unterscheidet zwei Arten von Halt: Ein Zug mit
+ * „!!“ oder „!“ bekommt den steigenden, alles andere den einzelnen. Ohne
+ * diesen Unterschied klänge die eigene Glanzstelle wie der eigene Patzer.
+ */
+export function soundForMoment(judgment: string): BoardSoundKind {
+  return judgment === "brilliant" || judgment === "great" ? "glanz" : "moment";
+}

@@ -18,9 +18,16 @@ export type BoardSoundKind =
   | "castle"
   | "check"
   | "checkmate"
-  | "error";
+  | "error"
+  /** Ein Halt im Durchgang durch die Partie · siehe `SYNTH`. */
+  | "moment"
+  /** Derselbe Halt, aber an einem Zug mit „!!“ oder „!“. */
+  | "glanz";
 
-const SOUND_URLS: Record<BoardSoundKind, string> = {
+/** Die Klänge, zu denen es eine Aufnahme gibt. */
+type Aufgenommen = Exclude<BoardSoundKind, "moment" | "glanz">;
+
+const SOUND_URLS: Record<Aufgenommen, string> = {
   move: new URL("../assets/sounds/move.wav", import.meta.url).href,
   capture: new URL("../assets/sounds/capture.wav", import.meta.url).href,
   castle: new URL("../assets/sounds/castle.wav", import.meta.url).href,
@@ -29,6 +36,34 @@ const SOUND_URLS: Record<BoardSoundKind, string> = {
   // Für Fehlbedienungen bleibt derselbe unaufdringliche Kontakt wie beim Zug.
   error: new URL("../assets/sounds/move.wav", import.meta.url).href,
 };
+
+/**
+ * Ein einzelner Sinuston einer gerechneten Figur · Frequenz, Einsatz nach dem
+ * Anschlag, Klingdauer, alles in Sekunden.
+ */
+type Ton = { hz: number; ab: number; dauer: number };
+
+/**
+ * Die beiden Klänge des Durchgangs · gerechnet statt aufgenommen.
+ *
+ * Sie kommen nicht vom Brett: Keine Figur wird aufgesetzt, sondern die
+ * Analyse hält an einer Stelle an. Deshalb sollen sie auch nicht nach Holz
+ * klingen, und deshalb steht hier kein sechster Ausschnitt aus derselben
+ * Aufnahme, sondern ein Paar weicher Sinustöne: „Moment" ein einzelner
+ * Anschlag, „Glanz" zwei steigende. Das spart eine Datei im Bündel und einen
+ * Eintrag in den Lizenzhinweisen, und leise genug einstellen lässt es sich
+ * nur so.
+ */
+const SYNTH: Partial<Record<BoardSoundKind, Ton[]>> = {
+  moment: [{ hz: 523.25, ab: 0, dauer: 0.17 }],
+  glanz: [
+    { hz: 659.25, ab: 0, dauer: 0.14 },
+    { hz: 987.77, ab: 0.085, dauer: 0.22 },
+  ],
+};
+
+/** Wie laut die gerechneten Töne über dem Brettklang stehen dürfen. */
+const SYNTH_SPITZE = 0.2;
 
 const POOL_SIZE = 3;
 let enabled = true;
@@ -64,8 +99,10 @@ function outputVolume(): number {
 
 function createAudio(kind: BoardSoundKind): HTMLAudioElement | null {
   if (unavailable || typeof Audio === "undefined") return null;
+  const url = SOUND_URLS[kind as Aufgenommen];
+  if (!url) return null;
   try {
-    const audio = new Audio(SOUND_URLS[kind]);
+    const audio = new Audio(url);
     audio.preload = "auto";
     audio.volume = outputVolume();
     return audio;
@@ -90,7 +127,8 @@ function soundPool(kind: BoardSoundKind): HTMLAudioElement[] {
  * Wiedergabe und erzeugt auch außerhalb eines Browsers keine Nebenwirkung.
  */
 function primeBoardSounds(): void {
-  for (const kind of Object.keys(SOUND_URLS) as BoardSoundKind[]) {
+  // Nur die Aufnahmen · die gerechneten Töne haben nichts zu laden.
+  for (const kind of Object.keys(SOUND_URLS) as Aufgenommen[]) {
     const pool = soundPool(kind);
     for (const audio of pool) {
       try {
@@ -118,8 +156,62 @@ function availableAudio(kind: BoardSoundKind): HTMLAudioElement | null {
   return pool[0] ?? null;
 }
 
+/**
+ * Einen gerechneten Klang ausgeben.
+ *
+ * Der Kontext entsteht beim ersten Ton und bleibt dann stehen; Browser starten
+ * ihn erst nach der ersten Bedienung, deshalb der Weckruf davor. Fällt etwas
+ * davon aus — kein Web Audio, kein erlaubter Kontext —, bleibt es still, und
+ * der Durchgang läuft weiter.
+ */
+let tonkontext: AudioContext | null = null;
+
+function audioKontext(): AudioContext | null {
+  if (tonkontext) return tonkontext;
+  const Ctor = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext;
+  if (!Ctor) return null;
+  try {
+    tonkontext = new Ctor();
+  } catch {
+    return null;
+  }
+  return tonkontext;
+}
+
+function playSynth(toene: Ton[]): void {
+  const ctx = audioKontext();
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended") void ctx.resume();
+    const jetzt = ctx.currentTime;
+    const spitze = Math.max(0.0002, SYNTH_SPITZE * outputVolume());
+    for (const ton of toene) {
+      const oszillator = ctx.createOscillator();
+      const huelle = ctx.createGain();
+      oszillator.type = "sine";
+      oszillator.frequency.value = ton.hz;
+      const beginn = jetzt + ton.ab;
+      // Ein harter Einsatz knackt · zwölf Millisekunden reichen dagegen.
+      huelle.gain.setValueAtTime(0.0001, beginn);
+      huelle.gain.linearRampToValueAtTime(spitze, beginn + 0.012);
+      huelle.gain.exponentialRampToValueAtTime(0.0001, beginn + ton.dauer);
+      oszillator.connect(huelle);
+      huelle.connect(ctx.destination);
+      oszillator.start(beginn);
+      oszillator.stop(beginn + ton.dauer + 0.02);
+    }
+  } catch {
+    /* Ein fehlgeschlagener Klang darf keinen Durchgang unterbrechen. */
+  }
+}
+
 function start(kind: BoardSoundKind): void {
   if (!enabled) return;
+  const toene = SYNTH[kind];
+  if (toene) {
+    playSynth(toene);
+    return;
+  }
   const audio = availableAudio(kind);
   if (!audio) return;
   try {

@@ -437,6 +437,44 @@ html[data-store-capture="true"] .board-end-flash {
   display: none;
 }
 
+
+/* Ein Zug mit „!!“ oder „!“ · der Marker geht kurz auf und legt einen Ring
+   um sich, der verklingt. Nichts fällt, nichts fliegt, nichts bleibt liegen:
+   Die Auszeichnung ist selten genug, dass ein Wimpernschlag reicht, und eine
+   Analyse ist kein Jahrmarkt. Dieselbe Zurückhaltung wie am Partieende, und
+   dieselben Ausnahmen — abbestellte Bewegung und Store-Aufnahmen bekommen den
+   Marker ohne den Weg dorthin.
+
+   Das `translate` steht in jeder Stufe: Der Marker sitzt über seiner
+   Feldmitte (siehe `badgePosition`), und eine Animation setzt die Umformung
+   ganz und nicht nur den Teil, der sich ändert. Ohne es spränge er für eine
+   halbe Sekunde in die Feldecke. */
+@keyframes board-badge-glanz {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55);
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 0.9vw rgba(255, 255, 255, 0);
+  }
+}
+.board-badge-glanz {
+  animation: board-badge-glanz 0.52s cubic-bezier(0.2, 0.9, 0.3, 1.2) 1 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-badge-glanz {
+    animation: none;
+  }
+}
+html[data-store-capture="true"] .board-badge-glanz {
+  animation: none;
+}
+
 /* Der gemeinsame WebView-Pointer-Drag deaktiviert das interne react-dnd,
    deshalb setzen wir den passenden Mauszeiger am Figuren-DOM selbst. */
 .board-pointer-drag [data-piece] {

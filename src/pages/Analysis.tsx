@@ -31,6 +31,8 @@ import {
   Square,
   Zap,
   RotateCcw,
+  Play,
+  X,
 } from "lucide-react";
 import { featuredGame, games as demoGames } from "../data/demo";
 import { useBackendInfo } from "../lib/backend";
@@ -101,6 +103,9 @@ import { fortsetzung } from "../lib/folge";
 import { zugfakten } from "../lib/zugfakten";
 import VariationLine, { aktiveZuege, type Variante } from "../components/VariationLine";
 import { useDiagramMode } from "../lib/diagramMode";
+import { momente } from "../lib/durchgang";
+import { soundForMoment } from "../lib/boardSound";
+import { playBoardSound } from "../lib/sound";
 import {
   acpl,
   evalNum,
@@ -458,6 +463,8 @@ export default function Analysis({
   >(null);
   const [rows, setRows] = useState<MoveEvalRow[] | null>(null);
   const [ply, setPly] = useState(0);
+  /** Der laufende Durchgang · Index in `momentListe`, `null` heißt: keiner. */
+  const [momentIndex, setMomentIndex] = useState<number | null>(null);
   const [liveEval, setLiveEval] = useState<{ cp: number | null; mate: number | null } | null>(null);
   const [liveBestUci, setLiveBestUci] = useState<string | null>(null);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
@@ -713,6 +720,18 @@ export default function Analysis({
 
   const analyzedRows = live ? (rows?.length ?? 0) > 0 : !loadingGame;
 
+  /**
+   * Die Halte des Durchgangs · siehe lib/durchgang.ts.
+   *
+   * Ohne eigene Seite (freies Brett, Schaufensterpartie) zählen alle Züge;
+   * sonst nur die eigenen — es ist der Durchgang durch die eigene Partie und
+   * nicht durch die des Gegners.
+   */
+  const momentListe = useMemo(
+    () => momente(viewMoves, live && game.color === "black" ? "black" : live && game.color ? "white" : null),
+    [viewMoves, live, game]
+  );
+
   // Notizen und Tags der gewählten Partie in die Eingaben übernehmen.
   useEffect(() => {
     setNoteDraft(game?.note ?? "");
@@ -760,6 +779,9 @@ export default function Analysis({
     setLiveBestUci(null);
     setScratchSelected(null);
     setVariation(null);
+    // Ein Durchgang gehört zu einer Partie · in der nächsten wäre „Moment 3
+    // von 5" eine Zählung durch fremde Halbzüge.
+    setMomentIndex(null);
   }, [selectedId, sans.length]);
 
   const openedFen = opened?.fen;
@@ -1456,6 +1478,24 @@ export default function Analysis({
     setLiveBestUci(null);
     setPly(Math.max(0, Math.min(sans.length, next)));
   };
+
+  /**
+   * Der Durchgang durch die Partie · von Moment zu Moment.
+   *
+   * Gesprungen wird über `goToPly`, also denselben Weg wie ein Klick in die
+   * Zugliste: Die Erklärung unter der Liste gehört ohnehin zum gezeigten
+   * Halbzug und steht damit ohne Zutun da. Dazu der Ton des Durchgangs — der
+   * Brettklang bleibt beim Springen über mehrere Züge aus (siehe
+   * `soundsForTransition`), und an dieser Stelle soll ohnehin der Halt zu
+   * hören sein und nicht die Figur.
+   */
+  const geheZuMoment = (index: number) => {
+    const moment = momentListe[index];
+    if (!moment) return;
+    setMomentIndex(index);
+    goToPly(moment.ply);
+    playBoardSound(soundForMoment(moment.judgment));
+  };
   /**
    * Was von dieser Stellung nach draußen geht.
    *
@@ -1570,6 +1610,84 @@ export default function Analysis({
   };
 
   /**
+   * Die Leiste des Durchgangs · einmal gebaut, zweimal gesetzt.
+   *
+   * Ausgeschaltet ist sie eine Einladung, eingeschaltet die Zählung samt
+   * Tasten. Beides steht am selben Platz, direkt über der Zugliste: Wo die
+   * Partie als Text steht, gehört auch der Weg durch sie hin.
+   *
+   * Sie kommt als fertiges Stück in beide Fassungen (siehe `griffe`): Das
+   * Blatt setzt sie mit `blatt-formular` neu und baut sie nicht ein zweites
+   * Mal.
+   */
+  const durchgangLeiste = () => {
+    if (momentListe.length === 0) return null;
+    const laufend = momentIndex != null && momentIndex < momentListe.length;
+    if (!laufend) {
+      return (
+        <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+          <span className="min-w-0 truncate text-[12px] text-ink3">
+            {t("an.walkOffer", { n: momentListe.length })}
+          </span>
+          <Button onClick={() => geheZuMoment(0)} compact>
+            <Play size={13} /> {t("an.walkStart")}
+          </Button>
+        </div>
+      );
+    }
+    const moment = momentListe[momentIndex];
+    const farbe = JUDGMENT_COLOR[moment.judgment];
+    return (
+      <div className="border-b border-line px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold"
+              style={{ color: farbe, background: "var(--color-panel2)" }}
+            >
+              {judgmentMark(moment.judgment, 11)}
+            </span>
+            <span className="min-w-0 truncate text-[12px] text-ink2">
+              {t(`an.walk.${moment.art}` as Key)}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1">
+            <span className="mr-1 text-[11px] tabular-nums text-ink3">
+              {t("an.walkStep", { n: momentIndex + 1, total: momentListe.length })}
+            </span>
+            <Button
+              onClick={() => geheZuMoment(momentIndex - 1)}
+              disabled={momentIndex === 0}
+              title={t("an.walkPrev")}
+              label={t("an.walkPrev")}
+              compact
+            >
+              <ChevronLeft size={13} />
+            </Button>
+            {momentIndex + 1 < momentListe.length ? (
+              <Button onClick={() => geheZuMoment(momentIndex + 1)} primary compact>
+                {t("an.walkNext")} <ChevronRight size={13} />
+              </Button>
+            ) : (
+              <Button onClick={() => setMomentIndex(null)} primary compact>
+                {t("an.walkDone")}
+              </Button>
+            )}
+            <Button
+              onClick={() => setMomentIndex(null)}
+              title={t("an.walkStop")}
+              label={t("an.walkStop")}
+              compact
+            >
+              <X size={13} />
+            </Button>
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  /**
    * Die Schlagliste einer Brettseite im Satz des Blattes.
    *
    * Dieselbe Rechnung wie in `playerLine` und derselbe Baustein · das Blatt
@@ -1625,10 +1743,14 @@ export default function Analysis({
           squareStyles={selectionStyles(fen, scratchSelected)}
           arrows={variation || scratch ? liveArrows : previewArrows}
           badges={currentQuality && currentTarget ? [{
+            // Der Schlüssel trägt den Halbzug · so geht der Marker auch dann
+            // wieder auf, wenn man denselben Zug ein zweites Mal ansteuert.
+            id: `${boardId}-${ply}-${currentTarget}`,
             square: currentTarget,
             label: judgmentMark(currentQuality),
             color: JUDGMENT_COLOR[currentQuality],
             title: judgmentLabel(t, currentQuality),
+            glanz: currentQuality === "brilliant" || currentQuality === "great",
           }] : []}
           muted={!!variation}
           end={boardEnd}
@@ -2385,6 +2507,7 @@ export default function Analysis({
             grund: blattAnalysen[index]?.grund,
             gewicht: blattAnalysen[index]?.gewicht,
           }))}
+          durchgang={durchgangLeiste()}
           ply={ply}
           onPly={goToPly}
           kurve={evalSeries.map((point) => point.eval)}
@@ -2645,6 +2768,7 @@ export default function Analysis({
                 {opened.history}
               </p>
             )}
+            {durchgangLeiste()}
             {/* Einspaltig gibt es keine Spaltenhöhe, an der die Liste sich
                 ausrichten könnte · dort bleibt der alte Deckel, sonst schiebt
                 eine lange Partie alles Weitere um Bildschirmlängen nach unten. */}

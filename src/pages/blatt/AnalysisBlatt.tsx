@@ -302,6 +302,15 @@ export interface AnalysisBlattProps {
    * Modus, sondern ein Nachteil.
    */
   griffe?: ReactNode;
+  /**
+   * Die Leiste des Durchgangs · sie kommt fertig von der Seite.
+   *
+   * Sie steht über dem Partietext, weil der Durchgang durch genau diesen Text
+   * führt: Jeder Halt setzt den Halbzug, und die Anmerkung dazu steht dann im
+   * Satz darunter. Der Modus setzt sie neu (`blatt-formular`), er baut sie
+   * nicht ein zweites Mal — siehe `griffe`.
+   */
+  durchgang?: ReactNode;
   zuege: SatzZug[];
   /** Der gezeigte Halbzug · die Marke in der Kurve und im Satz. */
   ply: number;
@@ -507,6 +516,7 @@ export default function AnalysisBlatt({
   brett,
   zeichen,
   griffe,
+  durchgang,
   zuege,
   ply,
   onPly,
@@ -673,6 +683,7 @@ export default function AnalysisBlatt({
   const partietext = (
     <div>
       <Rubrik>{frei ? t("an.freeBoard") : t("blatt.theGame")}</Rubrik>
+      {durchgang && <div className="blatt-formular mt-2.5">{durchgang}</div>}
       {/* Die Züge aus einem geteilten Link stehen vor den eigenen und sind
           nicht anklickbar · die Stellungen davor reisen nicht mit, nur ihre
           Notation. Dieselbe Regel wie in der gewöhnlichen Fassung. */}
