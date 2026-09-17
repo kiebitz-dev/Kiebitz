@@ -101,6 +101,16 @@ import { fortsetzung } from "../lib/folge";
 import { zugfakten } from "../lib/zugfakten";
 import VariationLine, { aktiveZuege, type Variante } from "../components/VariationLine";
 import { useDiagramMode } from "../lib/diagramMode";
+import {
+  acpl,
+  evalNum,
+  JUDGMENT_COLOR,
+  MARKED_IN_LIST,
+  NAG,
+  rowsToViewMoves,
+  type MoveJudgment,
+  type ViewMove,
+} from "../lib/urteil";
 
 /** Die kommentierte Partie kommt nach · siehe Dashboard.tsx. */
 import { LeereSeite } from "../components/blatt/LeereSeite";
@@ -118,61 +128,6 @@ const NO_MOVES: string[] = [];
 /** Dasselbe für die Sätze der Analyse · siehe `blattAnalysen`. */
 const NO_ANALYSEN: { erklaerung?: string | null; grund?: string | null; gewicht?: number | null }[] =
   [];
-
-/** Einheitliche Zug-Sicht für Demo- und DB-Partien. */
-interface ViewMove {
-  san: string;
-  evalCp: number | null; // nach dem Zug, aus Weiß-Sicht
-  mateIn: number | null;
-  nag?: string;
-  bestUci?: string;
-  playedUci?: string;
-  judgment?: MoveJudgment;
-}
-
-type MoveJudgment =
-  | "book"
-  | "brilliant"
-  | "great"
-  | "best"
-  | "excellent"
-  | "good"
-  | "inaccuracy"
-  | "mistake"
-  | "blunder";
-
-/** Buchzüge tragen wie bei chess.com ein Buch-Symbol statt eines Kürzels. */
-const NAG: Record<MoveJudgment, string> = {
-  book: "",
-  brilliant: "!!",
-  great: "!",
-  best: "★",
-  excellent: "✓",
-  good: "•",
-  inaccuracy: "?!",
-  mistake: "?",
-  blunder: "??",
-};
-
-/**
- * Farbe je Bewertung · Tokens statt Werte, damit die Zugliste dem Thema folgt.
- * Im farbsicheren Thema hängt daran mehr als der Farbton: Dort laufen `win`
- * und `loss` über Blau und Orange, und genau hier wird das gebraucht.
- */
-const JUDGMENT_COLOR: Record<MoveJudgment, string> = {
-  book: "var(--color-gold-dim)",
-  brilliant: "var(--color-win)",
-  great: "var(--color-blue)",
-  best: "var(--color-win)",
-  excellent: "var(--color-accent)",
-  good: "var(--color-draw)",
-  inaccuracy: "var(--color-gold)",
-  mistake: "var(--color-warn)",
-  blunder: "var(--color-loss)",
-};
-
-/** Bewertungen, die in der Zugliste ein Kürzel hinter dem Zug tragen. */
-const MARKED_IN_LIST: MoveJudgment[] = ["brilliant", "excellent", "inaccuracy", "blunder"];
 
 /**
  * Kürzel bzw. Symbol einer Bewertung. Das Buch bleibt so groß wie die Kürzel
@@ -241,12 +196,6 @@ function ClockBadge({
   );
 }
 
-/** Zahl fürs Chart / die Eval-Bar: Matt zählt wie ±10 Bauern. */
-function evalNum(cp: number | null, mate: number | null): number {
-  if (mate != null) return mate > 0 ? 1000 : -1000;
-  return cp ?? 0;
-}
-
 type Phase = "opening" | "middlegame" | "endgame";
 
 /**
@@ -281,62 +230,7 @@ function phaseStarts(sans: string[]): { middlegame: number | null; endgame: numb
   return { middlegame, endgame };
 }
 
-function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[] {
-  const byPly = new Map(rows.map((r) => [r.ply, r]));
-  const chess = new Chess();
-  let prevEval = 20;
-  return sans.map((san, i) => {
-    const r = byPly.get(i + 1);
-    let playedUci = "";
-    try {
-      const played = chess.move(san);
-      playedUci = `${played.from}${played.to}${played.promotion ?? ""}`;
-    } catch {
-      // Ungueltige Alt-Daten bleiben weiterhin sichtbar.
-    }
-    const currentEval = r ? evalNum(r.eval_cp, r.mate_in) : prevEval;
-    const before = winProb(prevEval) / 100;
-    const after = winProb(currentEval) / 100;
-    const drop = i % 2 === 0 ? Math.max(0, before - after) : Math.max(0, after - before);
-    const engineJudgment = r?.judgment as MoveJudgment | "" | undefined;
-    const isBest = !!r?.best_uci && r.best_uci.slice(0, playedUci.length) === playedUci;
-    let judgment: MoveJudgment | undefined = engineJudgment || undefined;
-    if (r && !judgment) {
-      if (i < 16 && drop < 0.03) judgment = "book";
-      else if (isBest && i >= 16 && /[x+#=]/.test(san) && Math.abs(currentEval - prevEval) >= 40) judgment = "brilliant";
-      else if (isBest) judgment = "best";
-      else if (drop < 0.01) judgment = "great";
-      else if (drop < 0.03) judgment = "excellent";
-      else if (drop < 0.10) judgment = "good";
-    }
-    prevEval = currentEval;
-    return {
-      san,
-      evalCp: r ? r.eval_cp : null,
-      mateIn: r ? r.mate_in : null,
-      nag: judgment ? NAG[judgment] : undefined,
-      bestUci: r?.best_uci,
-      playedUci,
-      judgment,
-    };
-  });
-}
 
-/** ACPL je Seite aus der Evalkurve (Startstellung ≈ +20 cp). */
-function acpl(moves: ViewMove[]): { white: number; black: number } {
-  let prev = 20;
-  const losses: { white: number[]; black: number[] } = { white: [], black: [] };
-  moves.forEach((m, i) => {
-    if (m.evalCp == null && m.mateIn == null) return;
-    const cur = Math.max(-1000, Math.min(1000, evalNum(m.evalCp, m.mateIn)));
-    const side = i % 2 === 0 ? "white" : "black";
-    const loss = side === "white" ? prev - cur : cur - prev;
-    losses[side].push(Math.max(0, Math.min(1000, loss)));
-    prev = cur;
-  });
-  const avg = (a: number[]) => (a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length) : 0);
-  return { white: avg(losses.white), black: avg(losses.black) };
-}
 
 /**
  * Die Stellung vor einem Halbzug · `null`, wo sich die Partie nicht bis dahin
