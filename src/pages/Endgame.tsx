@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import {
   CheckCircle2,
-  ChevronDown,
   Crown,
   Lightbulb,
   Loader2,
@@ -32,7 +31,7 @@ import { BOARD_MAX } from "../lib/boardLayout";
 import { moveTargetStyles } from "../lib/boardMoves";
 import { randomDrill } from "../lib/randomEndgame";
 import { useTrainingSession } from "../lib/session";
-import { Button, Card, Menu, MenuItem } from "../components/ui";
+import { Button, Card, Disclosure, Menu, MenuItem } from "../components/ui";
 import FocusBoard, { FocusButton, FocusMenuItem } from "../components/FocusBoard";
 import { deInt } from "../lib/format";
 import { maybeRequestPlayReview } from "../lib/reviewPrompt";
@@ -475,31 +474,15 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
                 statt es zu rechnen. Dieselbe Entscheidung wie im Blatt, im
                 Register dieser Fassung gesetzt: eine Fläche mit Rand, ein
                 Knopf mit Winkel, der Text darunter. */}
-            <div className="mt-2.5 rounded-lg border border-line bg-panel2">
-              <button
-                type="button"
-                onClick={() => setHintOpen((offen) => !offen)}
-                aria-expanded={hintOpen}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left hover:bg-panel3"
-              >
-                <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink2">
-                  <Lightbulb size={14} className="shrink-0 text-gold" />
-                  <span className="truncate">{t("eg.hintTitle")}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-ink3">
-                  {t(hintOpen ? "eg.hintHide" : "eg.hintShow")}
-                  <ChevronDown
-                    size={15}
-                    className={`transition-transform ${hintOpen ? "rotate-180" : ""}`}
-                  />
-                </span>
-              </button>
-              {hintOpen && (
-                <p className="border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed text-ink3">
-                  {drillText(drill.hint, locale)}
-                </p>
-              )}
-            </div>
+            <Disclosure
+              className="mt-2.5"
+              icon={<Lightbulb size={14} className="text-gold" />}
+              title={t("eg.hintTitle")}
+              open={hintOpen}
+              onToggle={() => setHintOpen((offen) => !offen)}
+            >
+              {drillText(drill.hint, locale)}
+            </Disclosure>
           </>
         )}
       </div>

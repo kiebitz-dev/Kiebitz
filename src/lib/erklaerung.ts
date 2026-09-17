@@ -285,9 +285,37 @@ function schlichterSatz(
   row: Zugzeile,
   options: { t: TFunc; locale: Locale; seed?: string; fakten?: Zugfakten | null }
 ): string | null {
-  const { t, locale, fakten } = options;
+  const { t, fakten } = options;
   if (!fakten) return null;
-  const san = translateSan(row.san, locale);
+  const seed = options.seed ?? `${row.ply}`;
+  const satz = tatsachensatz(fakten, row.san, { t, locale: options.locale, seed });
+  if (satz) return satz;
+  // Der letzte Satz ist der einzige, der sich in einer Partie wiederholt · zwei
+  // Formulierungen, gewählt wie überall am Halbzug, damit acht ruhige Züge
+  // nicht achtmal wörtlich dasselbe sagen.
+  return t(`expl.plain.quiet.${seedIndex(seed, VARIANTS) + 1}` as Key, {
+    san: translateSan(row.san, options.locale),
+  });
+}
+
+/**
+ * Was an einem Zug auffällt · ohne Urteil und ohne Rückfallsatz.
+ *
+ * Herausgelöst aus `schlichterSatz`, weil es außerhalb einer analysierten
+ * Partie noch eine zweite Stelle gibt, an der genau diese Sätze gebraucht
+ * werden: die Lösung einer Taktikaufgabe (siehe lib/loesung.ts). Dort gibt es
+ * keine Engine-Zeile, an der ein Urteil hinge, und der Rückfallsatz „die
+ * Engine hat daran nichts auszusetzen" wäre über einen Lösungszug schief — er
+ * ist ja *der* Zug. Fehlt hier etwas zu sagen, kommt `null` zurück, und die
+ * aufrufende Stelle schweigt.
+ */
+export function tatsachensatz(
+  fakten: Zugfakten,
+  sanRoh: string,
+  options: { t: TFunc; locale: Locale; seed?: string }
+): string | null {
+  const { t, locale } = options;
+  const san = translateSan(sanRoh, locale);
   const feld = fakten.feld;
 
   const drohsatz = (schluessel: "expl.plain.threat" | "expl.plain.alsoThreat") =>
@@ -331,11 +359,7 @@ function schlichterSatz(
       square: fakten.flucht,
     });
   }
-  // Der letzte Satz ist der einzige, der sich in einer Partie wiederholt · zwei
-  // Formulierungen, gewählt wie überall am Halbzug, damit acht ruhige Züge
-  // nicht achtmal wörtlich dasselbe sagen.
-  const seed = options.seed ?? `${row.ply}`;
-  return t(`expl.plain.quiet.${seedIndex(seed, VARIANTS) + 1}` as Key, { san });
+  return null;
 }
 
 /**

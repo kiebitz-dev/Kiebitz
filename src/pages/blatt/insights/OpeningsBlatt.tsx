@@ -23,7 +23,7 @@
  * vollständig. Es kommt aus derselben Auswertung wie drüben (`live`), nicht
  * aus einer eigenen Rechnung.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bahn,
   Blatttabelle,
@@ -40,6 +40,7 @@ import { repGaps, type RepGap } from "../../../lib/repertoire";
 import type { DeepInsights, OpeningFamily } from "../../../lib/insights";
 import type { LiveInsights } from "../../../lib/stats";
 import Reiterkopf from "./Reiterkopf";
+import { familienTheorie } from "../../../lib/eroeffnungstheorie";
 
 export default function OpeningsBlatt({
   mobile,
@@ -55,9 +56,24 @@ export default function OpeningsBlatt({
   desktop: boolean;
   onOpenRepertoire: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { repertoire, openings } = deep;
   const [gaps, setGaps] = useState<RepGap[] | null>(null);
+  // Die Ideen der eigenen Familien · siehe dieselbe Stelle in
+  // pages/insights/Openings.tsx. Gerechnet wird hier nichts Eigenes: dieselbe
+  // Familienliste, dasselbe Nachschlagen.
+  const ideen = useMemo(
+    () => familienTheorie(openings.families.map((familie) => familie.label), locale),
+    [openings.families, locale]
+  );
+  const [offeneIdeen, setOffeneIdeen] = useState<ReadonlySet<string>>(new Set());
+  const umschalten = (familie: string) =>
+    setOffeneIdeen((stand) => {
+      const neu = new Set(stand);
+      if (neu.has(familie)) neu.delete(familie);
+      else neu.add(familie);
+      return neu;
+    });
 
   // Dieselbe Bedingung wie in der gewöhnlichen Fassung · die Lückenkarte
   // spielt jede Partie am Buch entlang und lädt erst, wenn der Reiter offen
@@ -340,6 +356,43 @@ export default function OpeningsBlatt({
     </div>
   );
 
+  /**
+   * Die Idee je Familie · ein Verzeichnis zum Aufschlagen.
+   *
+   * Kein `Aufdeckfeld` je Familie: acht Rubriken untereinander wären acht
+   * Überschriften für acht Absätze. Hier steht eine Rubrik, darunter je
+   * Familie eine Zeile mit dem Namen kursiv im Buchsatz und dem Griff am
+   * Zeilenende; aufgeschlagen folgt der Text an der Haarlinie.
+   */
+  const ideenBlock = ideen.length > 0 && (
+    <div>
+      <Rubrik weg={t("op.theorySummary", { n: deInt(ideen.length) })}>{t("op.theoryTitle")}</Rubrik>
+      {ideen.map((idee) => {
+        const offen = offeneIdeen.has(idee.schluessel);
+        return (
+          <div key={idee.schluessel} className="border-b border-line">
+            <button
+              type="button"
+              onClick={() => umschalten(idee.schluessel)}
+              aria-expanded={offen}
+              className="flex min-h-11 w-full items-center justify-between gap-3 text-start"
+            >
+              <span className="buch min-w-0 truncate text-[14px] italic text-ink">{idee.schluessel}</span>
+              <span className="blatt-kolumne shrink-0 tracking-[0.12em] text-accent">
+                {t(offen ? "theory.hide" : "theory.show")}
+              </span>
+            </button>
+            {offen && (
+              <div className="buch mb-3 border-s-2 border-line2 ps-3 text-[14px] leading-[1.55] text-ink2">
+                {idee.text}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   const akte = openings.families.length > 0 && (
     <div>
       <Rubrik weg={t("ins.opTableSummary")}>{t("ins.openingTableTitle")}</Rubrik>
@@ -427,6 +480,7 @@ export default function OpeningsBlatt({
         {abweichung}
         {familienGruppe("white")}
         {familienGruppe("black")}
+        {ideenBlock}
         {gespielt}
         {wackelig}
         {luecken}
@@ -448,6 +502,7 @@ export default function OpeningsBlatt({
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {familienGruppe("white")}
           {familienGruppe("black")}
+          {ideenBlock}
           {gespielt}
           {luecken}
           {akte}

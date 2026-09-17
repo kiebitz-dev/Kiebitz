@@ -86,6 +86,33 @@ afterEach(() => {
 });
 
 describe("Puzzle training", () => {
+  /**
+   * Die Theorie zum Motiv liegt verdeckt, und die Lösung in Worten erscheint
+   * erst, wenn die Aufgabe vorbei ist · vorher wäre sie die Antwort.
+   */
+  it("keeps the motif theory covered and explains the solution only afterwards", async () => {
+    render(<LocaleProvider><Puzzles /></LocaleProvider>);
+    const board = await screen.findByTestId("puzzle-board");
+    await waitFor(() => expect(board.dataset.draggable).toBe("true"));
+
+    const theorie = await screen.findByRole("button", { name: /Theorie zum Motiv/ });
+    expect(theorie.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(/greift zwei Ziele auf einmal an/)).toBeNull();
+    fireEvent.click(theorie);
+    expect(screen.getByText(/greift zwei Ziele auf einmal an/)).toBeTruthy();
+
+    expect(screen.queryByText("Die Lösung")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "play a3" }));
+    // Die Meldungszeile steht mehrfach im DOM (siehe `actionRow`) · geklickt
+    // wird die sichtbare.
+    await waitFor(() => expect(document.querySelector('[data-action-row="wrong"][data-active]')).toBeTruthy());
+    const zeile = document.querySelector('[data-action-row="wrong"][data-active]')!;
+    const loesen = [...zeile.querySelectorAll("button")].find((knopf) => /Lösung/.test(knopf.textContent ?? ""))!;
+    fireEvent.click(loesen);
+    expect(await screen.findByText("Die Lösung", {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByText("1.e4 e5 2.Nf3 Nc6")).toBeTruthy();
+  }, 15_000);
+
   it("navigates through played positions with buttons and arrow keys", async () => {
     render(<LocaleProvider><Puzzles /></LocaleProvider>);
 

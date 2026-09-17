@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Chess } from "chess.js";
 import {
+  BookOpen,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -50,7 +51,9 @@ import { endForPosition } from "../lib/boardEnd";
 import { BOARD_MAX } from "../lib/boardLayout";
 import { moveTargetStyles } from "../lib/boardMoves";
 import { moveBetween } from "../lib/position";
-import { Button, Card, Chip, Spark } from "../components/ui";
+import { Button, Card, Chip, Disclosure, Spark } from "../components/ui";
+import { loesungszeile, loesungszuege } from "../lib/loesung";
+import { motivTheorie } from "../lib/motivtheorie";
 import FocusBoard, { FocusButton } from "../components/FocusBoard";
 import { openPlusDialog } from "../lib/plus/dialog";
 import { usePlusGate } from "../lib/plus/usePlus";
@@ -200,6 +203,15 @@ function TrainerView({
   const [showHint, setShowHint] = useState(false);
   /** Verdecktes Motiv für genau diese Aufgabe aufgedeckt. */
   const [themeRevealed, setThemeRevealed] = useState(false);
+  /**
+   * Ob die Theorie zum Motiv aufgedeckt ist · verdeckt ist der Normalfall.
+   *
+   * Sie nennt das Motiv beim Namen und erklärt es, verrät also genau das, was
+   * die Einstellung „Motiv verdecken" zurückhält. Mit der nächsten Aufgabe
+   * (`load`) fällt sie wieder zu, und ein Stand für beide Fassungen reicht:
+   * Wer den Modus umschaltet, soll nicht zweimal aufdecken.
+   */
+  const [theoryOpen, setTheoryOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [ratingDelta, setRatingDelta] = useState<number | null>(null);
   const [sharing, setSharing] = useState<ShareSubject | null>(null);
@@ -262,6 +274,7 @@ function TrainerView({
     setWrong(false);
     setShowHint(false);
     setThemeRevealed(false);
+    setTheoryOpen(false);
     setSelected(null);
     setRatingDelta(null);
     historyRef.current = [];
@@ -485,6 +498,33 @@ function TrainerView({
   // Verdeckt bleibt das Motiv nur, solange die Aufgabe offen ist · nach der
   // Lösung ist es Auswertung, kein Spoiler mehr.
   const themeHidden = hideTheme && !themeRevealed && status !== "solved";
+
+  /**
+   * Theorie und Lösung in Worten · siehe lib/motivtheorie.ts und lib/loesung.ts.
+   *
+   * Die Lösung steht erst da, wenn die Aufgabe vorbei ist — gelöst oder
+   * aufgedeckt. Vorher wäre sie keine Erklärung, sondern die Antwort. Die Züge
+   * werden dafür einmal nachgespielt, nicht bei jedem Rendern: `puzzle` und
+   * `status` ändern sich einmal je Aufgabe.
+   */
+  const motiv = useMemo(
+    () => (puzzle ? motivTheorie(puzzle.themes, locale) : null),
+    [puzzle, locale]
+  );
+  const loesung = useMemo(
+    () => (puzzle && status === "solved" ? loesungszuege(puzzle, { t, locale }) : []),
+    [puzzle, status, t, locale]
+  );
+  const erklaerteZuege = loesung.filter((zug) => zug.satz);
+  /** Wer die Theorie aufdeckt, deckt das Motiv mit auf · sie nennt es ja. */
+  const toggleTheory = () => {
+    if (!theoryOpen) setThemeRevealed(true);
+    setTheoryOpen(!theoryOpen);
+  };
+  const theoryTitle =
+    motiv && !themeHidden
+      ? `${t("pz.theoryLabel")} · ${themeLabel(motiv.schluessel, locale)}`
+      : t("pz.theoryLabel");
 
   /**
    * Die Aufgabe, wie sie beim Empfänger ankommt.
@@ -946,6 +986,24 @@ function TrainerView({
           ratingDelta={history.length >= 2 ? history[history.length - 1] - history[0] : null}
           history={history}
           geloest={stats.solved}
+          loesung={
+            loesung.length > 0
+              ? {
+                  zeile: loesungszeile(loesung),
+                  saetze: erklaerteZuege.map((zug) => ({ zug: zug.text, satz: zug.satz! })),
+                }
+              : undefined
+          }
+          motiv={
+            motiv
+              ? {
+                  titel: themeHidden ? t("pz.theoryTitle") : themeLabel(motiv.schluessel, locale),
+                  text: motiv.text,
+                  offen: theoryOpen,
+                  onUmschalten: toggleTheory,
+                }
+              : undefined
+          }
         />
         {/* Zwei Dialoge und kein Satz · sie gehören in beide Fassungen
             unverändert. Bis 1.4 standen sie nur im `return` der gewöhnlichen
@@ -1004,6 +1062,40 @@ function TrainerView({
           {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
 
           {puzzleActions(false)}
+
+          {/* Lösung und Theorie unter dem Brett · sie gehören zu dieser
+              Aufgabe und nicht in die Spalte der Statistik daneben. */}
+          {loesung.length > 0 && (
+            <Card title={t("pz.solutionTitle")} className="mt-3">
+              <p className="notation font-mono text-[13px] leading-relaxed text-ink">
+                {loesungszeile(loesung)}
+              </p>
+              {erklaerteZuege.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-1.5 border-t border-line pt-2">
+                  {/* Ohne Zugnummer davor · jeder Satz nennt seinen Zug
+                      selbst, und „21.Rxc1 Rxc1 schlägt die Dame" sagte ihn
+                      zweimal. Welcher Zug gemeint ist, steht in der Zeile
+                      darüber. */}
+                  {erklaerteZuege.map((zug) => (
+                    <li key={zug.text} className="text-[12.5px] leading-relaxed text-ink2">
+                      {zug.satz}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
+          {motiv && (
+            <Disclosure
+              className="mt-3"
+              icon={<BookOpen size={14} className="text-accent" />}
+              title={theoryTitle}
+              open={theoryOpen}
+              onToggle={toggleTheory}
+            >
+              {motiv.text}
+            </Disclosure>
+          )}
         </div>
 
         <div className="flex max-w-[528px] flex-col gap-4">

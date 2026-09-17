@@ -12,6 +12,7 @@ import {
 import { Chess } from "chess.js";
 import {
   AlertTriangle,
+  BookOpen,
   Check,
   ChevronDown,
   CornerUpLeft,
@@ -63,7 +64,8 @@ import ShareDialog, { type ShareSubject } from "../components/ShareDialog";
 import { useMobileShell } from "../components/MobileShell";
 import { BOARD_MAX } from "../lib/boardLayout";
 import { useBoardSelection } from "../lib/boardMoves";
-import { Button, Card, Chip } from "../components/ui";
+import { Button, Card, Chip, Disclosure } from "../components/ui";
+import { eroeffnungsTheorie } from "../lib/eroeffnungstheorie";
 import FocusBoard, { FocusButton } from "../components/FocusBoard";
 import { de, deInt } from "../lib/format";
 import { useDiagramMode } from "../lib/diagramMode";
@@ -648,6 +650,22 @@ function LiveRepertoire() {
     ? (selectedLine.nodeIds ?? []).indexOf(selectedId)
     : -1;
 
+  /**
+   * Worum es in der Eröffnung der aufgeschlagenen Variante geht.
+   *
+   * Nachgeschlagen über die Familie des Variantennamens (siehe
+   * lib/eroeffnungstheorie.ts) · „Italian Game: Giuoco Piano" und „Italian
+   * Game: Two Knights" teilen sich einen Text. Zugeklappt, bis man ihn will,
+   * und er klappt erst wieder zu, wenn die *Familie* wechselt: Wer in derselben
+   * Eröffnung von Variante zu Variante geht, liest weiter.
+   */
+  const idee = useMemo(
+    () => eroeffnungsTheorie(selectedLine?.name, locale),
+    [selectedLine?.name, locale]
+  );
+  const [ideeOffen, setIdeeOffen] = useState(false);
+  useEffect(() => setIdeeOffen(false), [idee?.schluessel]);
+
   const selectVariation = useCallback((line: VariationLine, ply: number) => {
     setSelectedLineKey(line.key);
     setSelectedId(ply >= 0 ? (line.nodeIds?.[ply] ?? null) : null);
@@ -985,6 +1003,16 @@ function LiveRepertoire() {
 
   const detailsPane = (
     <div className="flex flex-col gap-4">
+      {idee && (
+        <Disclosure
+          icon={<BookOpen size={14} className="text-accent" />}
+          title={t("op.theoryLabel", { f: idee.schluessel })}
+          open={ideeOffen}
+          onToggle={() => setIdeeOffen((offen) => !offen)}
+        >
+          {idee.text}
+        </Disclosure>
+      )}
       {selected ? (
         <>
           <Card
@@ -1363,6 +1391,16 @@ function LiveRepertoire() {
             onZugSpielen={startFromMove}
             // Dieselbe Karte wie unten auf der gewöhnlichen Seite, nur ohne
             // ihren Rahmen · einlesen und ausgeben gehören in beide Fassungen.
+            idee={
+              idee
+                ? {
+                    familie: idee.schluessel,
+                    text: idee.text,
+                    offen: ideeOffen,
+                    onUmschalten: () => setIdeeOffen((offen) => !offen),
+                  }
+                : undefined
+            }
             buch={{
               offen: bookOpen,
               onUmschalten: () => setBookOpen((offen) => !offen),

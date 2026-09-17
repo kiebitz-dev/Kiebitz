@@ -58,6 +58,7 @@ import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
 import { moveTargets, useBoardSelection } from "../../lib/boardMoves";
 import { Notizfeld } from "../../components/blatt/Notizfeld";
 import {
+  Aufdeckfeld,
   Balken,
   Ergebniskasten,
   Feldname,
@@ -161,6 +162,11 @@ export interface RepertoireBlattProps {
     onUmschalten: () => void;
     inhalt: ReactNode;
   };
+  /**
+   * Worum es in der Eröffnung dieser Variante geht · verdeckt, bis man es
+   * aufschlägt. Fehlt, wo sich zum Namen keine Familie mit Text findet.
+   */
+  idee?: { familie: string; text: string; offen: boolean; onUmschalten: () => void };
 }
 
 /** Was gerade am Zeiger hängt · Teil, Herkunft, Ziel und der Weg dorthin. */
@@ -203,6 +209,7 @@ export default function RepertoireBlatt({
   onTeilen,
   onZugSpielen,
   buch: buchAlsPgn,
+  idee,
 }: RepertoireBlattProps) {
   const { t } = useI18n();
   // Tippen–tippen liegt im selben Haken wie am Brett der gewöhnlichen Fassung
@@ -585,6 +592,20 @@ export default function RepertoireBlatt({
           )}
         </div>
       </div>
+
+      {idee && (
+        <Aufdeckfeld
+          titel={t("op.theoryTitle")}
+          offen={idee.offen}
+          onUmschalten={idee.onUmschalten}
+          wegAuf={t("theory.show")}
+          wegZu={t("theory.hide")}
+          verdeckt={t("op.theoryCovered", { f: idee.familie })}
+        >
+          <div className="blatt-feld text-ink3">{idee.familie}</div>
+          <div className="buch mt-1 text-[14px] leading-[1.55] text-ink2">{idee.text}</div>
+        </Aufdeckfeld>
+      )}
 
       {abdeckung != null && (
         <div>

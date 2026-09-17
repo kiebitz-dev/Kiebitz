@@ -14,6 +14,7 @@
  */
 import type { ReactNode } from "react";
 import {
+  Aufdeckfeld,
   Balken,
   Ergebniskasten,
   Farbfeld,
@@ -22,6 +23,7 @@ import {
   Kolumnentitel,
   Rubrik,
   Schalterreihe,
+  Zugfolge,
   type Feld,
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
@@ -76,6 +78,16 @@ export interface PuzzlesBlattProps {
   ratingDelta: number | null;
   history: number[];
   geloest: number;
+  /**
+   * Die Lösung in Worten · erst, wenn die Aufgabe vorbei ist.
+   *
+   * `zeile` ist die ganze Folge, `saetze` nur die Züge des Lösers, zu denen es
+   * etwas zu sagen gibt (siehe lib/loesung.ts). Fehlt sie, steht keine Rubrik
+   * da · eine leere Rubrik ist kein Abschnitt.
+   */
+  loesung?: { zeile: string; saetze: { zug: string; satz: string }[] };
+  /** Die Theorie zum Motiv · verdeckt, bis sie verlangt wird. */
+  motiv?: { titel: string; text: string; offen: boolean; onUmschalten: () => void };
 }
 
 export default function PuzzlesBlatt({
@@ -98,6 +110,8 @@ export default function PuzzlesBlatt({
   ratingDelta,
   history,
   geloest,
+  loesung,
+  motiv,
 }: PuzzlesBlattProps) {
   const { t } = useI18n();
 
@@ -209,6 +223,41 @@ export default function PuzzlesBlatt({
     </div>
   );
 
+  const loesungBlock = loesung && (
+    <div>
+      <Rubrik>{t("pz.solutionTitle")}</Rubrik>
+      <div className="mt-2">
+        <Zugfolge gross={15}>{loesung.zeile}</Zugfolge>
+      </div>
+      {/* Die Sätze ohne eigene Beschriftung · jeder nennt seinen Zug selbst,
+          und ein Etikett „21.Rxc1" über „Rxc1 schlägt die Dame" sagte ihn
+          zweimal. Die Zugfolge darüber sagt, wo er steht. */}
+      {loesung.saetze.length > 0 && (
+        <div className="buch mt-2.5 flex flex-col gap-1 border-s-2 border-line2 ps-[11px] text-[14px] leading-[1.5] text-ink2">
+          {loesung.saetze.map((eintrag) => (
+            <p key={eintrag.zug}>{eintrag.satz}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Das Motiv steht im Satz der Seite wie der Hinweis im Endspiel: verdeckt
+  // hinter seiner Rubrik, bis man es aufdeckt. Heißt die Rubrik das Motiv beim
+  // Namen, ist es schon aufgedeckt · sonst trägt sie nur „Das Motiv".
+  const motivTheorieBlock = motiv && (
+    <Aufdeckfeld
+      titel={motiv.titel}
+      offen={motiv.offen}
+      onUmschalten={motiv.onUmschalten}
+      wegAuf={t("theory.show")}
+      wegZu={t("theory.hide")}
+      verdeckt={t("pz.theoryCovered")}
+    >
+      <div className="buch text-[14px] leading-[1.55] text-ink2">{motiv.text}</div>
+    </Aufdeckfeld>
+  );
+
   const kopf = (
     <>
       <Kolumnentitel links={t("blatt.puzzlesTitle")} rechts={kopfRechts} />
@@ -236,6 +285,8 @@ export default function PuzzlesBlatt({
       <div className="flex flex-col px-3.5 pb-6 pt-3">
         {kopf}
         <div className="mt-3.5">{brettSpalte}</div>
+        {loesungBlock && <div className="mt-4">{loesungBlock}</div>}
+        {motivTheorieBlock && <div className="mt-4">{motivTheorieBlock}</div>}
         <div className="mt-4">{bogen}</div>
         {motivBlock && <div className="mt-4">{motivBlock}</div>}
         <div className="mt-4">{ratingBlock}</div>
@@ -250,6 +301,8 @@ export default function PuzzlesBlatt({
         {brettSpalte}
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-6">
           {bogen}
+          {loesungBlock}
+          {motivTheorieBlock}
           {motivBlock}
           {ratingBlock}
         </div>

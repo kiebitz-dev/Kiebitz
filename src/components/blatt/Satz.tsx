@@ -79,6 +79,57 @@ export function Rubrik({
   );
 }
 
+/**
+ * Ein Abschnitt, dessen Text verdeckt liegt · im Aufgabenbuch steht die
+ * Lösung hinten und nicht neben der Stellung.
+ *
+ * Das Gegenstück zu `Disclosure` der gewöhnlichen Fassung (components/ui.tsx):
+ * Rubrik mit dem Griff in der Linie, darunter entweder der Text an der
+ * Haarlinie oder ein gleich eingerücktes Feld, das sagt, was darunter liegt.
+ * Aufgedeckt wird an beiden · der Griff dort, wo der Leser hinsieht.
+ *
+ * Wie alle Bausteine hier holt es sich keine Texte: Beschriftungen und Stand
+ * kommen von der Seite.
+ */
+export function Aufdeckfeld({
+  titel,
+  offen,
+  onUmschalten,
+  wegAuf,
+  wegZu,
+  verdeckt,
+  children,
+}: {
+  titel: ReactNode;
+  offen: boolean;
+  onUmschalten: () => void;
+  wegAuf: string;
+  wegZu: string;
+  /** Was im verdeckten Feld steht · sagt, was darunter liegt, nicht was. */
+  verdeckt: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <Rubrik weg={offen ? wegZu : wegAuf} onWeg={onUmschalten}>
+        {titel}
+      </Rubrik>
+      {offen ? (
+        <div className="mt-2.5 border-s-2 border-line2 ps-3">{children}</div>
+      ) : (
+        <button
+          type="button"
+          onClick={onUmschalten}
+          aria-expanded={false}
+          className="mt-2.5 flex min-h-11 w-full items-center border-s-2 border-line2 ps-3 text-start text-[12.5px] text-ink3 hover:text-ink2"
+        >
+          {verdeckt}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Ein beschriftetes Feld des Turnierformulars · Wert auf einer Linie. */
 export interface Feld {
   label: string;

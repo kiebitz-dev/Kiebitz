@@ -19,6 +19,7 @@
  */
 import type { ReactNode } from "react";
 import {
+  Aufdeckfeld,
   Ergebniskasten,
   Farbfeld,
   Feldname,
@@ -155,23 +156,16 @@ export default function EndgameBlatt({
           lernt das Endspiel; wer es nebenbei mitliest, liest nur. Aufgedeckt
           wird an der Rubrik oder auf dem verdeckten Feld selbst — dasselbe
           Umschalten, damit der Griff dort liegt, wo der Leser hinsieht. */}
-      <Rubrik weg={t(hinweisOffen ? "eg.hintHide" : "eg.hintShow")} onWeg={onHinweis}>
-        {t("blatt.theHint")}
-      </Rubrik>
-      {hinweisOffen ? (
-        <div className="buch mt-2.5 border-s-2 border-line2 ps-3 text-[14.5px] leading-[1.55] text-ink2">
-          {`„${hinweis}“`}
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onHinweis}
-          aria-expanded={false}
-          className="mt-2.5 flex min-h-11 w-full items-center border-s-2 border-line2 ps-3 text-start text-[12.5px] text-ink3 hover:text-ink2"
-        >
-          {t("eg.hintCovered")}
-        </button>
-      )}
+      <Aufdeckfeld
+        titel={t("blatt.theHint")}
+        offen={hinweisOffen}
+        onUmschalten={onHinweis}
+        wegAuf={t("theory.show")}
+        wegZu={t("theory.hide")}
+        verdeckt={t("eg.hintCovered")}
+      >
+        <div className="buch text-[14.5px] leading-[1.55] text-ink2">{`„${hinweis}“`}</div>
+      </Aufdeckfeld>
       <div className="mt-2 text-[11px] leading-[1.55] text-ink3">{fussnote}</div>
       <div className="mt-4 min-h-0 flex-1">
         <Rubrik weg={t("eg.progress", { n: deInt(gemeistert), m: deInt(gesamt) })}>

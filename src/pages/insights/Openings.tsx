@@ -4,7 +4,8 @@
  * Die zweite Hälfte ist der eigentliche Gewinn · sie beantwortet, ob die
  * Vorbereitung überhaupt bis aufs Brett kommt und wo sie zuerst reißt.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { BookOpen } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -17,6 +18,8 @@ import {
 } from "recharts";
 import { barCursor, chart, chartSurface, ChartTooltip } from "../../components/chartTheme";
 import { useMobileShell } from "../../components/MobileShell";
+import { Disclosure } from "../../components/ui";
+import { familienTheorie } from "../../lib/eroeffnungstheorie";
 import { useI18n } from "../../lib/i18n";
 import { de, deInt } from "../../lib/format";
 import { repGaps, type RepGap } from "../../lib/repertoire";
@@ -40,10 +43,30 @@ export default function Openings({
   desktop: boolean;
   onOpenRepertoire: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const mobile = useMobileShell();
   const { repertoire } = deep;
   const [gaps, setGaps] = useState<RepGap[] | null>(null);
+  /**
+   * Die Ideen der eigenen Eröffnungsfamilien · je eine, meistgespielte zuerst.
+   *
+   * Die Familien stehen oben schon als Auswertung; hier steht, worum es in
+   * ihnen geht. Jede liegt zugeklappt, denn acht offene Absätze wären eine
+   * Wand, und wer die Eröffnung kennt, braucht den Text nicht (siehe
+   * lib/eroeffnungstheorie.ts).
+   */
+  const ideen = useMemo(
+    () => familienTheorie(deep.openings.families.map((familie) => familie.label), locale),
+    [deep.openings.families, locale]
+  );
+  const [offeneIdeen, setOffeneIdeen] = useState<ReadonlySet<string>>(new Set());
+  const umschalten = (familie: string) =>
+    setOffeneIdeen((stand) => {
+      const neu = new Set(stand);
+      if (neu.has(familie)) neu.delete(familie);
+      else neu.add(familie);
+      return neu;
+    });
 
   // Die Lückenkarte spielt jede Partie am Buch entlang · erst laden, wenn der
   // Reiter offen ist und ein Repertoire überhaupt existiert.
@@ -245,6 +268,28 @@ export default function Openings({
           </Section>
         );
       })}
+
+      {ideen.length > 0 && (
+        <Section
+          title={t("op.theoryTitle")}
+          summary={t("op.theorySummary", { n: deInt(ideen.length) })}
+          defaultOpen
+        >
+          <div className="flex flex-col gap-2">
+            {ideen.map((idee) => (
+              <Disclosure
+                key={idee.schluessel}
+                icon={<BookOpen size={14} className="text-accent" />}
+                title={idee.schluessel}
+                open={offeneIdeen.has(idee.schluessel)}
+                onToggle={() => umschalten(idee.schluessel)}
+              >
+                {idee.text}
+              </Disclosure>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section title={t("ins.openingsTitle")} summary={t("ins.opPlayedSummary")} defaultOpen>
         <ResponsiveContainer width="100%" height={320}>

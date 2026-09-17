@@ -231,6 +231,62 @@ export function Button({
 }
 
 /**
+ * Ein Text, der verdeckt liegt, bis man ihn verlangt · Theorie, Hinweis, Idee.
+ *
+ * Drei Seiten brauchen dieselbe Form: der Hinweis zum Endspiel, die Theorie
+ * zum Motiv einer Aufgabe und die Idee einer Eröffnung. Alle drei sind Text,
+ * der beim ersten Hinsehen nichts verloren hat — im Endspiel nähme er die
+ * Lösung vorweg, im Puzzle das Motiv, und in einer Tabelle voller Eröffnungen
+ * wären es dreißig Absätze. Eine gerahmte Leiste mit Winkel, der Text darunter.
+ *
+ * Der offene Zustand gehört der Seite und nicht diesem Baustein: Der
+ * Diagramm-Modus setzt denselben Text mit `Aufdeckfeld` (components/blatt/
+ * Satz.tsx), und wer mitten in einer Aufgabe umschaltet, soll nicht zweimal
+ * aufdecken.
+ */
+export function Disclosure({
+  icon,
+  title,
+  open,
+  onToggle,
+  children,
+  className = "",
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  const t = useT();
+  return (
+    <div className={`rounded-lg border border-line bg-panel2 ${className}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left hover:bg-panel3"
+      >
+        <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink2 [&>svg]:shrink-0">
+          {icon}
+          <span className="truncate">{title}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-ink3">
+          {t(open ? "theory.hide" : "theory.show")}
+          <ChevronDown size={15} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed text-ink3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Klapp-Menü für Aktionen, die eine Leiste sonst zumauern.
  *
  * Die Regel dahinter: Was man in einer Sitzung mehrmals anfasst, steht als

@@ -344,6 +344,60 @@ Dashboard-mode reader never pays for eighty sentences nobody shows.
 
 Still to come, deliberately: an Insights aggregation over recurring motifs.
 
+## Puzzles and openings
+
+Two more places explain themselves since 1.4, and both follow the rule of
+this file: the facts are checked, the words are written by a person.
+
+**The solution of a puzzle, in words.** A puzzle said *whether* you found
+the move and nothing about *why*. `lib/loesung.ts` replays the solution the
+puzzle carries anyway (`PuzzleOut.moves`, UCI) and hands each of the
+solver's moves to `zugfakten` — the same facts a game move gets. The sentence
+comes from `tatsachensatz` in `lib/erklaerung.ts`, which is `schlichterSatz`
+without its fallback: "the engine finds nothing to fault in Rxc1" is true
+about a quiet game move and absurd about the key move of a combination, so
+where nothing is notable the puzzle says nothing. The opponent's replies get
+no sentence (forced defence, and a list is not an explanation), the setup
+move of a Lichess puzzle is played but not shown, and numbering goes through
+`notationParts` like every other line. The block appears only once the
+puzzle is over — solved or revealed. Before that it would be the answer.
+
+No motif is detected here. The puzzle brings its motif as a Lichess theme,
+and what that theme means is the second piece:
+
+**Theory texts** — `data/puzzleTheory.ts` (37 motifs) and
+`data/openingTheory.ts` (55 opening families), two or three sentences each,
+in all seven languages. They are content, not interface, and sit next to
+`data/endgames.ts` for the same reason its hints do. A test fails if a text
+is missing in any language, if a motif key is unknown to the theme catalogue,
+or if an opening family is one the name table can never produce.
+
+Openings are explained per **family**, never per variation: 3,807 named
+positions cannot carry hand-written text, 120 families can, and the family is
+what the reader actually asks about. `eroeffnungsfamilie` in
+`lib/eroeffnungstheorie.ts` is `family_from_name` from the Rust insights,
+rebuilt word for word — the text next to a table row has to explain the same
+family the row counts. What the texts deliberately do not contain is lines or
+verdicts; that would be a second repertoire beside the user's own.
+
+All of it lies **covered** until asked for, like the endgame hint: the motif
+theory names the motif (and uncovers it with it), and eight open paragraphs
+in the openings tab would be a wall. Dashboard mode sets the cover as
+`Disclosure` (`components/ui.tsx`), diagram mode as `Aufdeckfeld`
+(`components/blatt/Satz.tsx`) and, for the list of families, as index lines
+with the handle at the end. The two catalogues load separately
+(`lib/motivtheorie.ts`, `lib/eroeffnungstheorie.ts`) — together they are
+about 190 KB of prose, and a page loads only the one it shows.
+
+Where it stands:
+
+| | Dashboard mode | Diagram mode |
+| --- | --- | --- |
+| Solution in words | card under the board | THE SOLUTION, right column |
+| Motif theory | strip under the board | covered field, right column |
+| Opening families | section in Insights → Openings | index in `OpeningsBlatt` |
+| Opening of the open variation | strip above the details | covered field in the apparatus |
+
 ## Adding a phrasing
 
 Each motif has two phrasings, picked by hashing `${gameId}:${ply}`: the same
