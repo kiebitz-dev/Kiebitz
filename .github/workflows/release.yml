@@ -15,14 +15,6 @@ on:
   push:
     tags:
       - "v*"
-  # Erneuter Lauf eines Tags von Hand (`gh workflow run release.yml --ref vX.Y.Z
-  # -f android=false`), z. B. wenn die signierte APK schon anders verteilt ist.
-  workflow_dispatch:
-    inputs:
-      android:
-        description: "Signierte Android-APK bauen und anhängen"
-        type: boolean
-        default: true
 
 permissions:
   contents: write # nötig, damit die Action das Release anlegen darf
@@ -261,158 +253,13 @@ jobs:
 
   android:
     # Startet parallel zum Desktop-Build; der Draft-Release existiert bereits.
+    # Die Schritte stehen in android-apk.yml, damit sich die APK für einen
+    # bestehenden Tag auch einzeln nachbauen lässt.
     needs: prepare-release
-    runs-on: ubuntu-latest
-    env:
-      # Android-Keystore als Base64-Secret (siehe DEPLOYMENT.md, One-time setup).
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-    steps:
-      # Ohne Keystore-Secret kann keine installierbare (signierte) APK entstehen.
-      # Dann den Android-Teil überspringen, statt das ganze Release rot zu färben.
-      - name: Keystore vorhanden?
-        id: guard
-        run: |
-          if [ "${{ inputs.android }}" = "false" ]; then
-            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Android-APK per workflow_dispatch abgewählt."
-          elif [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::ANDROID_KEYSTORE_BASE64 ist nicht gesetzt — Android-APK wird übersprungen. Setup siehe docs/DEPLOYMENT.md."
-          fi
-
-      - uses: actions/checkout@v5
-        if: steps.guard.outputs.has_keystore == 'true'
-
-      - name: Node einrichten
-        if: steps.guard.outputs.has_keystore == 'true'
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Toolchain-Pins laden
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: node scripts/export-toolchain-pins.mjs --github-env
-
-      - name: JDK 17 einrichten
-        if: steps.guard.outputs.has_keystore == 'true'
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Android-SDK/NDK einrichten
-        if: steps.guard.outputs.has_keystore == 'true'
-        uses: android-actions/setup-android@v4
-        with:
-          # Der Default „tools platform-tools“ scheitert, seit Google das
-          # veraltete Paket `tools` aus dem SDK-Repository entfernt hat.
-          packages: platform-tools
-          log-accepted-android-sdk-licenses: false
-
-      - name: NDK + Plattform installieren
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: |
-          sdkmanager "platform-tools" "platforms;android-$ANDROID_COMPILE_SDK" "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK_VERSION"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
-
-      - name: Rust + Android-Targets einrichten
-        if: steps.guard.outputs.has_keystore == 'true'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
-
-      - name: Rust-Build cachen
-        if: steps.guard.outputs.has_keystore == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: android
-
-      - name: Frontend-Abhängigkeiten installieren
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: npm ci
-
-      # Stockfish fuer Android reproduzierbar aus dem gepinnten Commit
-      # bauen. NDK r28 und 16-KB-Linker-Alignment erfuellen die Play-Anforderung;
-      # plain armv8 (kein -dotprod) bleibt breit kompatibel.
-      - name: Stockfish bauen (Android, armv8, 16 KB)
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: |
-          commit="$STOCKFISH_COMMIT"
-          git clone --filter=blob:none --no-checkout "$STOCKFISH_REPOSITORY" sf-src
-          git -C sf-src fetch --depth 1 origin "$commit"
-          git -C sf-src checkout --detach "$commit"
-          test "$(git -C sf-src rev-parse HEAD)" = "$commit"
-          export PATH="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          cd sf-src/src
-          ../scripts/net.sh
-          make -j2 build ARCH=armv8 COMP=ndk \
-            EXTRALDFLAGS="-Wl,-z,max-page-size=$ANDROID_PAGE_SIZE"
-          llvm-strip stockfish
-          while read -r alignment; do
-            if (( alignment < ANDROID_PAGE_SIZE )); then
-              echo "::error::Stockfish LOAD alignment is only $(printf '0x%x' "$alignment")."
-              exit 1
-            fi
-          done < <(llvm-readelf -lW stockfish | awk '$1 == "LOAD" { print $NF }')
-          cd ../..
-          dest=src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p "$dest"
-          cp sf-src/src/stockfish "$dest/libstockfish.so"
-          echo "Stockfish $STOCKFISH_VERSION built from $commit -> $dest/libstockfish.so"
-
-      # Keystore aus dem Secret wiederherstellen und die von Gradle gelesene
-      # keystore.properties erzeugen (beide sind gitignored).
-      - name: Keystore einrichten
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: |
-          cd src-tauri/gen/android
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > keystore.jks
-          {
-            echo "storeFile=keystore.jks"
-            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
-            echo "keyAlias=$ANDROID_KEY_ALIAS"
-            echo "keyPassword=$ANDROID_KEY_PASSWORD"
-          } > keystore.properties
-
-      # Schnell scheitern, bevor der lange Build läuft. -certreq greift wirklich
-      # auf den privaten Schlüssel zu und prüft damit Store- UND Key-Passwort
-      # (genau der Mismatch, der sonst erst nach Minuten beim Signieren auffliegt)
-      # sowie Alias und Keystore-Inhalt in einem Rutsch.
-      - name: Keystore prüfen
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: |
-          cd src-tauri/gen/android
-          if ! keytool -certreq -alias "$ANDROID_KEY_ALIAS" -keystore keystore.jks \
-                -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" >/dev/null 2>&1; then
-            echo "::error::Keystore-Check fehlgeschlagen: Alias, Store- oder Key-Passwort passen nicht zum Keystore. ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD prüfen — bei PKCS12 (keytool-Default) müssen Store- und Key-Passwort identisch sein. Siehe docs/DEPLOYMENT.md."
-            exit 1
-          fi
-          echo "Keystore ok: Alias '$ANDROID_KEY_ALIAS', Store- und Key-Passwort passen."
-
-      - name: Android-APK bauen (release, arm64)
-        if: steps.guard.outputs.has_keystore == 'true'
-        run: npx tauri android build --apk --target aarch64
-
-      # Signierte APK finden, versioniert umbenennen und ans Release hängen.
-      - name: APK ans Release hängen
-        if: steps.guard.outputs.has_keystore == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          version=$(node -p "require('./package.json').version")
-          apk=$(find src-tauri/gen/android -path "*/outputs/apk/*/release/*.apk" | head -n1)
-          [ -n "$apk" ] || { echo "Keine Release-APK gefunden"; exit 1; }
-          out="Kiebitz_${version}_arm64.apk"
-          cp "$apk" "$out"
-          echo "Lade $out ($(du -h "$out" | cut -f1)) zu Release ${{ github.ref_name }}"
-          gh release upload "${{ github.ref_name }}" "$out" --clobber
+    uses: ./.github/workflows/android-apk.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
 
   publish:
     # Bei einem fehlgeschlagenen Build bleibt der Draft als Diagnose-Artefakt

@@ -681,7 +681,10 @@ any completed artifacts for diagnosis, rather than publishing a partial release.
   restores the keystore from the secrets, builds a signed release APK
   (`tauri android build --apk --target aarch64`), and uploads
   `Kiebitz_<version>_arm64.apk` to the draft release. Without the keystore
-  secret the job skips cleanly, leaving the desktop release green.
+  secret the job skips cleanly, leaving the desktop release green. The steps
+  live in `.github/workflows/android-apk.yml`, which `release.yml` calls; if
+  only the Android leg of a release failed, rebuild and attach the APK for that
+  tag with `gh workflow run android-apk.yml --ref main -f tag=vX.Y.Z`.
 - **Linux runner pin**: `ubuntu-22.04`, not `ubuntu-latest`. An AppImage binds
   the glibc of the machine that built it, so building on the oldest supported
   runner keeps the result usable on older distributions.
