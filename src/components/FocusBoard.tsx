@@ -21,6 +21,14 @@
  * nicht mehr die Spalte einer Seite (siehe „Brettmaße" in src/index.css). Wie
  * viel davon das Brett bekommt, misst der Fokus selbst · siehe `useChrome`.
  *
+ * Im Diagramm-Modus ist der Fokus eine Seite des Buches wie jede andere:
+ * Kolumnentitel mit der kräftigen Linie statt Kopfzeile, eckiger Rahmen aus
+ * Tinte statt gerundeter Karte, Papier statt Panel. Was die Seiten über und
+ * unter das Brett stellen, setzen sie im Modus selbst (die Blätter der
+ * Puzzles, Endspiele und des Trainers bringen ihre Reihen mit); wo eine Seite
+ * ihre gewöhnliche Leiste hereinreicht, setzt `.blatt-formular` sie neu,
+ * dieselbe Regel wie beim Einstellungsblatt.
+ *
  * Das Fokus-Brett gehört zu Kiebitz Plus. Gesperrt bleibt der Griff sichtbar
  * und führt in die Erklärung · dieselbe Regel wie bei jeder anderen gesperrten
  * Funktion (siehe components/PlusLock.tsx).
@@ -38,6 +46,7 @@ import { Maximize2, Minimize2, Sparkles, X } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { useMobileShell } from "./MobileShell";
 import { useBackDismiss } from "../lib/backDismiss";
+import { useDiagramMode } from "../lib/diagramMode";
 import { openPlusDialog } from "../lib/plus/dialog";
 import { usePlusGate } from "../lib/plus/usePlus";
 import { Button, MenuItem } from "./ui";
@@ -336,6 +345,7 @@ function FocusLayer({
 }) {
   const t = useT();
   const mobile = useMobileShell();
+  const blatt = useDiagramMode();
   const { chrome, viewport, lead, layer, card, body, column, board, rows, controls } =
     useChrome(mobile);
   const [container] = useState<HTMLElement | null>(() =>
@@ -354,7 +364,31 @@ function FocusLayer({
 
   if (!container) return null;
 
-  const head = (
+  const head = blatt ? (
+    // Der Kolumnentitel des Blattes · Titel links in der Kolumne, der Kontext
+    // kursiv daneben, die kräftige Linie darunter. Geschlossen wird am Ende
+    // der Zeile, wo die Seite ihre Paginierung trüge.
+    <header className="shrink-0 px-4 pt-3">
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-baseline gap-3">
+          <span className="blatt-kolumne shrink-0 text-ink3">{title}</span>
+          {subtitle && (
+            <span className="buch min-w-0 truncate text-[13px] italic text-ink2">{subtitle}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("board.focusClose")}
+          title={t("board.focusClose")}
+          className="-me-2 shrink-0 p-2 text-ink3 transition-colors hover:text-ink"
+        >
+          {mobile ? <Minimize2 size={17} /> : <X size={16} />}
+        </button>
+      </div>
+      <div className="mt-1 h-px bg-ink" />
+    </header>
+  ) : (
     <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="truncate text-[14px] font-semibold tracking-tight text-ink">{title}</div>
@@ -395,7 +429,7 @@ function FocusLayer({
             fehlt. `gap-2` in den Hüllen, damit mehrteilige Reihen denselben
             Abstand behalten wie als direkte Kinder der Spalte. */}
         {above && (
-          <div ref={rows} className="flex flex-col gap-2">
+          <div ref={rows} className={`flex flex-col gap-2 ${blatt ? "blatt-formular blatt-fokusreihe" : ""}`}>
             {above}
           </div>
         )}
@@ -403,7 +437,7 @@ function FocusLayer({
           {children}
         </div>
         {below && (
-          <div ref={controls} className="flex flex-col gap-2">
+          <div ref={controls} className={`flex flex-col gap-2 ${blatt ? "blatt-formular blatt-fokusreihe" : ""}`}>
             {below}
           </div>
         )}
@@ -430,6 +464,7 @@ function FocusLayer({
         aria-label={title}
         data-testid="focus-board"
         className="board-focus fixed inset-0 z-50 flex flex-col bg-bg"
+        data-blatt={blatt ? "" : undefined}
         style={{
           ...measured,
           paddingTop: "env(safe-area-inset-top)",
@@ -458,7 +493,12 @@ function FocusLayer({
     >
       <div
         ref={card}
-        className="flex max-h-full w-auto max-w-full flex-col overflow-hidden rounded-2xl border border-line2 bg-panel pb-1 shadow-2xl shadow-black/50"
+        data-blatt={blatt ? "" : undefined}
+        // Im Blatt ein Bogen Papier mit Tintenrand · keine Rundung, kein
+        // Panel. Der Schatten bleibt, weil der Bogen über der Seite liegt.
+        className={`flex max-h-full w-auto max-w-full flex-col overflow-hidden pb-1 shadow-2xl shadow-black/50 ${
+          blatt ? "border border-ink bg-bg" : "rounded-2xl border border-line2 bg-panel"
+        }`}
       >
         {head}
         {content}

@@ -857,10 +857,18 @@ function TrainerView({
                   ? t("pz.noneFound")
                   : t("pz.findBest")}
             </span>,
+            // Tipp und Lösung auch vor dem ersten Fehlversuch · die Lösung
+            // stand bisher erst nach einem falschen Zug zur Wahl. Beides
+            // bucht einen Fehlversuch (siehe `takeHint`, `revealSolution`).
             status === "playing" && (
-              <Button onClick={takeHint}>
-                <Lightbulb size={15} /> {t("pz.hint")}
-              </Button>
+              <>
+                <Button onClick={takeHint}>
+                  <Lightbulb size={15} /> {t("pz.hint")}
+                </Button>
+                <Button onClick={revealSolution}>
+                  <Eye size={15} /> {t("pz.solution")}
+                </Button>
+              </>
             )
           )
         )}
@@ -960,14 +968,34 @@ function TrainerView({
               ? t("pz.loadingNext")
               : status === "empty"
                 ? t("pz.noneFound")
-                : t("pz.findBest")
+                : status === "solved"
+                  ? `${failedRef.current ? t("pz.solvedWithHelp") : t("pz.correct")}${
+                      ratingDelta != null
+                        ? t("pz.ratingDelta", { d: `${ratingDelta >= 0 ? "+" : ""}${ratingDelta}` })
+                        : ""
+                    }`
+                  : wrong
+                    ? t("pz.wrong", { d: ratingDelta != null ? ` (Rating ${ratingDelta})` : "" })
+                    : showHint
+                      ? t("pz.hintText", {
+                          theme: mainTheme ? t("pz.hintTheme", { m: themeLabel(mainTheme, locale) }) : "",
+                        })
+                      : t("pz.findBest")
           }
+          ton={status === "solved" ? "richtig" : wrong && status === "playing" ? "falsch" : "offen"}
           brett={puzzleBoard("puzzle")}
-          schalter={[
-            { label: t("pz.hint"), onClick: status === "playing" ? takeHint : undefined },
-            { label: t("pz.solution"), onClick: status === "playing" || wrong ? revealSolution : undefined },
-            { label: t("common.next"), betont: true, onClick: () => load() },
-          ]}
+          // Kein „Weiter", solange die Aufgabe offen ist · wer nicht weiter
+          // weiß, nimmt Tipp oder Lösung, und beide werden gebucht. Einfach
+          // überspringen ließ die Aufgabe dagegen spurlos verschwinden. Erst
+          // die gelöste (oder aufgedeckte) Aufgabe bekommt den Weg nach vorn.
+          schalter={
+            status === "solved"
+              ? [{ label: t("common.next"), betont: true, onClick: () => load() }]
+              : [
+                  { label: t("pz.hint"), onClick: status === "playing" ? takeHint : undefined },
+                  { label: t("pz.solution"), onClick: status === "playing" ? revealSolution : undefined },
+                ]
+          }
           verlaufSchalter={[
             { label: "⏮", titel: t("pz.firstPosition"), onClick: () => goToPly(0) },
             { label: "‹", titel: t("pz.previousPosition"), onClick: () => goToPly(viewPly - 1) },
@@ -975,7 +1003,16 @@ function TrainerView({
             { label: "⏭", titel: t("pz.currentPosition"), onClick: () => goToPly(lastPly) },
           ]}
           griffe={nebengriffe(false)}
+          verlaufZaehler={`${viewPly} / ${lastPly}`}
           verlaufNote={t("blatt.historyNote")}
+          fokus={{
+            offen: focused,
+            onSchliessen: () => setFocused(false),
+            titel: t("pz.title"),
+            untertitel: puzzle ? `Rating ${puzzle.rating}` : undefined,
+            brett: puzzleBoard("puzzle-focus"),
+            griffe: nebengriffe(true),
+          }}
           heute={stats.today_attempts}
           ziel={goal}
           motive={themeStats.map((th) => ({
@@ -1005,25 +1042,10 @@ function TrainerView({
               : undefined
           }
         />
-        {/* Zwei Dialoge und kein Satz · sie gehören in beide Fassungen
-            unverändert. Bis 1.4 standen sie nur im `return` der gewöhnlichen
-            Fassung, und damit kostete der Modus zwei Wege. */}
+        {/* Der Dialog ist kein Satz · er gehört in beide Fassungen unverändert.
+            Den Fokus setzt das Blatt selbst (`fokus`), mit seinen eigenen
+            Zeilen um das Brett. */}
         {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
-        <FocusBoard
-          open={focused}
-          onClose={() => setFocused(false)}
-          title={t("pz.title")}
-          subtitle={puzzle ? `Rating ${puzzle.rating}` : undefined}
-          above={puzzleHead(true)}
-          below={
-            <>
-              {puzzleHistory(true)}
-              {puzzleActions(true)}
-            </>
-          }
-        >
-          {puzzleBoard("puzzle-focus")}
-        </FocusBoard>
       </Suspense>
     );
   }

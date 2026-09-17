@@ -11,8 +11,13 @@
  *
  * Hier wird gezogen, also ist das Brett ein Brett und kommt fertig von der
  * Seite herein.
+ *
+ * Der Fokus gehört diesem Blatt, wie die Buchstellung dem Repertoire: Er zeigt
+ * dieselben Zeilen um das Brett, die hier daneben stehen, und nicht die
+ * Kästen der gewöhnlichen Fassung.
  */
 import type { ReactNode } from "react";
+import FocusBoard from "../../components/FocusBoard";
 import {
   Aufdeckfeld,
   Balken,
@@ -45,6 +50,21 @@ function Verlauf({ werte, breite = 240, hoehe = 34 }: { werte: number[]; breite?
   );
 }
 
+/** Woran die Meldung unter dem Brett ihre Farbe nimmt · wie im Trainer. */
+export type Tonart = "offen" | "richtig" | "falsch";
+
+const TON: Record<Tonart, string> = {
+  offen: "var(--color-line2)",
+  richtig: "var(--color-accent)",
+  falsch: "var(--color-loss)",
+};
+
+const TONFARBE: Record<Tonart, string> = {
+  offen: "var(--color-ink2)",
+  richtig: "var(--color-accent)",
+  falsch: "var(--color-loss)",
+};
+
 export interface MotivZeile {
   name: string;
   quote: number;
@@ -59,7 +79,12 @@ export interface PuzzlesBlattProps {
   /** Wer am Zug ist · über dem Brett steht die Gegenseite. */
   amZug: "white" | "black";
   amZugText: string;
-  aufforderung: string;
+  /**
+   * Was die Aufgabe gerade sagt · die Aufforderung, der Tipp, „Leider falsch"
+   * oder das Urteil. Ein Satz an einem Strich in seiner Farbe, kein Kasten.
+   */
+  aufforderung: ReactNode;
+  ton: Tonart;
   brett: ReactNode;
   schalter: { label: ReactNode; onClick?: () => void; betont?: boolean }[];
   /** Der Stellungsverlauf · vier Griffe zum Zurückblättern. */
@@ -69,7 +94,21 @@ export interface PuzzlesBlattProps {
    * der gewöhnlichen Fassung genau dort stehen. Fertig von der Seite herein.
    */
   griffe?: ReactNode;
+  /** „3 / 5" · die Zählung neben den Griffen. */
+  verlaufZaehler: string;
   verlaufNote: string;
+  /**
+   * Das Fokus-Brett · offen oder zu, mit eigenem Brett (eigene Kennung, siehe
+   * die Seite) und den Nebengriffen ohne den Griff zum Fokus.
+   */
+  fokus: {
+    offen: boolean;
+    onSchliessen: () => void;
+    titel: string;
+    untertitel?: string;
+    brett: ReactNode;
+    griffe?: ReactNode;
+  };
   /** Versuche heute, Ziel, und die Nummer der laufenden Aufgabe. */
   heute: number;
   ziel: number;
@@ -98,11 +137,14 @@ export default function PuzzlesBlatt({
   amZug,
   amZugText,
   aufforderung,
+  ton,
   brett,
   schalter,
   verlaufSchalter,
   griffe,
+  verlaufZaehler,
   verlaufNote,
+  fokus,
   heute,
   ziel,
   motive,
@@ -119,33 +161,81 @@ export default function PuzzlesBlatt({
   // ist dasselbe Maß, das dort die Spalte deckelt. Ein eigenes, kleineres
   // Maß hätte den Modus zu einer Ansicht gemacht, in der man schlechter
   // sieht.
-  const brettSpalte = (
-    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
-      <div className="flex items-center gap-[9px] pb-[9px]">
-        <Farbfeld farbe={amZug === "white" ? "black" : "white"} kante={11} />
-        <span className="text-[14px] text-ink">
-          {amZug === "white" ? t("common.black") : t("common.white")}
-        </span>
-      </div>
-      {brett}
-      <div className="flex flex-wrap items-center gap-[9px] pt-[9px]">
+  // Die Zeilen um das Brett · einmal gebaut, zweimal gesetzt: neben dem
+  // Tagesbogen und im Fokus. Dort fehlt nur die Anmerkung zum Verlauf, die
+  // Höhe gehört im Fokus dem Brett.
+  const obenZeile = (
+    <div className="flex items-center gap-[9px]">
+      <Farbfeld farbe={amZug === "white" ? "black" : "white"} kante={11} />
+      <span className="text-[14px] text-ink">
+        {amZug === "white" ? t("common.black") : t("common.white")}
+      </span>
+    </div>
+  );
+
+  const untenZeilen = (imFokus: boolean) => (
+    <>
+      <div className={`flex items-center gap-[9px] ${imFokus ? "" : "pt-[9px]"}`}>
         <Farbfeld farbe={amZug} kante={11} />
         <span className="text-[14px] text-ink">{amZugText}</span>
-        <span className="flex-1" />
-        <span className="buch text-[13px] italic text-ink2">{aufforderung}</span>
+      </div>
+      {/* Feste Mindesthöhe für zwei Zeilen · der Tipp ist länger als die
+          Aufforderung, und im Fokus rechnet das Brett mit dieser Höhe. */}
+      <div
+        className="buch mt-2 flex min-h-[46px] items-center border-s-2 ps-3 text-[14px] italic leading-[1.4]"
+        style={{ borderColor: TON[ton], color: TONFARBE[ton] }}
+      >
+        {aufforderung}
       </div>
       <div className="mt-3">
         <Schalterreihe eintraege={schalter} />
       </div>
-      <div className="flex-1" />
-      <div className="mt-3 border-t border-line pt-3">
+    </>
+  );
+
+  const verlauf = (imFokus: boolean) => (
+    <div className={imFokus ? "" : "mt-3 border-t border-line pt-3"}>
+      <div className="flex items-baseline justify-between gap-3">
         <Feldname>{t("pz.positionHistory")}</Feldname>
-        <div className="mt-2">
-          <Schalterreihe eintraege={verlaufSchalter} griffe={griffe} />
-        </div>
-        <p className="mt-2 text-[11px] leading-[1.55] text-ink3">{verlaufNote}</p>
+        <span className="blatt-zahl text-[11px] text-ink3">{verlaufZaehler}</span>
       </div>
+      <div className="mt-2">
+        <Schalterreihe eintraege={verlaufSchalter} griffe={imFokus ? fokus.griffe : griffe} />
+      </div>
+      {!imFokus && <p className="mt-2 text-[11px] leading-[1.55] text-ink3">{verlaufNote}</p>}
     </div>
+  );
+
+  // Das Brett ist so groß wie in der gewöhnlichen Fassung · `--board-edge`
+  // ist dasselbe Maß, das dort die Spalte deckelt. Ein eigenes, kleineres
+  // Maß hätte den Modus zu einer Ansicht gemacht, in der man schlechter
+  // sieht.
+  const brettSpalte = (
+    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
+      <div className="pb-[9px]">{obenZeile}</div>
+      {brett}
+      {untenZeilen(false)}
+      <div className="flex-1" />
+      {verlauf(false)}
+    </div>
+  );
+
+  const fokusBogen = (
+    <FocusBoard
+      open={fokus.offen}
+      onClose={fokus.onSchliessen}
+      title={fokus.titel}
+      subtitle={fokus.untertitel}
+      above={obenZeile}
+      below={
+        <>
+          <div>{untenZeilen(true)}</div>
+          {verlauf(true)}
+        </>
+      }
+    >
+      {fokus.brett}
+    </FocusBoard>
   );
 
   const bogen = (
@@ -290,6 +380,7 @@ export default function PuzzlesBlatt({
         <div className="mt-4">{bogen}</div>
         {motivBlock && <div className="mt-4">{motivBlock}</div>}
         <div className="mt-4">{ratingBlock}</div>
+        {fokusBogen}
       </div>
     );
   }
@@ -307,6 +398,7 @@ export default function PuzzlesBlatt({
           {ratingBlock}
         </div>
       </div>
+      {fokusBogen}
     </div>
   );
 }

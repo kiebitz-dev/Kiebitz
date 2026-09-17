@@ -25,6 +25,7 @@
  * zu zeigen.
  */
 import type { ReactNode } from "react";
+import FocusBoard from "../../components/FocusBoard";
 import {
   Ergebniskasten,
   Farbfeld,
@@ -80,6 +81,17 @@ export interface TrainerAufgabe {
   notiz: ReactNode;
   hinweis: string;
   onBeenden: () => void;
+  /**
+   * Das Fokus-Brett · es gehört dem Blatt, damit um das Brett dieselben
+   * Zeilen stehen wie hier und nicht die Kästen der gewöhnlichen Fassung.
+   */
+  fokus: {
+    offen: boolean;
+    onSchliessen: () => void;
+    titel: string;
+    untertitel?: string;
+    brett: ReactNode;
+  };
 }
 
 export interface TrainerEnde {
@@ -156,18 +168,22 @@ export default function TrainerBlatt({ mobile, kopfRechts, ende, aufgabe }: Trai
     notiz,
     hinweis,
     onBeenden,
+    fokus,
   } = aufgabe;
 
-  // Das Brett ist so groß wie in der gewöhnlichen Fassung · `--board-edge`
-  // ist dasselbe Maß, das dort die Spalte deckelt.
-  const brettSpalte = (
-    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
-      <div className="flex items-center gap-[9px] pb-[9px]">
-        <Farbfeld farbe={oben.farbe} kante={11} />
-        <span className="truncate text-[14px] text-ink">{oben.name}</span>
-      </div>
-      {brett}
-      <div className="flex items-center gap-[9px] pt-[9px]">
+  // Die Zeilen um das Brett · einmal gebaut, neben der Sitzung und im Fokus
+  // gesetzt.
+  const obenZeile = (
+    <div className="flex items-center gap-[9px]">
+      <Farbfeld farbe={oben.farbe} kante={11} />
+      <span className="truncate text-[14px] text-ink">{oben.name}</span>
+    </div>
+  );
+
+  // Name, Meldung und Schalter · im Fokus dieselben, ohne den Griff zum Fokus.
+  const untenZeilen = (imFokus: boolean) => (
+    <>
+      <div className="flex items-center gap-[9px]">
         <Farbfeld farbe={unten.farbe} kante={11} />
         <span className="truncate text-[14px] text-ink">{unten.name}</span>
       </div>
@@ -182,19 +198,51 @@ export default function TrainerBlatt({ mobile, kopfRechts, ende, aufgabe }: Trai
         {meldung}
       </div>
       <div className="mt-3">
-        <Schalterreihe eintraege={schalter} griffe={griffe} />
+        <Schalterreihe eintraege={schalter} griffe={imFokus ? undefined : griffe} />
       </div>
+    </>
+  );
+
+  const verlauf = (imFokus: boolean) => (
+    <div className={imFokus ? "" : "mt-3 border-t border-line pt-3"}>
+      <div className="flex items-baseline justify-between gap-3">
+        <Feldname>{t("pz.positionHistory")}</Feldname>
+        <span className="blatt-zahl text-[11px] text-ink3">{verlaufZaehler}</span>
+      </div>
+      <div className="mt-2">
+        <Schalterreihe eintraege={verlaufSchalter} />
+      </div>
+      {!imFokus && <p className="mt-2 text-[11px] leading-[1.55] text-ink3">{verlaufNote}</p>}
+    </div>
+  );
+
+  const fokusBogen = (
+    <FocusBoard
+      open={fokus.offen}
+      onClose={fokus.onSchliessen}
+      title={fokus.titel}
+      subtitle={fokus.untertitel}
+      above={obenZeile}
+      below={
+        <>
+          <div>{untenZeilen(true)}</div>
+          {verlauf(true)}
+        </>
+      }
+    >
+      {fokus.brett}
+    </FocusBoard>
+  );
+
+  // Das Brett ist so groß wie in der gewöhnlichen Fassung · `--board-edge`
+  // ist dasselbe Maß, das dort die Spalte deckelt.
+  const brettSpalte = (
+    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
+      <div className="pb-[9px]">{obenZeile}</div>
+      {brett}
+      <div className="pt-[9px]">{untenZeilen(false)}</div>
       <div className="flex-1" />
-      <div className="mt-3 border-t border-line pt-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <Feldname>{t("pz.positionHistory")}</Feldname>
-          <span className="blatt-zahl text-[11px] text-ink3">{verlaufZaehler}</span>
-        </div>
-        <div className="mt-2">
-          <Schalterreihe eintraege={verlaufSchalter} />
-        </div>
-        <p className="mt-2 text-[11px] leading-[1.55] text-ink3">{verlaufNote}</p>
-      </div>
+      {verlauf(false)}
     </div>
   );
 
@@ -278,6 +326,7 @@ export default function TrainerBlatt({ mobile, kopfRechts, ende, aufgabe }: Trai
         {kopf}
         <div className="mt-3.5">{brettSpalte}</div>
         <div className="mt-4">{rechts}</div>
+        {fokusBogen}
       </div>
     );
   }
@@ -289,6 +338,7 @@ export default function TrainerBlatt({ mobile, kopfRechts, ende, aufgabe }: Trai
         {brettSpalte}
         {rechts}
       </div>
+      {fokusBogen}
     </div>
   );
 }

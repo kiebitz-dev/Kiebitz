@@ -163,3 +163,17 @@
   border-radius: 0;
   background: transparent;
 }
+
+/* ── Die Reihen im Fokus ─────────────────────────────────────────────────────
+
+   Reicht eine Seite ihre gewöhnliche Leiste in den Fokus (Analyse, Repertoire),
+   steht sie dort auf dem Papier des Blattes. Dieselbe Regel wie oben, eine
+   Stufe weiter: Auch die Kästen um Meldung und Leiste werden Kanten, getönte
+   Flächen fallen fort. Kreise (`rounded-full`) bleiben, was sie sind. */
+.blatt-fokusreihe :is(.rounded, .rounded-md, .rounded-lg, .rounded-xl) {
+  border-radius: 0;
+}
+
+.blatt-fokusreihe :is(.bg-panel, .bg-panel2, .bg-accent-soft, .bg-loss-soft, .bg-win-soft) {
+  background: transparent;
+}

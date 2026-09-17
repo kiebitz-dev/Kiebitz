@@ -18,6 +18,7 @@
  * Aufgabe gelöst wurde, und daraus steht „x von 15 gemeistert" im Kopf.
  */
 import type { ReactNode } from "react";
+import FocusBoard from "../../components/FocusBoard";
 import {
   Aufdeckfeld,
   Ergebniskasten,
@@ -82,6 +83,18 @@ export interface EndgameBlattProps {
    * kosten, und ein zweites Mal gebaut gehören sie schon gar nicht.
    */
   griffe?: ReactNode;
+  /**
+   * Das Fokus-Brett · es gehört dem Blatt, damit um das Brett dieselben
+   * Zeilen stehen wie hier und nicht die Kästen der gewöhnlichen Fassung.
+   */
+  fokus: {
+    offen: boolean;
+    onSchliessen: () => void;
+    titel: string;
+    untertitel?: string;
+    brett: ReactNode;
+    griffe?: ReactNode;
+  };
   /** Die Zufallsstellung als eigener Block unter der Bedienung. */
   zufall?: { titel: string; text: string; knopf: string; onClick: () => void };
   onWaehlen: (id: string) => void;
@@ -105,6 +118,7 @@ export default function EndgameBlatt({
   gesamt,
   schalter,
   griffe,
+  fokus,
   zufall,
   onWaehlen,
 }: EndgameBlattProps) {
@@ -114,22 +128,45 @@ export default function EndgameBlatt({
   // ist dasselbe Maß, das dort die Spalte deckelt. Ein eigenes, kleineres
   // Maß hätte den Modus zu einer Ansicht gemacht, in der man schlechter
   // sieht.
-  const brettSpalte = (
-    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
-      <div className="flex items-center gap-[9px] pb-[9px]">
-        <Farbfeld farbe={oben.farbe} kante={11} />
-        <span className="truncate text-[14px] text-ink">{oben.name}</span>
-      </div>
-      {brett}
-      <div className="flex items-center gap-[9px] pt-[9px]">
+  const obenZeile = (
+    <div className="flex items-center gap-[9px]">
+      <Farbfeld farbe={oben.farbe} kante={11} />
+      <span className="truncate text-[14px] text-ink">{oben.name}</span>
+    </div>
+  );
+  // Name, Stand und Schalter · im Fokus dieselben, nur mit dessen Griffen.
+  const untenZeilen = (nebengriffe: ReactNode) => (
+    <>
+      <div className="flex items-center gap-[9px]">
         <Farbfeld farbe={unten.farbe} kante={11} />
         <span className="truncate text-[14px] text-ink">{unten.name}</span>
         <span className="flex-1" />
         <span className="text-[12.5px] text-accent">{stand}</span>
       </div>
       <div className="mt-3">
-        <Schalterreihe eintraege={schalter} griffe={griffe} />
+        <Schalterreihe eintraege={schalter} griffe={nebengriffe} />
       </div>
+    </>
+  );
+
+  const fokusBogen = (
+    <FocusBoard
+      open={fokus.offen}
+      onClose={fokus.onSchliessen}
+      title={fokus.titel}
+      subtitle={fokus.untertitel}
+      above={obenZeile}
+      below={<div>{untenZeilen(fokus.griffe)}</div>}
+    >
+      {fokus.brett}
+    </FocusBoard>
+  );
+
+  const brettSpalte = (
+    <div className={mobile ? "flex flex-col" : "flex w-[var(--board-edge)] max-w-full flex-none flex-col"}>
+      <div className="pb-[9px]">{obenZeile}</div>
+      {brett}
+      <div className="pt-[9px]">{untenZeilen(griffe)}</div>
       {zufall && (
         <>
           <div className="flex-1" />
@@ -236,6 +273,7 @@ export default function EndgameBlatt({
         {kopf}
         <div className="mt-3.5">{brettSpalte}</div>
         <div className="mt-4">{verzeichnis}</div>
+        {fokusBogen}
       </div>
     );
   }
@@ -247,6 +285,7 @@ export default function EndgameBlatt({
         {brettSpalte}
         {verzeichnis}
       </div>
+      {fokusBogen}
     </div>
   );
 }

@@ -791,18 +791,15 @@ export default function RepertoireTrainer({
             ),
             hinweis: t("rep.trainerHint"),
             onBeenden: onExit,
+            fokus: {
+              offen: focused,
+              onSchliessen: () => setFocused(false),
+              titel: t("rep.trainerTitle"),
+              untertitel: item.line || t("rep.fallbackLine"),
+              brett: trainBoard("rep-train-focus"),
+            },
           }}
         />
-        <FocusBoard
-          open={focused}
-          onClose={() => setFocused(false)}
-          title={t("rep.trainerTitle")}
-          subtitle={item.line || t("rep.fallbackLine")}
-          above={trainHead}
-          below={trainControls(true)}
-        >
-          {trainBoard("rep-train-focus")}
-        </FocusBoard>
       </Suspense>
     );
   }

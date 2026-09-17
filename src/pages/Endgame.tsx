@@ -555,6 +555,14 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
             },
           ]}
           griffe={nebenaktionen(false)}
+          fokus={{
+            offen: focused,
+            onSchliessen: () => setFocused(false),
+            titel: t("eg.title"),
+            untertitel: drillText(drill.name, locale),
+            brett: drillBoard("endgame-focus"),
+            griffe: nebenaktionen(true),
+          }}
           zufall={{
             titel: t("eg.randomTitle"),
             text: t("eg.randomHint"),
@@ -566,20 +574,9 @@ export default function Endgame({ initialCategory }: { initialCategory?: Endgame
             if (gewaehlt) start(gewaehlt);
           }}
         />
-        {/* Teilen und Fokus sind zwei Dialoge und kein Satz · sie gehören in
-            beide Fassungen unverändert. Bis 1.4 standen sie nur im `return`
-            der gewöhnlichen, und damit kostete der Modus zwei Wege. */}
+        {/* Teilen ist ein Dialog und kein Satz · er gehört in beide Fassungen
+            unverändert. Den Fokus setzt das Blatt selbst (`fokus`). */}
         {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
-        <FocusBoard
-          open={focused}
-          onClose={() => setFocused(false)}
-          title={t("eg.title")}
-          subtitle={drillText(drill.name, locale)}
-          above={drillHead}
-          below={drillActions(true)}
-        >
-          {drillBoard("endgame-focus")}
-        </FocusBoard>
       </Suspense>
     );
   }
