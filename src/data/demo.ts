@@ -1,3 +1,5 @@
+import type { InformatorZeichen } from "../lib/informator";
+
 export type Source = "chess.com" | "lichess" | "manual";
 export type Result = "win" | "loss" | "draw";
 export type TimeControl = "Bullet" | "Blitz" | "Rapid" | "Täglich";
@@ -277,6 +279,53 @@ export const featuredGame = {
     { eval: "+4,9", depth: 24, line: "20.Re3 Rf6 21.Qxc7 Raf8 22.Qe5 · Weiß konsolidiert mit Mehrfigur" },
     { eval: "+4,1", depth: 23, line: "20.Qe3 e5 21.Nf5 Rf6 22.Qg3 · auch hier bleibt die Figur mehr" },
   ],
+  /**
+   * Die Informator-Zeichen je Stellung · Index i ist die Stellung vor dem
+   * Halbzug i + 1, `endSigns` die Schlussstellung. Erzeugt mit
+   * `informator::signs_for_game` aus genau diesen Zügen, Bewertungen und
+   * Marken · die Vorschau zeigt, was die Analyse ablegen würde.
+   */
+  signs: [
+    [],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }],
+    [{ kind: "eval", value: "=" }, { kind: "bishop_pair", side: "w" }],
+    [{ kind: "eval", value: "=" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "=" }, { kind: "idea", san: "d5", squares: ["d5"] }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "+=" }, { kind: "nag", squares: ["e8"], value: "?!" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "=" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "+/-" }, { kind: "nag", squares: ["h7"], value: "?" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "+/-" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e6", "e5"] }],
+    [{ kind: "eval", value: "+/-" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["d6", "d4"] }],
+    [{ kind: "eval", value: "+/-" }, { kind: "same_bishops" }],
+    [{ kind: "eval", value: "+/-" }, { kind: "nag", squares: ["e5"], value: "?" }, { kind: "same_bishops" }],
+    [{ kind: "eval", value: "+/-" }, { kind: "same_bishops" }, { kind: "doubled", squares: ["e5", "e4"] }],
+    [{ kind: "eval", value: "+/-" }, { kind: "same_bishops" }],
+    [{ kind: "eval", value: "+/-" }, { kind: "idea", san: "Qe7", squares: ["e7"] }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }],
+    [{ kind: "eval", value: "+-" }, { kind: "nag", squares: ["e5"], value: "??" }, { kind: "attack", san: "Qd5+", squares: ["d5"] }, { kind: "against", squares: ["g8", "e5"] }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }],
+    [{ kind: "eval", value: "+-" }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }],
+    [{ kind: "eval", value: "+-" }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }],
+    [{ kind: "eval", value: "+-" }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }],
+  ] as InformatorZeichen[][],
+  endSigns: [{ kind: "eval", value: "+-" }, { kind: "same_bishops" }, { kind: "passed", squares: ["e4"] }] as InformatorZeichen[],
 };
 
 // ── Repertoire ───────────────────────────────────────────────────────────────

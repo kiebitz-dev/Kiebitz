@@ -54,6 +54,11 @@ export interface GameSummary {
    * liest.
    */
   verdict?: string;
+  /**
+   * Die Informator-Zeichen der Schlussstellung als JSON-Liste · gelesen mit
+   * `leseZeichen` (lib/informator.ts). Wie das Fazit nur am Einzeldatensatz.
+   */
+  end_signs?: string;
 }
 
 export interface GameRecord extends GameSummary {

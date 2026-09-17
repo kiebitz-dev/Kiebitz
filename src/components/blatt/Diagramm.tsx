@@ -31,6 +31,8 @@ import { fenSquares } from "../../lib/boardSound";
 import { usePieceGlyphs } from "../../lib/pieces/usePieceSet";
 import { glyphKey } from "../../lib/pieces/sets";
 import { PIECE_VIEWBOX } from "../pieceGlyphs";
+import type { InformatorZeichen } from "../../lib/informator";
+import { Zeichenebene } from "./Zeichen";
 import "./blatt.css";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
@@ -73,6 +75,11 @@ export interface DiagrammProps {
   highlight?: readonly string[];
   /** Ohne ihn ist das Diagramm ein reiner Abdruck · siehe oben. */
   zug?: DiagrammZug;
+  /**
+   * Informator-Zeichen dieser Stellung · gedruckt auf die Felder, wie im Buch
+   * das △ auf dem Feld des Durchbruchs. Kommen aus der Analyse.
+   */
+  zeichen?: readonly InformatorZeichen[];
 }
 
 /** Welcher Halbzug unter einem Punkt liegt · aus dem Maß des Bretts gerechnet. */
@@ -297,6 +304,7 @@ export function Diagramm({
   live = false,
   highlight,
   zug,
+  zeichen,
 }: DiagrammProps) {
   const ranks = orientation === "white" ? RANKS : [...RANKS].reverse();
   const files = orientation === "white" ? FILES : [...FILES].reverse();
@@ -324,7 +332,7 @@ export function Diagramm({
         {/* Der Rahmen liegt auf dem Maß, nicht darum herum · sonst stünden
             die Koordinaten daneben um zwei Bildpunkte versetzt. */}
         <div
-          className={`border border-ink ${size == null ? "aspect-square min-w-0 flex-1" : ""}`}
+          className={`relative border border-ink ${size == null ? "aspect-square min-w-0 flex-1" : ""}`}
           style={size == null ? undefined : { width: size, height: size }}
         >
           <DiagrammFelder
@@ -334,6 +342,9 @@ export function Diagramm({
             highlight={highlight}
             zug={zug}
           />
+          {zeichen && zeichen.length > 0 && (
+            <Zeichenebene zeichen={zeichen} fen={fen} orientation={orientation} />
+          )}
         </div>
       </div>
       <div

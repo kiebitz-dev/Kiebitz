@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { games as demoGames, profile, type Result, type Source } from "../data/demo";
+import { featuredGame, games as demoGames, profile, type Result, type Source } from "../data/demo";
 import { useBackendInfo } from "../lib/backend";
 import { useI18n } from "../lib/i18n";
 import { deleteGame, getGame, listGamesForExport, listGamesPage, readPgnFile, setGameNote, setGameTags, upsertGames, writePgnFile, type GameRecord } from "../lib/db";
@@ -50,6 +50,7 @@ import { openExternal } from "../lib/ext";
 import { LeereSeite } from "../components/blatt/LeereSeite";
 const GamesBlatt = lazy(() => import("./blatt/GamesBlatt"));
 import { replaySans } from "../lib/position";
+import { leseZeichen } from "../lib/informator";
 import { exportPgn, importPgn, PgnPlayerMismatchError } from "../lib/pgn";
 
 const PAGE_SIZE_KEY = "kiebitz.games.pageSize";
@@ -251,6 +252,14 @@ export default function Games({
   const preview = useMemo(() => replaySans(selected ? selected.sans : []), [selected]);
   const previewFen = selected ? preview.fen : "";
   const previewLastMove = preview.moves[preview.moves.length - 1] ?? null;
+  // Die Informator-Zeichen der Schlussstellung · abgelegt vom Analyselauf und
+  // nur am Einzeldatensatz. Die Vorschau im Browser nimmt die der Demo-Partie,
+  // die dieselben Züge hat.
+  const vorschauZeichen = useMemo(() => {
+    if (selectedRecord && selected?.dbId === selectedRecord.id) return leseZeichen(selectedRecord.end_signs);
+    if (backend.mode !== "desktop" && selected?.id === featuredGame.gameId) return featuredGame.endSigns;
+    return [];
+  }, [selectedRecord, selected, backend.mode]);
   useEffect(() => {
     if (!selectedSummary?.dbId) {
       setSelectedRecord(null);
@@ -1170,6 +1179,7 @@ export default function Games({
           }))}
           gewaehlt={selected}
           fen={previewFen}
+          zeichen={vorschauZeichen}
           unterschrift={{
             // Eine Eintragsnummer ist eine Kennung und keine Menge · sie steht
             // ohne Tausenderpunkt, wie eine Seitenzahl.

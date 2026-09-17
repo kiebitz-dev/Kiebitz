@@ -819,6 +819,7 @@ fn run_worker(
             if analysis_excluded { &[] } else { &own_puzzles },
         )?;
         index_game_positions(&conn, game_id, &walked)?;
+        refresh_signs(&conn, game_id)?;
         conn.execute(
             "UPDATE games SET analyzed = 1, accuracy = COALESCE(accuracy, ?2),
                 accuracy_opening = ?3, accuracy_middlegame = ?4, accuracy_endgame = ?5,
@@ -879,6 +880,9 @@ pub struct MoveEvalRow {
     pub motif_detail: String,
     /// Die Hauptvariante vor dem Zug, lesbar statt in UCI.
     pub pv: Vec<String>,
+    /// Die Informator-Zeichen der Stellung vor dem Zug · leere Liste, wenn
+    /// keine abgelegt sind (siehe informator.rs).
+    pub signs: serde_json::Value,
 }
 
 #[tauri::command]
@@ -901,7 +905,7 @@ pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>
     let mut stmt = conn
         .prepare(
             "SELECT ply, san, eval_cp, mate_in, best_uci, judgment, phase,
-                    loss_cp, motif, motif_detail, pv
+                    loss_cp, motif, motif_detail, pv, signs
              FROM move_evals WHERE game_id = ?1 ORDER BY ply",
         )
         .map_err(|e| e.to_string())?;
@@ -909,6 +913,7 @@ pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>
         .query_map(params![game_id], |r| {
             let ply: u32 = r.get(0)?;
             let pv: String = r.get(10)?;
+            let signs: String = r.get(11)?;
             Ok(MoveEvalRow {
                 ply,
                 san: r.get(1)?,
@@ -924,6 +929,8 @@ pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>
                     .get(ply as usize - 1)
                     .map(|fen| crate::motifs::pv_sans(fen, &pv))
                     .unwrap_or_default(),
+                signs: serde_json::from_str(&signs)
+                    .unwrap_or_else(|_| serde_json::Value::Array(Vec::new())),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1146,6 +1153,9 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
                 .map_err(|e| e.to_string())?;
             }
         }
+        // Die Zeichen hängen an den Motiven · wer diese neu ableitet, leitet
+        // jene mit ab.
+        refresh_signs(conn, game_id)?;
         // Auch ein leeres Fazit bekommt seine Nummer: Sonst versucht es der
         // nächste Start wieder, und der übernächste auch.
         conn.execute(
@@ -1157,6 +1167,135 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
         done += 1;
     }
     Ok(done)
+}
+
+// ── Informator-Zeichen ───────────────────────────────────────────────────────
+
+/// Leitet die Informator-Zeichen einer analysierten Partie neu ab und legt sie
+/// an ihre Zeilen.
+///
+/// Gelesen wird, was die Analyse schon abgelegt hat · Bewertungen,
+/// Empfehlungen, Urteile, Motive · und dazu Züge und Uhren der Partie. Deshalb
+/// braucht es keine Engine und läuft nach jeder Analyse ebenso wie für den
+/// Bestand (siehe `backfill_signs`). Eine Transaktion öffnet es nicht: Es läuft
+/// in der seines Aufrufers.
+pub fn refresh_signs(conn: &Connection, game_id: i64) -> Result<(), String> {
+    let (moves, clocks, time_control): (String, String, String) = conn
+        .query_row(
+            "SELECT moves, clocks, time_control FROM games WHERE id = ?1",
+            params![game_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .map_err(|e| e.to_string())?;
+    /// Halbzug, Bewertung, Matt, Empfehlung, Urteil, Motiv, Motivfelder.
+    type Stored = (
+        u32,
+        Option<i32>,
+        Option<i32>,
+        String,
+        String,
+        String,
+        String,
+    );
+    let stored: Vec<Stored> = {
+        let mut stmt = conn
+            .prepare_cached(
+                "SELECT ply, eval_cp, mate_in, best_uci, judgment, motif, motif_detail
+                 FROM move_evals WHERE game_id = ?1 ORDER BY ply",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![game_id], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    let walked = chess::walk_sans(&moves);
+    // Die Zeichen rechnen mit lückenlosen Zeilen ab Halbzug 1 · eine Analyse,
+    // die vorzeitig endete, bekommt nur ihren zusammenhängenden Anfang.
+    let contiguous = stored
+        .iter()
+        .enumerate()
+        .take_while(|(index, row)| row.0 as usize == index + 1)
+        .count();
+    let facts: Vec<crate::informator::RowFacts> = stored[..contiguous]
+        .iter()
+        .map(
+            |(_, cp, mate, best, judgment, motif, detail)| crate::informator::RowFacts {
+                eval_cp: *cp,
+                mate_in: *mate,
+                best_uci: best,
+                judgment,
+                motif,
+                motif_detail: detail,
+            },
+        )
+        .collect();
+    let signs = crate::informator::signs_for_game(&walked, &facts, &clocks, &time_control);
+    {
+        let mut stmt = conn
+            .prepare_cached(
+                "UPDATE move_evals SET signs = ?3, signs_version = ?4
+                 WHERE game_id = ?1 AND ply = ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        for (index, text) in signs.rows.iter().enumerate() {
+            stmt.execute(params![
+                game_id,
+                index as u32 + 1,
+                text,
+                crate::informator::SIGNS_VERSION
+            ])
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    conn.execute(
+        "UPDATE games SET end_signs = ?2 WHERE id = ?1",
+        params![game_id, signs.end],
+    )
+    .map_err(|e| e.to_string())?;
+    // Zeilen jenseits einer Lücke tragen trotzdem den Regelstand · sonst sucht
+    // jeder Start sie wieder heraus.
+    conn.execute(
+        "UPDATE move_evals SET signs_version = ?2 WHERE game_id = ?1 AND signs_version < ?2",
+        params![game_id, crate::informator::SIGNS_VERSION],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Trägt die Informator-Zeichen in Partien nach, deren Zeilen einen älteren
+/// Regelstand tragen · ohne Engine, siehe `refresh_signs`.
+pub fn backfill_signs(conn: &Connection) -> Result<usize, String> {
+    let games: Vec<i64> = {
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT game_id FROM move_evals WHERE signs_version < ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![crate::informator::SIGNS_VERSION], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    for game_id in &games {
+        conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+        if let Err(error) = refresh_signs(conn, *game_id) {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(error);
+        }
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+    }
+    Ok(games.len())
 }
 
 // ── Fehler nach Spielphase (nur eigene Züge) ─────────────────────────────────
@@ -1642,5 +1781,17 @@ mod tests {
 
         // Ein zweiter Lauf findet nichts mehr · die Nummer steht.
         assert_eq!(backfill_explanations(&conn).unwrap(), 0);
+
+        // Mit den Motiven kommen die Zeichen · der Patzer auf Halbzug 8 trägt
+        // sein Urteil in die Stellung danach, und alle Zeilen ihren Regelstand.
+        let signs: String = conn
+            .query_row(
+                "SELECT signs FROM move_evals WHERE game_id = 1 AND ply = 9",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(signs.contains(r#""kind":"nag""#), "{signs}");
+        assert_eq!(backfill_signs(&conn).unwrap(), 0);
     }
 }

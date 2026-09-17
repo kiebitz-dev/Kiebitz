@@ -20,6 +20,8 @@
  */
 import type { ReactNode } from "react";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
+import { Zeichenschluessel } from "../../components/blatt/Zeichen";
+import type { InformatorZeichen } from "../../lib/informator";
 import {
   ErledigenZeile,
   Ergebniskasten,
@@ -82,6 +84,11 @@ export type Tagesquelle =
       gruende?: (string | undefined)[];
       /** Das Fazit der Partie · schon fertige Sätze, sonst leer. */
       fazit?: string[];
+      /**
+       * Die Informator-Zeichen je Halbzug · die Stellung *vor* dem Zug, wie
+       * der Analyselauf sie abgelegt hat (src-tauri/src/informator.rs).
+       */
+      zeichen?: (InformatorZeichen[] | undefined)[];
       weiss: string;
       weissElo: string;
       schwarz: string;
@@ -139,6 +146,8 @@ interface Tagesdiagramm {
   grund?: string;
   /** Das Fazit der ganzen Partie · leer, solange keins gerechnet wurde. */
   fazit?: string[];
+  /** Die Informator-Zeichen der gedruckten Stellung · aufs Diagramm gesetzt. */
+  zeichen?: InformatorZeichen[];
   /** Eigene Notiz zur Partie, wenn eine da ist. */
   notiz?: string;
   onOeffnen?: () => void;
@@ -306,6 +315,9 @@ function bauen(
       analyse: quelle.analysen?.[cut],
       grund: quelle.gruende?.[cut],
       fazit: quelle.fazit,
+      // Dieselbe Stellung wie das Diagramm · die Zeile des Zuges, um den es
+      // geht, trägt die Zeichen der Stellung davor.
+      zeichen: quelle.zeichen?.[cut],
       notiz: quelle.notiz,
       onOeffnen: quelle.onOeffnen,
     };
@@ -643,6 +655,7 @@ export default function DashboardBlatt({
         size={mobile ? undefined : 420}
         gutter={mobile ? 13 : 15}
         orientation={diagramm.orientation}
+        zeichen={diagramm.zeichen}
       />
       <Bildunterschrift
         nummer={t("blatt.diagram", { n: "1" })}
@@ -654,6 +667,16 @@ export default function DashboardBlatt({
         breite={mobile ? undefined : 420}
         gutter={mobile ? 13 : 15}
       />
+      {/* Der Schlüssel unter der Bildunterschrift · er nennt nur die Zeichen,
+          die auf diesem Diagramm stehen. */}
+      {diagramm.zeichen && diagramm.zeichen.length > 0 && (
+        <div
+          className="mt-3 border-t border-line pt-2.5"
+          style={{ marginLeft: mobile ? 13 : 15, width: mobile ? undefined : 420 }}
+        >
+          <Zeichenschluessel zeichen={diagramm.zeichen} />
+        </div>
+      )}
     </div>
   );
 

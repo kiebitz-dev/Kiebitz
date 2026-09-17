@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { emitDataChange } from "./changes";
+import type { InformatorZeichen } from "./informator";
 
 // ── Live-Engine (persistente Stockfish-Instanz, Streaming) ──────────────────
 
@@ -70,6 +71,12 @@ export interface MoveEvalRow {
   motif_detail?: string;
   /** Die Hauptvariante vor dem Zug, in englischem SAN. */
   pv?: string[];
+  /**
+   * Die Informator-Zeichen der Stellung *vor* diesem Zug · entstanden im
+   * Analyselauf (`src-tauri/src/informator.rs`). Leer, solange keine
+   * abgelegt sind.
+   */
+  signs?: InformatorZeichen[];
 }
 
 export interface AnalysisProgress {

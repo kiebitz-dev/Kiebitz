@@ -39,6 +39,8 @@ import {
   Rubrik,
   type Feld,
 } from "../../components/blatt/Satz";
+import { Zeichenschluessel } from "../../components/blatt/Zeichen";
+import type { InformatorZeichen } from "../../lib/informator";
 // Die Sperre wird im Modus nicht neu gebaut, sondern neu gesetzt · dieselbe
 // Regel wie beim Einstellungsformular, siehe `.blatt-formular` in blatt.css.
 import { PlusLock } from "../../components/PlusLock";
@@ -276,6 +278,11 @@ export interface AnalysisBlattProps {
    */
   brett: ReactNode;
   /**
+   * Die Informator-Zeichen der gezeigten Stellung · auf dem Brett liegen sie
+   * schon (die Seite legt sie als Ebene darüber), hier steht ihr Schlüssel.
+   */
+  zeichen?: InformatorZeichen[];
+  /**
    * Die Nebengriffe zum Brett · Drehen, Teilen, Fokus, neues Brett.
    *
    * Sie kommen wie das Brett fertig von der Seite (`boardExtras` in
@@ -491,6 +498,7 @@ export default function AnalysisBlatt({
   oben,
   unten,
   brett,
+  zeichen,
   griffe,
   zuege,
   ply,
@@ -1179,6 +1187,11 @@ export default function AnalysisBlatt({
       {brett}
       {spieler(unten, true)}
       {steuerung}
+      {zeichen && zeichen.length > 0 && (
+        <div className="mt-3.5 border-t border-line pt-2.5">
+          <Zeichenschluessel zeichen={zeichen} />
+        </div>
+      )}
       {kurve.length > 1 && (
         <div className="mt-3.5">
           <div className="flex items-baseline justify-between">

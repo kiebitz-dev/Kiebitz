@@ -362,6 +362,9 @@ export default function Dashboard({
         nags: sans.map((_, index) => nagOf(rows[index]?.judgment ?? "")),
         analysen,
         gruende,
+        // Die Informator-Zeichen hat der Analyselauf abgelegt · hier werden
+        // sie nur mitgegeben, gesetzt werden sie im Blatt.
+        zeichen: sans.map((_, index) => rows[index]?.signs),
         fazit: erklaereFazit(record.verdict, { t, locale }),
         weiss: white,
         weissElo: String(record.color === "white" ? record.my_elo : record.opp_elo),
@@ -412,6 +415,7 @@ export default function Dashboard({
             : undefined
         ),
         fazit: erklaereFazit(featuredGame.verdict, { t, locale }),
+        zeichen: featuredGame.signs,
         weiss: profile.name,
         weissElo: "1462",
         schwarz: "DragonSlayer_88",

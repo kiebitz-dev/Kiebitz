@@ -39,6 +39,7 @@ import { isStoreCapture } from "../lib/storeCapture";
 import { useTrainingSession } from "../lib/session";
 import { maybeRequestPlayReview } from "../lib/reviewPrompt";
 import { getGame, listGameSummaries, setGameNote, setGameTags, type GameRecord, type GameSummary } from "../lib/db";
+import { leseZeichen, type InformatorZeichen } from "../lib/informator";
 import {
   chessdbQuery,
   explorerQuery,
@@ -105,6 +106,10 @@ import { useDiagramMode } from "../lib/diagramMode";
 import { LeereSeite } from "../components/blatt/LeereSeite";
 import { Laufzettel } from "../components/blatt/Laufzettel";
 const AnalysisBlatt = lazy(() => import("./blatt/AnalysisBlatt"));
+// Die Informator-Zeichen stehen nur im Blatt · ihre Ebene lädt erst mit ihm.
+const Zeichenebene = lazy(() =>
+  import("../components/blatt/Zeichen").then((module) => ({ default: module.Zeichenebene }))
+);
 
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
     davon abhängigen useMemo-Ketten bei jedem Durchlauf neu rechnen. */
@@ -1366,6 +1371,26 @@ export default function Analysis({
   }, [sans]);
   const currentPly = variation?.basePly ?? ply;
 
+  /**
+   * Die Informator-Zeichen der gezeigten Stellung · nur im Blatt.
+   *
+   * Gerechnet hat sie der Analyselauf (src-tauri/src/informator.rs): Die
+   * Zeile des nächsten Halbzugs trägt die Stellung davor, die Partie selbst
+   * die Schlussstellung. Eine Variante hat keine Analyse und damit keine
+   * Zeichen · ein △ aus der Partie auf einem Brett, das woanders steht, wäre
+   * eine falsche Anmerkung.
+   */
+  const alleStellungsZeichen = useMemo((): InformatorZeichen[] => {
+    if (!diagramMode || variation || scratch || loadingGame) return [];
+    if (live) {
+      if (ply === sans.length) return leseZeichen(game.end_signs);
+      return rows?.find((row) => row.ply === ply + 1)?.signs ?? [];
+    }
+    if (desktop) return [];
+    if (ply === sans.length) return featuredGame.endSigns;
+    return featuredGame.signs[ply] ?? [];
+  }, [diagramMode, variation, scratch, loadingGame, live, ply, sans.length, game, rows, desktop]);
+
   // ── Uhren ────────────────────────────────────────────────────────────────
   // Nur echte Partien bringen Zeitdaten mit; fehlen sie, entfällt die Anzeige
   // komplett statt Nullen zu zeigen.
@@ -1496,6 +1521,16 @@ export default function Analysis({
   // aber weiterhin ein rotes Feld darüber.
   const currentQuality = zeigtUrteil(ply) ? currentMove?.judgment : undefined;
   const currentTarget = currentMove?.playedUci?.slice(2, 4);
+  // Das Urteil über den Zug, der hierher führte, folgt derselben Regel wie
+  // die Marke: Wo die Seite es nicht zeigt (nur eigene Züge), steht es auch
+  // nicht im Schlüssel. Wo die Marke am Brett steht, bleibt das Feld frei.
+  const stellungsZeichen = zeigtUrteil(ply)
+    ? alleStellungsZeichen
+    : alleStellungsZeichen.filter((zeichen) => zeichen.kind !== "nag");
+  const brettZeichenListe =
+    currentQuality && currentTarget
+      ? stellungsZeichen.filter((zeichen) => zeichen.kind !== "nag")
+      : stellungsZeichen;
   const nextMove = !variation ? viewMoves[ply] : null;
   const nextBestUci = liveBestUci || nextMove?.bestUci || "";
   const previewArrows: [string, string, string?][] = nextMove
@@ -1701,6 +1736,13 @@ export default function Analysis({
           muted={!!variation}
           end={boardEnd}
           mouseDrag
+          overlay={
+            brettZeichenListe.length > 0 ? (
+              <Suspense fallback={null}>
+                <Zeichenebene zeichen={brettZeichenListe} fen={fen} orientation={orientation} />
+              </Suspense>
+            ) : null
+          }
         />
       </div>
     </div>
@@ -2323,6 +2365,7 @@ export default function Analysis({
         <AnalysisBlatt
           mobile={mobile}
           frei={scratch}
+          zeichen={stellungsZeichen}
           laufleiste={laufleiste}
           meldung={meldung}
           /* Die Engine rechnet in beiden Lagen mit · am freien Brett trägt

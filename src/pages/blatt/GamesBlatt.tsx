@@ -40,6 +40,8 @@ import { useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Download, SlidersHorizontal } from "lucide-react";
 import MobileSheet from "../../components/MobileSheet";
 import { Bildunterschrift, Diagramm } from "../../components/blatt/Diagramm";
+import { Zeichenschluessel } from "../../components/blatt/Zeichen";
+import type { InformatorZeichen } from "../../lib/informator";
 import { MarkenSchluessel, PartieZeile } from "../../components/blatt/PartieZeile";
 import {
   Ergebniskasten,
@@ -120,6 +122,11 @@ export interface GamesBlattProps {
   gewaehlt: UiGame | undefined;
   /** Schlussstellung der gewählten Partie · schon gerechnet. */
   fen: string;
+  /**
+   * Die Informator-Zeichen der Schlussstellung · abgelegt vom Analyselauf.
+   * Leer bei einer Partie ohne vollständige Analyse.
+   */
+  zeichen?: InformatorZeichen[];
   /**
    * Die Bildunterschrift dazu, von der Seite gesetzt · die Nummer des
    * Eintrags und darunter, was zu dieser Stellung zu sagen ist. Kein reiner
@@ -214,6 +221,7 @@ export default function GamesBlatt({
   zeilen,
   gewaehlt,
   fen,
+  zeichen,
   unterschrift,
   angaben,
   stichwoerter,
@@ -656,6 +664,7 @@ export default function GamesBlatt({
           orientation={gewaehlt.color}
           size={mobile ? undefined : 262}
           gutter={13}
+          zeichen={zeichen}
         />
         <Bildunterschrift
           nummer={unterschrift.nummer}
@@ -663,6 +672,11 @@ export default function GamesBlatt({
           breite={mobile ? undefined : 262}
           gutter={13}
         />
+        {zeichen && zeichen.length > 0 && (
+          <div className="mt-3 border-t border-line pt-2.5" style={{ marginLeft: 13, width: mobile ? undefined : 262 }}>
+            <Zeichenschluessel zeichen={zeichen} />
+          </div>
+        )}
       </div>
       {/* Die Angaben sind zugleich die Griffe in die Liste: Ein Klick auf das
           Datum, die Quelle oder die Eröffnung schränkt das Verzeichnis auf

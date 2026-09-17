@@ -76,6 +76,10 @@ pub struct GameRecord {
     /// entsteht ausschließlich in `analysis::run_worker`.
     #[serde(default)]
     pub verdict: String,
+    /// Die Informator-Zeichen der Schlussstellung als JSON-Liste · leer ohne
+    /// vollständige Analyse. Wie das Fazit nur in `get_game`.
+    #[serde(default)]
+    pub end_signs: String,
 }
 
 #[derive(Serialize)]
@@ -605,6 +609,9 @@ fn migrate_to_current(conn: &Connection) -> Result<(), String> {
         // neuen Stockfish-Lauf ersetzen kann.
         ("verdict", "TEXT NOT NULL DEFAULT ''"),
         ("verdict_version", "INTEGER NOT NULL DEFAULT 0"),
+        // Migration v22: Die Informator-Zeichen der Schlussstellung · sie hat
+        // keine Zeile in `move_evals` (siehe informator.rs).
+        ("end_signs", "TEXT NOT NULL DEFAULT ''"),
     ] {
         add_column_if_missing(conn, "games", column, definition)?;
     }
@@ -618,6 +625,11 @@ fn migrate_to_current(conn: &Connection) -> Result<(), String> {
         ("motif", "TEXT NOT NULL DEFAULT ''"),
         ("motif_detail", "TEXT NOT NULL DEFAULT ''"),
         ("expl_version", "INTEGER NOT NULL DEFAULT 0"),
+        // Migration v22: Die Informator-Zeichen der Stellung vor dem Zug
+        // (JSON, siehe informator.rs) und der Regelstand, nach dem sie
+        // entstanden · `backfill_signs` trägt sie ohne Engine nach.
+        ("signs", "TEXT NOT NULL DEFAULT ''"),
+        ("signs_version", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         add_column_if_missing(conn, "move_evals", column, definition)?;
     }
@@ -1230,6 +1242,7 @@ pub fn list_games(conn: &Connection) -> Result<Vec<GameRecord>, String> {
                 // hier niemand liest. Wer es braucht, holt die Partie einzeln
                 // (`get_game`).
                 verdict: String::new(),
+                end_signs: String::new(),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1377,7 +1390,7 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
                 opponent_accuracy, opponent_accuracy_opening,
                 opponent_accuracy_middlegame, opponent_accuracy_endgame, moves,
                 note, tags, analyzed, analysis_excluded, clocks, time_control, termination,
-                verdict
+                verdict, end_signs
          FROM games WHERE id = ?1",
         params![id],
         |r| {
@@ -1396,6 +1409,7 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
                 analysis_excluded: r.get::<_, i64>(28)? != 0,
                 clocks: r.get(29)?, time_control: r.get(30)?, termination: r.get(31)?,
                 verdict: r.get(32)?,
+                end_signs: r.get(33)?,
             })
         },
     )
@@ -1483,6 +1497,7 @@ mod tests {
     fn sample(source_id: &str) -> GameRecord {
         GameRecord {
             verdict: String::new(),
+            end_signs: String::new(),
             id: None,
             source: "lichess".into(),
             source_id: source_id.into(),

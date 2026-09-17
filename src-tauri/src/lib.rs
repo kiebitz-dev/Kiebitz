@@ -11,6 +11,7 @@ mod diag;
 mod endgame;
 mod engine;
 mod explorer;
+mod informator;
 mod insights;
 mod legal;
 mod live;
@@ -591,6 +592,17 @@ pub fn run() {
                             Ok(0) => {}
                             Ok(count) => log::info!("Erklärungen nachgetragen: {count} Partien"),
                             Err(error) => log::warn!("Erklärungen nicht nachgetragen: {error}"),
+                        }
+                        // Danach die Informator-Zeichen · sie lesen die Motive,
+                        // die der Lauf davor gerade nachgetragen hat.
+                        match analysis::backfill_signs(&conn) {
+                            Ok(0) => {}
+                            Ok(count) => {
+                                log::info!("Informator-Zeichen nachgetragen: {count} Partien")
+                            }
+                            Err(error) => {
+                                log::warn!("Informator-Zeichen nicht nachgetragen: {error}")
+                            }
                         }
                     });
                 }

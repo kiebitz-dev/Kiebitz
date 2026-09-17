@@ -165,6 +165,29 @@ Its rules:
   instead: `components/plantafel.ts` holds the hook both settings call, and
   `StudyPlanner.tsx` and `Plantafel.tsx` are two ways of drawing the same one.
   One data path, one set of mutations, two sheets.
+- **A focus is a page too.** The focus board used to open as the dashboard's
+  rounded card in both modes. In the mode it is a sheet now: a running head
+  with a heavy rule instead of a title bar, an ink frame instead of a card,
+  paper instead of a panel (`FocusBoard.tsx` reads `useDiagramMode()`). The
+  drill sheets — puzzles, endgames, the opening trainer — own their focus,
+  like the repertoire's print: the rows around the board in the focus are the
+  same colour-field lines, hairline switch rows and toned message as on the
+  sheet, built once and set twice. Where a page hands its ordinary bar into the
+  focus (analysis, repertoire), `.blatt-formular` and `.blatt-fokusreihe`
+  re-set it. The puzzle sheet has no "next" until a puzzle is over: skipping
+  left no trace, while hint and solution are booked as failed attempts.
+- **Informator signs, from the analysis.** A book comments without words:
+  ± = ∓, △ with the idea, ▽ aimed against, → with attack, ⊕ time trouble,
+  bishop pair, passed and doubled pawns, ⊥ ending. The signs are derived in
+  the analysis run (`src-tauri/src/informator.rs`) from what it can prove —
+  evaluation, engine recommendation, detected motif, clocks, the position —
+  and stored per position (`move_evals.signs`, `games.end_signs`); nothing
+  is computed when a page opens. The sheet prints them onto the dashboard's
+  diagram, the game entry's final position and the analysis board
+  (`components/blatt/Zeichen.tsx`), drawn as strokes rather than glyphs so
+  every device prints the same sign, with the key underneath listing only
+  what stands on this board. An idea is only marked where the move played
+  missed it — a triangle on every quiet move would be the engine, not a book.
 - **Book type.** Source Serif 4, and only where `.buch` is set — the interface
   stays on Inter. `blatt.css` also holds the four typographic rules the mode
   uses: `.blatt-kolumne` (running heads and section rules), `.blatt-feld` (form
@@ -193,6 +216,7 @@ German, like the design vocabulary they carry: `Kolumnentitel`, `Rubrik`,
 | Composition pieces, type | `src/components/blatt/`, `blatt.css` |
 | State shared by both settings | `src/components/plantafel.ts` |
 | Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx`, the five Insights tabs in `src/pages/blatt/insights/` |
+| Informator signs (derived, stored, drawn) | `src-tauri/src/informator.rs`, `src/lib/informator.ts`, `src/components/blatt/Zeichen.tsx` |
 | Shared field both modes write | `src/components/RepertoireNote.tsx` (ordinary), `src/components/blatt/Notizfeld.tsx` (sheet) |
 
 Each page renders its regular version and lazy-loads its `*Blatt.tsx` variant

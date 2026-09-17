@@ -177,6 +177,11 @@ type BoardProps = {
   silent?: boolean;
   /** Partieende; null solange gespielt wird oder das Brett zurückblättert. */
   end?: BoardEndView | null;
+  /**
+   * Eine Ebene über den Feldern, unter dem Partieende · füllt die Brettfläche.
+   * Das Blatt legt hier seine Informator-Zeichen ab (components/blatt/Zeichen).
+   */
+  overlay?: ReactNode;
 };
 
 function isAndroidWebView(): boolean {
@@ -590,6 +595,7 @@ export default function Board({
   mouseDrag = false,
   silent = false,
   end = null,
+  overlay = null,
 }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -1149,6 +1155,7 @@ export default function Board({
         />
         <BoardArrows arrows={shownArrows} orientation={orientation} />
         <BoardCircles shapes={shownShapes} orientation={orientation} />
+        {overlay}
         {badges.map((badge, index) => (
           <span
             key={`${badge.square}-${index}`}
