@@ -3063,7 +3063,7 @@ export default function Analysis({
             </Card>
           )}
 
-          {!desktop && (
+          {!desktop && !storeCapture && (
             <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
               <Cpu size={13} className="mr-1.5 inline" />
               {t("an.demoNote")}

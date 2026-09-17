@@ -1455,11 +1455,7 @@ function DemoPuzzles() {
         <div>
           <h1 className="page-title text-[21px] font-semibold tracking-tight">{t("pz.title")}</h1>
           <p className="mt-0.5 text-[13px] text-ink3">
-            {storeCapture
-              ? locale === "de"
-                ? "Gezieltes Taktiktraining aus Millionen kuratierter Stellungen"
-                : "Focused tactics training from millions of curated positions"
-              : t("pz.demoSubtitle")}
+            {storeCapture ? t("pz.captureSubtitle") : t("pz.demoSubtitle")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1539,9 +1535,11 @@ function DemoPuzzles() {
               <Spark data={demoStats.history} width={140} height={44} />
             </div>
           </Card>
-          <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
-            {t("pz.demoNote")}
-          </div>
+          {!isStoreCapture() && (
+            <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
+              {t("pz.demoNote")}
+            </div>
+          )}
         </div>
       </div>
     </div>

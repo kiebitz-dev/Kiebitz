@@ -25,6 +25,48 @@ bundle boots. `--locales all` recaptures every locale, which overwrites the
 hand-checked German and English captures — pass the list explicitly unless that
 is what you want.
 
+Capture mode also shows Kiebitz **with Plus**: `initPlus` hands out a local
+all-features entitlement instead of reading the secure store, so the Plus
+screens (Insights strength tab and so on) are not blurred behind the lock. It
+only exists in the dev server (`import.meta.env.DEV`) with `?store-capture` on
+localhost. The engine card reads "Stockfish 19" and the demo hints ("demo
+view", "preview values") are hidden.
+
+The script waits for spinners to disappear and for charts to animate in
+before each shot; do not edit `src/` while a run is going, Vite reloads the
+page and the run aborts.
+
+### Website screenshots
+
+```sh
+node scripts/capture-store-assets.mjs --site
+```
+
+Takes the four feature screenshots for kiebitz.dev (English, 1920 × 1009 like
+the desktop window) into `artifacts/site-shots/`. Copy them to
+`kiebitz-site/assets/shots/` and check the figure captions in
+`src/pages/index.html.template`, which quote numbers from the shots.
+
+### Real captures (September 2026)
+
+The browser preview only knows demo pages (puzzles and repertoire without a
+real trainer, analysis without an engine). The current upload set was
+therefore taken from the real apps instead, with the real database and Plus:
+
+- `phone` / `tablet-7`: Kiebitz 1.4.0 (published AAB) on the `Kiebitz_API_36`
+  emulator, display set to 1080 × 1920 with `adb shell wm size`, the desktop
+  database copied in via `VACUUM INTO`, pages opened with
+  `kiebitz://open?page=…`, the language switched in the app's
+  `settings.json`. Status bar and gesture bar are cropped
+  (y 100–1870); the renderer draws its own status bar.
+- `tablet-10` / `chromebook`: the desktop app maximised on a 1920 × 1080
+  monitor (client area 1920 × 1009), grabbed with `PrintWindow` so windows in
+  front of it do not end up in the picture.
+
+The raw files live in `artifacts/real-shots/`; copy them into
+`artifacts/store-assets/<locale>/<device>/` with the names above and run the
+marketing step.
+
 ## 2. Marketing layer
 
 ```sh

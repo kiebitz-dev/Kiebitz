@@ -3,6 +3,7 @@ import { Chess } from "chess.js";
 import { Cpu, Pause, Play } from "lucide-react";
 import { engineInfo, type EngineInfo } from "../lib/backend";
 import { useT } from "../lib/i18n";
+import { isStoreCapture } from "../lib/storeCapture";
 import { analyzeLive, onEngineDone, onEngineInfo, stopLive, type LiveInfo } from "../lib/analysis";
 
 type EngineState =
@@ -337,12 +338,18 @@ export default function LiveEngine({
     .filter((l): l is LiveInfo => l != null);
   const depth = ordered[0]?.depth ?? 0;
 
+  // Im Aufnahmelauf steht die Engine so da wie in der App · die Demo-Zeilen
+  // sollen nicht als „nicht verbunden" im Store landen.
+  const capture = isStoreCapture();
   const stand =
     engine.mode === "checking"
       ? "…"
       : available
         ? (engine as { info: EngineInfo }).info.name
-        : t("eng.notConnected");
+        : capture
+          ? "Stockfish 19"
+          : t("eng.notConnected");
+  const lit = available || capture;
 
   return (
     <section className={blatt ? "" : "rounded-xl border border-line bg-panel"}>
@@ -356,19 +363,19 @@ export default function LiveEngine({
       ) : (
         <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="flex items-center gap-2 text-[13px] font-medium text-ink2">
-            <Cpu size={15} className={available ? "text-accent" : "text-ink3"} />
+            <Cpu size={15} className={lit ? "text-accent" : "text-ink3"} />
             {t("eng.title")}
           </h2>
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px]"
             style={{
-              color: available ? "var(--color-win)" : "var(--color-ink3)",
-              background: available ? "var(--color-accent-soft)" : "var(--color-panel2)",
+              color: lit ? "var(--color-win)" : "var(--color-ink3)",
+              background: lit ? "var(--color-accent-soft)" : "var(--color-panel2)",
             }}
           >
             <span
               className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ background: available ? "var(--color-win)" : "var(--color-draw)" }}
+              style={{ background: lit ? "var(--color-win)" : "var(--color-draw)" }}
             />
             {stand}
           </span>
@@ -454,13 +461,15 @@ export default function LiveEngine({
                 )
               )}
             </div>
-            <p
-              className={`text-[11.5px] leading-relaxed text-ink3 ${
-                blatt ? "mt-2.5" : "mt-3 border-t border-line pt-3"
-              }`}
-            >
-              {engine.mode === "web" ? t("eng.webHint") : t("eng.notFound")}
-            </p>
+            {!capture && (
+              <p
+                className={`text-[11.5px] leading-relaxed text-ink3 ${
+                  blatt ? "mt-2.5" : "mt-3 border-t border-line pt-3"
+                }`}
+              >
+                {engine.mode === "web" ? t("eng.webHint") : t("eng.notFound")}
+              </p>
+            )}
           </>
         )}
       </div>

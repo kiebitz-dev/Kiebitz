@@ -29,8 +29,10 @@ import {
 import { acknowledgePurchase, playPurchaseTokens, purchasePlus } from "./billing";
 import type { Locale } from "../i18n";
 import { deleteSecret, readSecret, writeSecret } from "./storage";
+import { isStoreCapture } from "../storeCapture";
 import { claimsStillValid, verifyEntitlementToken } from "./token";
 import {
+  ALL_FEATURES,
   isPlusOnlyFeature,
   type CachedEntitlement,
   type CachedEntitlementKeys,
@@ -197,6 +199,10 @@ async function writeCachedEntitlement(
  */
 export function initPlus(): Promise<void> {
   if (bootstrap) return bootstrap;
+  if (import.meta.env.DEV && typeof window !== "undefined" && isStoreCapture()) {
+    bootstrap = Promise.resolve().then(() => setState({ loading: false, claims: captureClaims() }));
+    return bootstrap;
+  }
   bootstrap = (async () => {
     const now = Date.now();
     const [session, claims] = await Promise.all([
@@ -208,6 +214,30 @@ export function initPlus(): Promise<void> {
     if (session) void refreshEntitlement().catch(() => {});
   })();
   return bootstrap;
+}
+
+/**
+ * Die Store-Screenshots zeigen Kiebitz mit Plus · ohne Konto und ohne Netz.
+ * Nur im Dev-Server mit `?store-capture` erreichbar; ein Release-Build hat
+ * den Zweig gar nicht (`import.meta.env.DEV` ist dort konstant `false`).
+ */
+function captureClaims(): EntitlementClaims {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    iss: "store-capture",
+    sub: "store-capture",
+    aud: "kiebitz",
+    plan: "plus",
+    features: [...ALL_FEATURES],
+    provider: null,
+    providers: [],
+    status: "active",
+    trial: false,
+    trial_until: null,
+    entitlement_valid_until: null,
+    iat: now,
+    exp: now + 86_400,
+  };
 }
 
 /** Steht eine Aktualisierung an? `refresh_after` der letzten Antwort zählt. */

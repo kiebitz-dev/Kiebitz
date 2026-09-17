@@ -2105,9 +2105,11 @@ function DemoRepertoire() {
         </div>
       </Card>
 
-      <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
-        {t("rep.demoNote")}
-      </div>
+      {!isStoreCapture() && (
+        <div className="rounded-xl border border-dashed border-line2 px-4 py-3 text-[12px] leading-relaxed text-ink3">
+          {t("rep.demoNote")}
+        </div>
+      )}
     </div>
   );
 
@@ -2117,11 +2119,7 @@ function DemoRepertoire() {
         <div>
           <h1 className="page-title text-[21px] font-semibold tracking-tight">{t("rep.title")}</h1>
           <p className="mt-0.5 text-[13px] text-ink3">
-            {storeCapture
-              ? locale === "de"
-                ? `${repertoireStats.positions} Stellungen · dein persönlicher Eröffnungsplan`
-                : `${repertoireStats.positions} positions · your personal opening plan`
-              : t("rep.demoSummary", { n: repertoireStats.positions })}
+            {t(storeCapture ? "rep.captureSummary" : "rep.demoSummary", { n: repertoireStats.positions })}
           </p>
         </div>
         <Button primary>

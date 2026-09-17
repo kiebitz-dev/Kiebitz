@@ -12,6 +12,11 @@
  *
  *   node scripts/capture-store-assets.mjs --locales fr-FR,es-ES,hi-IN,ar,zh-CN
  *   node scripts/capture-store-assets.mjs --locales all
+ *   node scripts/capture-store-assets.mjs --site
+ *
+ * `--site` takes the four desktop screenshots for kiebitz.dev instead
+ * (English, 1920 × 1009 like the Tauri window) and writes them into
+ * `artifacts/site-shots/`, ready to copy to `kiebitz-site/assets/shots/`.
  *
  * Requires Chrome or Edge; both ship a `--headless` mode that speaks CDP.
  */
@@ -56,6 +61,15 @@ const SCREENS = [
   { name: "04-study", page: "study", scroll: 0 },
   { name: "05-repertoire", page: "repertoire", scroll: 0, phoneOnly: true },
   { name: "06-puzzles", page: "puzzles", scroll: 0, phoneOnly: true },
+];
+
+/** The feature screenshots on kiebitz.dev · file names as the site uses them. */
+const SITE_DEVICE = { width: 1920, height: 1009, scale: 1, mobile: false };
+const SITE_SCREENS = [
+  { name: "insights", page: "insights", tab: 1, scroll: 0 },
+  { name: "repertoire", page: "repertoire", scroll: 0 },
+  { name: "puzzles", page: "puzzles", scroll: 0 },
+  { name: "study", page: "study", scroll: 0 },
 ];
 
 function findBrowser() {
@@ -149,13 +163,66 @@ const SCROLL = (offset) => `
     return main.scrollTop;
   })()`;
 
-/** Waits until the layout has settled: fonts loaded, no pending animation. */
+/**
+ * Waits until the layout has settled: lazy pages loaded (no spinner left),
+ * fonts loaded, no pending animation. A fixed sleep was not enough · on the
+ * phone the first screens were captured while their chunk still loaded.
+ */
 const SETTLED = `
   (async () => {
+    const deadline = Date.now() + 15000;
+    while (document.querySelector('[aria-busy=true], main .animate-spin') && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
     await document.fonts.ready;
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return true;
   })()`;
+
+async function captureScreen(browserUrl, language, metrics, screen, file) {
+  const session = await Session.open(browserUrl);
+  await session.send("Page.enable");
+  await session.send("Runtime.enable");
+  await session.send("Emulation.setDeviceMetricsOverride", {
+    width: Math.round(metrics.width / metrics.scale),
+    height: Math.round(metrics.height / metrics.scale),
+    deviceScaleFactor: metrics.scale,
+    mobile: metrics.mobile,
+  });
+  // Seed the language before the bundle runs · the LocaleProvider reads
+  // exactly this key on its first render.
+  await session.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: `try { localStorage.setItem("kiebitz.locale", ${JSON.stringify(language)}); } catch {}`,
+  });
+
+  const flags = [
+    "store-capture",
+    metrics.mobile ? "mobile-preview" : "",
+    `page=${screen.page}`,
+  ].filter(Boolean);
+  await session.send("Page.navigate", {
+    url: `http://127.0.0.1:${PORT}/?${flags.join("&")}`,
+  });
+  await sleep(1800);
+  await session.evaluate(SETTLED);
+
+  if (screen.tab != null) {
+    await session.evaluate(CLICK_TAB(screen.tab));
+    await sleep(400);
+  }
+  await session.evaluate(SCROLL(screen.scroll ?? 0));
+  // Charts load as their own chunk without a spinner and then animate
+  // their lines in · give both time, or the rating chart stays empty.
+  await sleep(2500);
+  await session.evaluate(SETTLED);
+
+  const shot = await session.send("Page.captureScreenshot", {
+    format: "png",
+    captureBeyondViewport: false,
+  });
+  writeFileSync(file, Buffer.from(shot.data, "base64"));
+  session.close();
+}
 
 async function captureLocale(browserUrl, locale, outRoot) {
   const language = LOCALES[locale];
@@ -165,57 +232,42 @@ async function captureLocale(browserUrl, locale, outRoot) {
     const screens = SCREENS.filter((screen) => device === "phone" || !screen.phoneOnly);
 
     for (const screen of screens) {
-      const session = await Session.open(browserUrl);
-      await session.send("Page.enable");
-      await session.send("Runtime.enable");
-      await session.send("Emulation.setDeviceMetricsOverride", {
-        width: Math.round(metrics.width / metrics.scale),
-        height: Math.round(metrics.height / metrics.scale),
-        deviceScaleFactor: metrics.scale,
-        mobile: metrics.mobile,
-      });
-      // Seed the language before the bundle runs · the LocaleProvider reads
-      // exactly this key on its first render.
-      await session.send("Page.addScriptToEvaluateOnNewDocument", {
-        source: `try { localStorage.setItem("kiebitz.locale", ${JSON.stringify(language)}); } catch {}`,
-      });
-
-      const flags = [
-        "store-capture",
-        metrics.mobile ? "mobile-preview" : "",
-        `page=${screen.page}`,
-      ].filter(Boolean);
-      await session.send("Page.navigate", {
-        url: `http://127.0.0.1:${PORT}/?${flags.join("&")}`,
-      });
-      await sleep(1800);
-      await session.evaluate(SETTLED);
-
-      if (screen.tab != null) {
-        await session.evaluate(CLICK_TAB(screen.tab));
-        await sleep(400);
-      }
-      await session.evaluate(SCROLL(screen.scroll ?? 0));
-      await sleep(700);
-      await session.evaluate(SETTLED);
-
-      const shot = await session.send("Page.captureScreenshot", {
-        format: "png",
-        captureBeyondViewport: false,
-      });
-      writeFileSync(join(targetDir, `${screen.name}.png`), Buffer.from(shot.data, "base64"));
-      session.close();
+      await captureScreen(browserUrl, language, metrics, screen, join(targetDir, `${screen.name}.png`));
       process.stdout.write(`  ${locale}/${device}/${screen.name}\n`);
     }
   }
 }
 
+async function captureSite(browserUrl, outRoot) {
+  mkdirSync(outRoot, { recursive: true });
+  for (const screen of SITE_SCREENS) {
+    await captureScreen(browserUrl, "en", SITE_DEVICE, screen, join(outRoot, `${screen.name}.png`));
+    process.stdout.write(`  site/${screen.name}\n`);
+  }
+}
+
+async function warmUp(browserUrl) {
+  const session = await Session.open(browserUrl);
+  const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
+  const targets = await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
+  const page = await Session.open(targets.find((t) => t.id === targetId).webSocketDebuggerUrl);
+  for (const name of ["dashboard", "analysis", "insights", "study", "repertoire", "puzzles"]) {
+    await page.send("Page.navigate", { url: `http://127.0.0.1:${PORT}/?store-capture&page=${name}` });
+    await sleep(2500);
+  }
+  page.close();
+  await session.send("Target.closeTarget", { targetId });
+  session.close();
+}
+
 async function main() {
   const args = process.argv.slice(2);
-  const localeArg = args[args.indexOf("--locales") + 1] ?? "all";
-  const outRoot = join(ROOT, "artifacts", "store-assets");
-  const locales =
-    localeArg === "all" ? Object.keys(LOCALES) : localeArg.split(",").map((s) => s.trim());
+  const site = args.includes("--site");
+  const localeArg = args.includes("--locales") ? args[args.indexOf("--locales") + 1] : "all";
+  const outRoot = join(ROOT, "artifacts", site ? "site-shots" : "store-assets");
+  const locales = site
+    ? ["en-US"]
+    : localeArg === "all" ? Object.keys(LOCALES) : localeArg.split(",").map((s) => s.trim());
   for (const locale of locales) {
     if (!(locale in LOCALES)) throw new Error(`unknown locale ${locale}`);
   }
@@ -259,6 +311,10 @@ async function main() {
     const version = await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
     const browserUrl = version.webSocketDebuggerUrl;
 
+    // Warm-up · Vite compiles lazy chunks (the rating chart) on first request,
+    // and the first shot of a run would otherwise miss them.
+    await warmUp(browserUrl);
+
     for (const locale of locales) {
       process.stdout.write(`${locale}\n`);
       const session = await Session.open(browserUrl);
@@ -266,7 +322,8 @@ async function main() {
       session.close();
       const targets = await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
       const page = targets.find((t) => t.id === targetId);
-      await captureLocale(page.webSocketDebuggerUrl, locale, outRoot);
+      if (site) await captureSite(page.webSocketDebuggerUrl, outRoot);
+      else await captureLocale(page.webSocketDebuggerUrl, locale, outRoot);
       const closer = await Session.open(browserUrl);
       await closer.send("Target.closeTarget", { targetId });
       closer.close();
@@ -283,7 +340,7 @@ async function main() {
       /* Windows still had a handle on it */
     }
   }
-  process.stdout.write("captures written to artifacts/store-assets\n");
+  process.stdout.write(`captures written to ${outRoot}\n`);
 }
 
 main().catch((error) => {
