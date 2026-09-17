@@ -45,6 +45,7 @@ import {
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
 import { de } from "../../lib/format";
+import WertungsverlaufBlatt, { type WertungsverlaufProps } from "./insights/WertungsverlaufBlatt";
 import "../../components/blatt/blatt.css";
 
 export interface DnaZeile {
@@ -96,10 +97,14 @@ export interface InsightsBlattProps {
   phasen: Kennzahl[];
   /** Die Befunde · als fertige Blöcke von der Seite. */
   befunde: ReactNode;
+  /** Woraus die Befunde gerechnet sind · „aus den letzten N Tagen, M Partien". */
+  befundeZeitraum?: ReactNode;
   genauigkeit: number[];
   patzer: number[];
   kurvenNote: string;
   monateNote: string;
+  /** Der Ratingverlauf · auf der Übersicht über die volle Breite, unter den Spalten. */
+  wertungsverlauf?: WertungsverlaufProps;
   /** Auf einem Tiefenreiter steht hier dessen Blatt · siehe blatt/insights/. */
   kinder?: ReactNode;
 }
@@ -146,11 +151,13 @@ export default function InsightsBlatt({
   schluesselmoment,
   phasen,
   befunde,
+  befundeZeitraum,
   genauigkeit,
   patzer,
   kurvenNote,
   monateNote,
   kinder,
+  wertungsverlauf,
 }: InsightsBlattProps) {
   const { t } = useI18n();
 
@@ -321,6 +328,7 @@ export default function InsightsBlatt({
     <div className="flex min-w-0 flex-1 flex-col">
       <Rubrik>{t("blatt.strongestFindings")}</Rubrik>
       <div className="mt-0.5">{befunde}</div>
+      {befundeZeitraum}
       <div className="flex-1" />
       <Monatsfigur
         titel={t("blatt.accuracyByMonth")}
@@ -348,6 +356,11 @@ export default function InsightsBlatt({
         {kopf}
         <div className="mt-4">{links}</div>
         <div className="mt-6">{rechts}</div>
+        {wertungsverlauf && (
+          <div className="mt-6">
+            <WertungsverlaufBlatt {...wertungsverlauf} mobile />
+          </div>
+        )}
       </div>
     );
   }
@@ -359,6 +372,11 @@ export default function InsightsBlatt({
         {links}
         {rechts}
       </div>
+      {wertungsverlauf && (
+        <div className="pt-6">
+          <WertungsverlaufBlatt {...wertungsverlauf} mobile={false} />
+        </div>
+      )}
     </div>
   );
 }

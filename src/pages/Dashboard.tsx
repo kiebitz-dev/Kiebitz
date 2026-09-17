@@ -23,7 +23,7 @@ import { buildDashboard, type HistoryPoint, type RatingHistorySeries } from "../
 import type { GamesFilter, UiGame } from "../lib/gameUi";
 import { Card, ExtLink, GameCard, ResultBadge, SourceBadge, Spark, Button } from "../components/ui";
 import { useMobileShell } from "../components/MobileShell";
-import { chart, RATING_CHART_HEIGHT } from "../components/chartTheme";
+import { chart, RATING_CHART_HEIGHT, RATING_COLORS } from "../components/chartTheme";
 import { dateLocale, de, deInt } from "../lib/format";
 import type { PageId } from "../App";
 import type { Tagesquelle } from "./blatt/DashboardBlatt";
@@ -303,18 +303,7 @@ export default function Dashboard({
     };
   }, [diagramMode, backend.mode, featuredId, locale]);
 
-  const historyColors: Record<string, string> = {
-    "chess.com-rapid": chart.cc,
-    "chess.com-blitz": chart.gold,
-    "chess.com-bullet": chart.mistake,
-    "chess.com-daily": chart.violet,
-    "lichess-rapid": chart.li,
-    "lichess-blitz": chart.accent,
-    "lichess-bullet": chart.loss,
-    "lichess-daily": "#b09bea",
-    cc: chart.cc,
-    li: chart.li,
-  };
+  const historyColors = RATING_COLORS;
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -492,6 +481,14 @@ export default function Dashboard({
           onAllePartien={() => openGames()}
           onPartie={(game) => (game.dbId != null ? openAnalysis(game.dbId) : openGames())}
           onFilter={openGames}
+          profile={
+            storeCapture
+              ? []
+              : [
+                  { plattform: "chess.com", href: `https://www.chess.com/member/${users.cc}` },
+                  { plattform: "lichess", href: `https://lichess.org/@/${users.li}` },
+                ]
+          }
         />
       </Suspense>
     );

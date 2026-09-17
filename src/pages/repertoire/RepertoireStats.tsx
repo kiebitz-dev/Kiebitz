@@ -6,7 +6,7 @@ import { Button, Card, Chip } from "../../components/ui";
 import { useMobileShell } from "../../components/MobileShell";
 import { de } from "../../lib/format";
 
-const COVERAGE_PLIES = [6, 8, 12, 16];
+export const COVERAGE_PLIES = [6, 8, 12, 16];
 
 function moveText(sans: string[]): string {
   return sans.map((move, index) => (index % 2 === 0 ? `${index / 2 + 1}.${move}` : move)).join(" ");

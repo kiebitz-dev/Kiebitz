@@ -2392,6 +2392,14 @@ export default function Analysis({
                   : featuredGame.engine}
             </>
           }
+          original={
+            originUrl && game
+              ? {
+                  label: t("blatt.originalAt", { p: game.source }),
+                  onClick: () => openExternal(originUrl),
+                }
+              : undefined
+          }
           felder={[
             {
               label: t("common.white"),

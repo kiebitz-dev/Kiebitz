@@ -176,6 +176,11 @@ export interface GamesBlattProps {
   /** Ist sie schon analysiert? Danach heißt der Weg „öffnen" statt „starten". */
   analysiert?: boolean;
   onOriginal?: () => void;
+  /**
+   * Die Partie aus dem Bestand nehmen · fragt vorher nach (der Dialog kommt
+   * von der Seite). Fehlt es, steht die Partie nicht in der Datenbank.
+   */
+  loeschen?: { onClick: () => void; laeuft: boolean; fehler: string | null };
   /** Import und Export · fehlt ohne Datenbank, also in der Web-Vorschau. */
   einfuhr?: Importbereich;
   /**
@@ -244,6 +249,7 @@ export default function GamesBlatt({
   onAnalyse,
   analysiert = false,
   onOriginal,
+  loeschen,
   einfuhr,
   filterOffen = false,
   onFilterUmschalten,
@@ -757,7 +763,7 @@ export default function GamesBlatt({
       {/* Die Wege aus dem Eintrag heraus · sie stehen unter dem, was man
           geschrieben hat, und nicht oben in der Rubrik: Wer die Bemerkung
           gerade abgelegt hat, ist mit der Hand hier unten. */}
-      {(onAnalyse || onOriginal) && (
+      {(onAnalyse || onOriginal || loeschen) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-[18px]">
           {onAnalyse && (
             <Weg onClick={onAnalyse}>
@@ -767,7 +773,22 @@ export default function GamesBlatt({
           {onOriginal && (
             <Weg onClick={onOriginal}>{t("blatt.originalAt", { p: gewaehlt.source })}</Weg>
           )}
+          {/* Löschen ist kein Weg irgendwohin · es steht abgesetzt am Ende
+              der Zeile, in der Farbe des Verlusts und ohne Pfeil. */}
+          {loeschen && (
+            <button
+              type="button"
+              onClick={loeschen.onClick}
+              disabled={loeschen.laeuft}
+              className="ms-auto flex min-h-11 items-center whitespace-nowrap text-[12.5px] text-loss hover:underline disabled:opacity-45"
+            >
+              {loeschen.laeuft ? t("games.deleting") : t("games.delete")}
+            </button>
+          )}
         </div>
+      )}
+      {loeschen?.fehler && (
+        <div className="mt-1 border-s-2 border-loss ps-3 text-[12px] text-loss">{loeschen.fehler}</div>
       )}
     </div>
   );

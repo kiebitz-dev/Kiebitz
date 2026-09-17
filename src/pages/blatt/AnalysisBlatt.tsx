@@ -37,6 +37,7 @@ import {
   Kolumnentitel,
   Punkt,
   Rubrik,
+  Weg,
   type Feld,
 } from "../../components/blatt/Satz";
 import { Zeichenschluessel } from "../../components/blatt/Zeichen";
@@ -264,6 +265,11 @@ export interface AnalysisBlattProps {
   vorlauf?: string | null;
   /** Kopfzeile rechts · Partienummer und Engine, von der Seite gesetzt. */
   kopfRechts: ReactNode;
+  /**
+   * Der Weg zur Partie auf chess.com oder lichess · fehlt ohne Partie, bei
+   * manuell erfassten Partien und ohne Kontonamen (siehe `originUrl`).
+   */
+  original?: { label: string; onClick: () => void };
   felder: Feld[];
   ergebnis: string;
   /** Namen über und unter dem Brett · oben der Gegner, unten die eigene Farbe. */
@@ -493,6 +499,7 @@ export default function AnalysisBlatt({
   motor,
   vorlauf,
   kopfRechts,
+  original,
   felder,
   ergebnis,
   oben,
@@ -1242,6 +1249,13 @@ export default function AnalysisBlatt({
               </Ergebniskasten>
             </div>
           </div>
+        </div>
+      )}
+      {/* Unter dem Zettel, rechtsbündig · der Weg aus dem Eintrag heraus, wie
+          im Partien-Blatt unter der Bemerkung. */}
+      {!frei && original && (
+        <div className="flex justify-end">
+          <Weg onClick={original.onClick}>{original.label}</Weg>
         </div>
       )}
     </>

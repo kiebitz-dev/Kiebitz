@@ -315,3 +315,44 @@ describe("Das Buch im Diagramm-Modus", () => {
     expect(screen.queryByRole("button", { name: /rep\.deleteLine/ })).toBeNull();
   });
 });
+
+describe("Abdeckung und Lücken", () => {
+  it("lässt die Tiefe wählen, trennt nach Farbe und übernimmt eine Lücke", () => {
+    const onWaehlen = vi.fn();
+    const onUebernehmen = vi.fn();
+    const gap = {
+      node_id: 7,
+      side: "white" as const,
+      path_sans: ["e4", "e5"],
+      san: "Nf3",
+      count: 4,
+      mine: true,
+      score_pct: 62.5,
+      book_sans: ["Bc4"],
+      line: "",
+    };
+    zeichne({
+      abdeckung: 71,
+      tiefe: { werte: [6, 8, 12, 16], aktiv: 8, onWaehlen },
+      seiten: [
+        { side: "white", games: 30, covered: 24, pct: 80 },
+        { side: "black", games: 20, covered: 12, pct: 60 },
+      ],
+      lueckenListe: [gap],
+      onUebernehmen,
+    });
+
+    expect(screen.getByText("common.asWhite")).toBeTruthy();
+    expect(screen.getByText("common.asBlack")).toBeTruthy();
+    const acht = screen.getByRole("button", { name: "rep.coveragePlies 8" });
+    expect(acht.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "rep.coveragePlies 12" }));
+    expect(onWaehlen).toHaveBeenCalledWith(12);
+
+    // Zug, Pfad, Buchantwort und Quote stehen an der Zeile.
+    expect(screen.getByText("rep.gapMine 2.Nf3 4")).toBeTruthy();
+    expect(screen.getByText("1.e4 e5")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "rep.gapAdopt" }));
+    expect(onUebernehmen).toHaveBeenCalledWith(gap);
+  });
+});

@@ -17,22 +17,27 @@
  * Kästen der gewöhnlichen Fassung.
  */
 import type { ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 import FocusBoard from "../../components/FocusBoard";
 import {
   Aufdeckfeld,
   Balken,
+  Blatttabelle,
   Ergebniskasten,
   Farbfeld,
   Feldname,
   Formularkopf,
+  Fussnote,
   Kolumnentitel,
+  Punkt,
   Rubrik,
   Schalterreihe,
   Zugfolge,
   type Feld,
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
-import { deInt } from "../../lib/format";
+import { dateLocale, deInt } from "../../lib/format";
+import { themeLabel, type AttemptRow } from "../../lib/puzzles";
 
 /** Der Ratingverlauf als Haarlinie · so viele Messpunkte wie vorliegen. */
 function Verlauf({ werte, breite = 240, hoehe = 34 }: { werte: number[]; breite?: number; hoehe?: number }) {
@@ -68,6 +73,15 @@ const TONFARBE: Record<Tonart, string> = {
 export interface MotivZeile {
   name: string;
   quote: number;
+}
+
+/** Ein Wort der Auswahl · gewählt steht es kräftig und unterstrichen. */
+export interface Auswahlwort {
+  label: string;
+  aktiv: boolean;
+  /** Gehört zu Plus und ist nicht freigeschaltet · das Wort bleibt wählbar. */
+  plus?: boolean;
+  onClick: () => void;
 }
 
 export interface PuzzlesBlattProps {
@@ -127,6 +141,17 @@ export interface PuzzlesBlattProps {
   loesung?: { zeile: string; saetze: { zug: string; satz: string }[] };
   /** Die Theorie zum Motiv · verdeckt, bis sie verlangt wird. */
   motiv?: { titel: string; text: string; offen: boolean; onUmschalten: () => void };
+  /**
+   * Woraus die nächste Aufgabe kommt · Herkunft, Motiv und das Band aus dem
+   * Plan. Gewählt wird auf der Seite, hier steht es als Wörter auf Linien.
+   */
+  auswahl: {
+    quellen: Auswahlwort[];
+    motive: Auswahlwort[];
+    band?: { lo: number; hi: number; onAufheben: () => void };
+  };
+  /** Die letzten 25 Versuche · `rows` ist null, solange sie laden. */
+  versuche: { open: boolean; onToggle: () => void; rows: AttemptRow[] | null };
 }
 
 export default function PuzzlesBlatt({
@@ -154,8 +179,10 @@ export default function PuzzlesBlatt({
   geloest,
   loesung,
   motiv,
+  auswahl,
+  versuche,
 }: PuzzlesBlattProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   // Das Brett ist so groß wie in der gewöhnlichen Fassung · `--board-edge`
   // ist dasselbe Maß, das dort die Spalte deckelt. Ein eigenes, kleineres
@@ -348,6 +375,103 @@ export default function PuzzlesBlatt({
     </Aufdeckfeld>
   );
 
+  /** Eine Zeile Wörter · wie das Schlagwortregister, das gewählte kräftig. */
+  const wortzeile = (woerter: Auswahlwort[]) => (
+    <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-[3px] text-[12.5px]">
+      {woerter.map((wort) => (
+        <button
+          key={wort.label}
+          type="button"
+          onClick={wort.onClick}
+          aria-pressed={wort.aktiv}
+          className={`inline-flex min-h-11 items-center gap-1 ${
+            wort.aktiv
+              ? "text-ink underline"
+              : "text-ink3 hover:text-ink"
+          }`}
+        >
+          {wort.label}
+          {wort.plus && <Sparkles size={10} className="shrink-0 text-accent" />}
+        </button>
+      ))}
+    </div>
+  );
+
+  const auswahlBlock = (
+    <div>
+      <Rubrik
+        weg={auswahl.band ? t("pz.bandClear") : undefined}
+        onWeg={auswahl.band?.onAufheben}
+      >
+        {t("pz.filter")}
+      </Rubrik>
+      {wortzeile(auswahl.quellen)}
+      {wortzeile(auswahl.motive)}
+      {auswahl.band && (
+        <div className="mt-2 border-s-2 border-accent ps-3 text-[12.5px] text-accent">
+          {t("pz.bandActive", { lo: deInt(auswahl.band.lo), hi: deInt(auswahl.band.hi) })}
+        </div>
+      )}
+      <Fussnote>{t("pz.bandInfo")}</Fussnote>
+    </div>
+  );
+
+  // Der Verlauf liegt zu wie in der gewöhnlichen Fassung · geladen wird er
+  // erst, wenn jemand ihn aufschlägt. Aufgeschlagen ist er eine Tabelle im
+  // Turnierbuchsatz: Punkt, Motiv, Zeitpunkt, Schwierigkeit, Wertung.
+  const versuchBlock = (
+    <Aufdeckfeld
+      titel={t("pz.history")}
+      offen={versuche.open}
+      onUmschalten={versuche.onToggle}
+      wegAuf={t("pz.historyShow")}
+      wegZu={t("pz.historyHide")}
+      verdeckt={t("pz.historyHint")}
+    >
+      {versuche.rows == null ? (
+        <div className="text-[12.5px] text-ink3">{t("common.loading")}</div>
+      ) : versuche.rows.length === 0 ? (
+        <div className="text-[12.5px] text-ink3">{t("pz.noAttempts")}</div>
+      ) : (
+        <div className="max-h-[340px] overflow-y-auto">
+          <Blatttabelle
+            spalten={[
+              { label: "", breite: 14 },
+              { label: t("blatt.motif") },
+              { label: t("games.colDate"), breite: 92, zahl: true, blass: true },
+              { label: t("blatt.difficulty"), breite: mobile ? 44 : 84, zahl: true, rechts: true },
+              { label: "±", breite: 36, zahl: true, rechts: true },
+            ]}
+            zeilen={versuche.rows.map((row) => {
+              const delta = row.rating_after - row.rating_before;
+              return [
+                <Punkt key="p" ergebnis={row.solved ? "win" : "loss"} />,
+                row.themes
+                  .slice(0, 2)
+                  .map((theme) => themeLabel(theme, locale))
+                  .join(" · ") || row.puzzle_id,
+                new Date(row.ts * 1000).toLocaleString(dateLocale(), {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                row.puzzle_rating > 0 ? deInt(row.puzzle_rating) : "—",
+                <span
+                  key="d"
+                  style={{ color: delta >= 0 ? "var(--color-win)" : "var(--color-loss)" }}
+                >
+                  {delta >= 0 ? "+" : "−"}
+                  {deInt(Math.abs(delta))}
+                </span>,
+              ];
+            })}
+          />
+        </div>
+      )}
+    </Aufdeckfeld>
+  );
+
   const kopf = (
     <>
       <Kolumnentitel links={t("blatt.puzzlesTitle")} rechts={kopfRechts} />
@@ -380,6 +504,8 @@ export default function PuzzlesBlatt({
         <div className="mt-4">{bogen}</div>
         {motivBlock && <div className="mt-4">{motivBlock}</div>}
         <div className="mt-4">{ratingBlock}</div>
+        <div className="mt-4">{auswahlBlock}</div>
+        <div className="mt-4">{versuchBlock}</div>
         {fokusBogen}
       </div>
     );
@@ -396,6 +522,8 @@ export default function PuzzlesBlatt({
           {motivTheorieBlock}
           {motivBlock}
           {ratingBlock}
+          {auswahlBlock}
+          {versuchBlock}
         </div>
       </div>
       {fokusBogen}

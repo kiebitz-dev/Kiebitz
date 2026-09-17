@@ -1012,6 +1012,9 @@ export default function Study({
               <div className="py-3 text-[12.5px] text-ink3">{t("st.coachEmpty")}</div>
             )
           }
+          jetzt={nextItem}
+          morgen={tomorrowNote}
+          befundeZeitraum={state ? <WindowNote window={state.window} blatt /> : undefined}
           bereiche={bereiche}
           tage={wochentage.map((day) => ({
             name: new Date(day.day_ts * 1000).toLocaleDateString(dateLocale(), { weekday: "short" }),

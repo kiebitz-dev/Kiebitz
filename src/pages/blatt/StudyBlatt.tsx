@@ -34,8 +34,9 @@
  * er ungelesen ist, steht ausgeschrieben in seiner Beschriftung und nicht als
  * leuchtender Punkt · im Buchsatz ist das die Form, die es dafür gibt.
  */
-import type { Area } from "../../lib/study";
+import { AREA_COLOR, AREA_KEY, type Area } from "../../lib/study";
 import type { ReactNode } from "react";
+import type { SessionItem } from "../../components/TodaySession";
 import {
   Ergebniskasten,
   ErledigenZeile,
@@ -43,6 +44,7 @@ import {
   Formularkopf,
   Kolumnentitel,
   Rubrik,
+  Schalterreihe,
   Weg,
   type Feld,
 } from "../../components/blatt/Satz";
@@ -86,7 +88,16 @@ export interface StudyBlattProps {
   felder: Feld[];
   /** Die Serie im Kasten rechts. */
   serie: number;
+  /**
+   * Die eine nächste Einheit · dieselbe wie „Jetzt dran" drüben. null heißt:
+   * heute ist nichts mehr offen, dann steht der erreichte Zustand da.
+   */
+  jetzt?: SessionItem | null;
+  /** „Morgen stehen 20 Minuten … an" · nur, wenn heute nichts offen ist. */
+  morgen?: string;
   befunde: ReactNode;
+  /** Woraus die Befunde gerechnet sind · „aus den letzten N Tagen, M Partien". */
+  befundeZeitraum?: ReactNode;
   bereiche: BereichZeile[];
   tage: TagSpalte[];
   wocheIst: number;
@@ -117,7 +128,10 @@ export default function StudyBlatt({
   kopfRechts,
   felder,
   serie,
+  jetzt,
+  morgen,
   befunde,
+  befundeZeitraum,
   bereiche,
   tage,
   wocheIst,
@@ -269,10 +283,67 @@ export default function StudyBlatt({
         {t("blatt.theCoach")}
       </Rubrik>
       <div className="mt-0.5">{befunde}</div>
+      {befundeZeitraum}
       <div className="flex-1" />
       <div className="mt-3 border-t border-line pt-2.5 text-[10.5px] leading-[1.6] text-ink3">
         {t("blatt.severityNote")}
       </div>
+    </div>
+  );
+
+  /**
+   * Jetzt dran · die eine nächste Einheit mit ihrem Startknopf.
+   *
+   * Drüben ist sie eine Kachel mit Wasserzeichen; hier ein Eintrag an einem
+   * Strich in der Farbe seines Bereichs, der Titel im Buchsatz, die Dosis
+   * darunter und der Start als Haarlinienreihe, wie die Schalter unter einem
+   * Brett. Der Rest des Tages steht in der Plantafel.
+   */
+  const jetztDran = jetzt !== undefined && (
+    <div className="pt-4">
+      <Rubrik weg={jetzt?.area ? t(AREA_KEY[jetzt.area]) : undefined}>{t("st.now")}</Rubrik>
+      {jetzt ? (
+        <div data-session-hero={jetzt.id}>
+          <div
+            className="mt-2.5 border-s-2 ps-3"
+            style={{ borderColor: jetzt.area ? AREA_COLOR[jetzt.area] : "var(--color-line2)" }}
+          >
+            {jetzt.meta && (
+              <div className="blatt-zahl text-[11px] text-ink3">{jetzt.meta}</div>
+            )}
+            <div className="buch text-[19px] leading-snug text-ink">{jetzt.label}</div>
+            <p className="buch mt-0.5 text-[14px] italic leading-[1.5] text-ink2">
+              {jetzt.dose ?? jetzt.detail}
+            </p>
+          </div>
+          {(jetzt.action || jetzt.toggle) && (
+            <div className="mt-3">
+              <Schalterreihe
+                eintraege={[
+                  ...(jetzt.action
+                    ? [
+                        {
+                          label: `${jetzt.action.heroLabel ?? jetzt.action.label} →`,
+                          betont: true,
+                          onClick: jetzt.action.run,
+                        },
+                      ]
+                    : []),
+                  ...(jetzt.toggle ? [{ label: t("st.checkOff"), onClick: jetzt.toggle }] : []),
+                ]}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          data-session-hero="done"
+          className="mt-2.5 border-s-2 border-accent ps-3"
+        >
+          <div className="buch text-[16px] text-accent">{t("st.allDone")}</div>
+          {morgen && <div className="mt-0.5 text-[12.5px] text-ink2">{morgen}</div>}
+        </div>
+      )}
     </div>
   );
 
@@ -369,6 +440,7 @@ export default function StudyBlatt({
     return (
       <div className="flex flex-col px-3.5 pb-6 pt-3">
         {kopf}
+        {jetztDran}
         {heute}
         <div className="mt-4">{coach}</div>
         <div className="mt-6">{woche}</div>
@@ -385,6 +457,7 @@ export default function StudyBlatt({
         {coach}
         {woche}
       </div>
+      {jetztDran}
       {heute}
       {plan}
       {spielhygiene}

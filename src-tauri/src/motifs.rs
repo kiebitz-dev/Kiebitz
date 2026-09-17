@@ -694,9 +694,64 @@ pub fn pv_sans(fen: &str, pv: &str) -> Vec<String> {
     out
 }
 
+/// Das Motiv einer Aufgabe aus einer eigenen Partie · als Lichess-Schlüssel.
+///
+/// `detect` erzählt, womit ein Fehler *bestraft* wurde. Eine eigene Aufgabe
+/// fragt das Umgekehrte: Was hätte der verpasste Zug selbst getan? Dieselben
+/// Prüfungen, nur aus Sicht dessen, der ihn hätte spielen sollen — mit genau
+/// den Schlüsseln, unter denen Lichess seine Aufgaben führt. Damit tragen die
+/// eigenen Aufgaben ein Motiv, eine Theorie dazu und eine Trefferquote, statt
+/// als „verpasster Zug" ohne Namen dazustehen. Findet keine Prüfung etwas,
+/// bleibt es dabei.
+pub fn solution_theme(fen: &str, best_uci: &str) -> Option<&'static str> {
+    let before = Board::from_fen(fen).ok()?;
+    let mv = Move::from_uci_legal(best_uci, &before).ok()?;
+    let after = before.make_move(mv).ok()?;
+    let victim = before.side().inv();
+
+    if after.is_check() && !after.has_legal_moves() {
+        return Some(if detect_back_rank(&after, victim).is_some() {
+            "backRankMate"
+        } else {
+            "mateIn1"
+        });
+    }
+    if detect_hanging(&before, mv, victim).is_some() {
+        return Some("hangingPiece");
+    }
+    if detect_fork(&after, mv.dst(), victim).is_some() {
+        return Some("fork");
+    }
+    if let Some(found) = detect_line_motif(&after, victim) {
+        let new = detect_line_motif(&before, victim)
+            .map(|had| had.front.0 != found.front.0 || had.behind.0 != found.behind.0)
+            .unwrap_or(true);
+        if new {
+            return Some(if found.kind == "pin" { "pin" } else { "skewer" });
+        }
+    }
+    if detect_discovered(&before, &after, mv.dst(), victim).is_some() {
+        return Some("discoveredAttack");
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_own_puzzle_names_what_the_missed_move_does() {
+        // Schäfermatt · der verpasste Zug setzt matt.
+        let fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 4";
+        assert_eq!(solution_theme(fen, "f3f7"), Some("mateIn1"));
+        // Springer c7 greift König e8 und Turm a8 zugleich an.
+        let fork = "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+        assert_eq!(solution_theme(fork, "b5c7"), Some("fork"));
+        // Ein ruhiger Zug ohne Motiv bleibt ohne Namen.
+        let quiet = "4k3/8/8/8/8/8/8/4K3 w - - 0 1";
+        assert_eq!(solution_theme(quiet, "e1e2"), None);
+    }
 
     fn facts<'a>(
         fen: &'a str,

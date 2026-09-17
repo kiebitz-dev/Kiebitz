@@ -28,6 +28,24 @@ export const chart = {
 };
 
 /**
+ * Die Farbe einer Ratingreihe · je Plattform und Modus dieselbe, auf dem Start
+ * wie in den Insights und in beiden Modi. `cc` und `li` sind die Reihen der
+ * Demo-Ansicht.
+ */
+export const RATING_COLORS: Record<string, string> = {
+  "chess.com-rapid": chart.cc,
+  "chess.com-blitz": chart.gold,
+  "chess.com-bullet": chart.mistake,
+  "chess.com-daily": chart.violet,
+  "lichess-rapid": chart.li,
+  "lichess-blitz": chart.accent,
+  "lichess-bullet": chart.loss,
+  "lichess-daily": "#b09bea",
+  cc: chart.cc,
+  li: chart.li,
+};
+
+/**
  * Eigenschaften, die jede Zeichenfläche trägt.
  *
  * Recharts 3 macht ein Diagramm von sich aus tastaturbedienbar:

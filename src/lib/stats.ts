@@ -57,7 +57,7 @@ const HISTORY_MONTHS = 6;
  * aus · sonst zöge ein seit Monaten unbespieltes Rating als waagerechte Linie
  * bis heute durch.
  */
-const HISTORY_IDLE_DAYS = 35;
+export const HISTORY_IDLE_DAYS = 35;
 
 export interface DashboardOptions {
   locale: Locale;
@@ -128,56 +128,10 @@ export function buildDashboard(
     label: `${card.platform} · ${card.tc}`,
   }));
 
-  // Verlauf für dieselben vier aktiven Plattform-/Modus-Paare wie oben, mit
-  // einem Stützpunkt je Tag: jede einzelne Partie verschiebt die Linie sichtbar,
-  // statt in einem Fünf-Tage-Mittel unterzugehen. Ein Tag ohne Partie behält den
-  // letzten Stand · das Rating ändert sich ja auch nicht von selbst. Wer über
-  // `HISTORY_IDLE_DAYS` gar nicht gespielt hat, setzt aus, damit ein seit Monaten
-  // ruhendes chess.com-Rating nicht als aktueller Wert bis heute durchzieht.
-  const history: HistoryPoint[] = [];
-  const tag = localeTag(opts.locale);
   const today = new Date(Date.now());
   today.setHours(0, 0, 0, 0);
   const firstDay = new Date(today.getFullYear(), today.getMonth() - (HISTORY_MONTHS - 1), 1);
-  const seriesGames = new Map(
-    historySeries.map((series) => [
-      series.key,
-      asc.filter(
-        (game) =>
-          game.source === series.platform
-          && game.time_class === series.timeClass
-          && game.my_elo > 0
-      ),
-    ])
-  );
-  const cursor = new Map<string, number>();
-  for (const day = new Date(firstDay); day <= today; day.setDate(day.getDate() + 1)) {
-    // Über die Tagesgrenze statt über 86 400 Sekunden gehen · sonst verrutscht
-    // der Verlauf zweimal im Jahr um eine Stunde in die Sommerzeit hinein.
-    const next = new Date(day);
-    next.setDate(next.getDate() + 1);
-    const dayEnd = Math.floor(next.getTime() / 1000);
-    const monthLabel = day.toLocaleDateString(tag, { month: "short" });
-    const point: HistoryPoint = {
-      month: day.getDate() === 1 ? monthLabel : "",
-      monthLabel,
-      dayLabel: day.toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }),
-    };
-    for (const series of historySeries) {
-      const games = seriesGames.get(series.key) ?? [];
-      // Die Stützpunkte laufen zeitlich vorwärts, also wandert je Serie ein
-      // Zeiger mit, statt für jeden Punkt die ganze Partienliste zu prüfen.
-      let index = cursor.get(series.key) ?? 0;
-      while (index < games.length && games[index].played_ts < dayEnd) index++;
-      cursor.set(series.key, index);
-      const last = index > 0 ? games[index - 1] : null;
-      point[series.key] =
-        last != null && last.played_ts >= dayEnd - HISTORY_IDLE_DAYS * 86400
-          ? last.my_elo
-          : null;
-    }
-    history.push(point);
-  }
+  const history = historyPoints(asc, historySeries, firstDay, today, opts.locale, 1).points;
 
   return {
     cards: activeCards,
@@ -189,6 +143,96 @@ export function buildDashboard(
     // must not appear as a phantom backlog on the dashboard.
     unanalyzed: records.filter((g) => !g.analyzed && (g.has_moves ?? Boolean(g.moves?.trim()))).length,
   };
+}
+
+// ── Ratingverlauf ────────────────────────────────────────────────────────────
+
+/**
+ * Die Stützpunkte eines Ratingverlaufs · einer je `stepDays` Tage.
+ *
+ * Verlauf für die übergebenen Plattform-/Modus-Paare: jede einzelne Partie
+ * verschiebt die Linie sichtbar, statt in einem Fünf-Tage-Mittel unterzugehen.
+ * Ein Tag ohne Partie behält den letzten Stand · das Rating ändert sich ja auch
+ * nicht von selbst. Wer über `HISTORY_IDLE_DAYS` gar nicht gespielt hat, setzt
+ * aus, damit ein seit Monaten ruhendes chess.com-Rating nicht als aktueller
+ * Wert bis heute durchzieht.
+ *
+ * Beschriftet wird der erste Stützpunkt eines Monats. Reicht der Verlauf über
+ * mehr als ein Jahr, nur jedes Quartal, über mehr als drei Jahre nur der
+ * Januar · sonst stünden sechzig Monatsnamen unter einem Bild.
+ */
+export function historyPoints(
+  asc: GameSummary[],
+  series: RatingHistorySeries[],
+  firstDay: Date,
+  lastDay: Date,
+  locale: Locale,
+  stepDays: number
+): { points: HistoryPoint[]; games: Map<string, GameSummary[]> } {
+  const tag = localeTag(locale);
+  const spanMonths =
+    (lastDay.getFullYear() - firstDay.getFullYear()) * 12 + lastDay.getMonth() - firstDay.getMonth();
+  const labelled = (month: number) =>
+    spanMonths <= 13 ? true : spanMonths <= 37 ? month % 3 === 0 : month === 0;
+  const seriesGames = new Map(
+    series.map((entry) => [
+      entry.key,
+      asc.filter(
+        (game) =>
+          game.source === entry.platform
+          && game.time_class === entry.timeClass
+          && game.my_elo > 0
+      ),
+    ])
+  );
+  const points: HistoryPoint[] = [];
+  const cursor = new Map<string, number>();
+  let previousMonth = -1;
+  const day = new Date(firstDay);
+  for (;;) {
+    // Der letzte Tag steht immer da · sonst endete ein Wochenraster vor heute.
+    const final = day >= lastDay;
+    const at = final ? new Date(lastDay) : new Date(day);
+    // Über die Tagesgrenze statt über 86 400 Sekunden gehen · sonst verrutscht
+    // der Verlauf zweimal im Jahr um eine Stunde in die Sommerzeit hinein.
+    const next = new Date(at);
+    next.setDate(next.getDate() + 1);
+    const dayEnd = Math.floor(next.getTime() / 1000);
+    const monthLabel = at.toLocaleDateString(tag, { month: "short" });
+    const monthKey = at.getFullYear() * 12 + at.getMonth();
+    const newMonth = monthKey !== previousMonth;
+    previousMonth = monthKey;
+    // Tagesraster: beschriftet ist der Monatserste. Wochenraster: der erste
+    // Stützpunkt, der in einen neuen Monat fällt.
+    const labelHere = stepDays > 1 ? newMonth : at.getDate() === 1;
+    const point: HistoryPoint = {
+      month:
+        labelHere && labelled(at.getMonth())
+          ? spanMonths > 13 && at.getMonth() === 0
+            ? String(at.getFullYear())
+            : monthLabel
+          : "",
+      monthLabel,
+      dayLabel: at.toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }),
+    };
+    for (const entry of series) {
+      const games = seriesGames.get(entry.key) ?? [];
+      // Die Stützpunkte laufen zeitlich vorwärts, also wandert je Serie ein
+      // Zeiger mit, statt für jeden Punkt die ganze Partienliste zu prüfen.
+      let index = cursor.get(entry.key) ?? 0;
+      while (index < games.length && games[index].played_ts < dayEnd) index++;
+      cursor.set(entry.key, index);
+      const last = index > 0 ? games[index - 1] : null;
+      point[entry.key] =
+        last != null && last.played_ts >= dayEnd - HISTORY_IDLE_DAYS * 86400
+          ? last.my_elo
+          : null;
+    }
+    points.push(point);
+    if (final) break;
+    day.setDate(day.getDate() + stepDays);
+  }
+  return { points, games: seriesGames };
 }
 
 // ── Insights ─────────────────────────────────────────────────────────────────

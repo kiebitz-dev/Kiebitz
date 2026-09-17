@@ -15,14 +15,21 @@ export default function WindowNote({
   // verdecktes globales Objekt ist eine Falle für die nächste Änderung hier.
   window: span,
   className = "",
+  blatt = false,
 }: {
   window: FindingWindow;
   className?: string;
+  /** Im Diagramm-Modus als Fußnote unter den Befunden gesetzt. */
+  blatt?: boolean;
 }) {
   const { t } = useI18n();
   if (span.games <= 0) return null;
   return (
-    <p className={`text-[11.5px] leading-relaxed text-ink3 ${className}`}>
+    <p
+      className={`${
+        blatt ? "mt-2.5 text-[10.5px] leading-[1.6]" : "text-[11.5px] leading-relaxed"
+      } text-ink3 ${className}`}
+    >
       {span.days > 0
         ? t("ins.windowNote", { d: deInt(span.days), n: deInt(span.games) })
         : t("ins.windowAll", { n: deInt(span.games) })}

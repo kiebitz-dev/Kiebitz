@@ -73,6 +73,8 @@ import {
 } from "../../components/blatt/Satz";
 import { useI18n } from "../../lib/i18n";
 import { de, deInt } from "../../lib/format";
+import { notationLine, translateSan } from "../../lib/notation";
+import type { RepGap, SideCoverage } from "../../lib/repertoire";
 
 export interface BuchZeile {
   key: string;
@@ -123,7 +125,22 @@ export interface RepertoireBlattProps {
   abdeckung: number | null;
   abdeckungNote: string;
   abdeckungUnter: string;
+  /**
+   * Die Prüftiefe · 6, 8, 12 oder 16 Halbzüge, wählbar wie drüben. Ohne sie
+   * steht die Quote ohne Wahl da.
+   */
+  tiefe?: { werte: number[]; aktiv: number; onWaehlen: (value: number) => void };
+  /** Die Abdeckung je Farbe · als Weiß, als Schwarz. */
+  seiten?: SideCoverage[];
+  /** Was über die Lücken zu sagen ist, solange keine Liste dasteht. */
   luecken: ReactNode;
+  /**
+   * Die Lücken selbst · jede mit Zug, Pfad, Buchantwort, Quote und dem Griff,
+   * der sie ins Buch übernimmt. Der kürzeste Weg zu einer neuen Variante.
+   */
+  lueckenListe?: RepGap[] | null;
+  onUebernehmen?: (gap: RepGap) => void;
+  lueckenNote?: string;
   /** Halbzug, der gerade aufgeschlagen ist · −1 ist die Grundstellung. */
   aktivZug: number;
   onWaehlen: (key: string) => void;
@@ -197,7 +214,12 @@ export default function RepertoireBlatt({
   abdeckung,
   abdeckungNote,
   abdeckungUnter,
+  tiefe,
+  seiten,
   luecken,
+  lueckenListe,
+  onUebernehmen,
+  lueckenNote,
   aktivZug,
   onWaehlen,
   onZug,
@@ -211,7 +233,7 @@ export default function RepertoireBlatt({
   buch: buchAlsPgn,
   idee,
 }: RepertoireBlattProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   // Tippen–tippen liegt im selben Haken wie am Brett der gewöhnlichen Fassung
   // · eine zweite Auswahllogik für dieselbe Geste gäbe es sonst zweimal.
   const auswahl = useBoardSelection(fen, onZugSpielen ?? (() => false), onZugSpielen != null);
@@ -619,6 +641,46 @@ export default function RepertoireBlatt({
               <span className="mt-1 block text-[11px] text-ink3">{abdeckungUnter}</span>
             </span>
           </div>
+          {seiten && seiten.length > 0 && (
+            <div className="mt-2.5">
+              {seiten.map((seite) => (
+                <div
+                  key={seite.side}
+                  className="flex h-[30px] items-center gap-2.5 border-b border-line text-[12.5px]"
+                >
+                  <span className="w-20 flex-none truncate text-ink2">
+                    {seite.side === "white" ? t("common.asWhite") : t("common.asBlack")}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <Balken anteil={seite.pct} />
+                  </span>
+                  <span className="blatt-zahl w-[86px] flex-none text-end text-ink">
+                    {de(seite.pct)} %{" "}
+                    <span className="text-ink3">· {deInt(seite.games)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {tiefe && (
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 border-b border-line pb-[3px] text-[12.5px]">
+              {tiefe.werte.map((wert) => (
+                <button
+                  key={wert}
+                  type="button"
+                  onClick={() => tiefe.onWaehlen(wert)}
+                  aria-pressed={tiefe.aktiv === wert}
+                  className={`inline-flex min-h-11 items-center ${
+                    tiefe.aktiv === wert
+                      ? "text-ink underline"
+                      : "text-ink3 hover:text-ink"
+                  }`}
+                >
+                  {t("rep.coveragePlies", { n: deInt(wert) })}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mt-2 text-[11px] leading-[1.55] text-ink3">{abdeckungNote}</div>
         </div>
       )}
@@ -626,8 +688,66 @@ export default function RepertoireBlatt({
       <div>
         <Rubrik weg={t("rep.startTraining", { n: deInt(faellig) })} onWeg={onTraining}>
           {t("rep.gaps")}
+          {lueckenListe && lueckenListe.length > 0 && (
+            <span className="blatt-zahl">{` ${deInt(lueckenListe.length)}`}</span>
+          )}
         </Rubrik>
-        <div className="mt-2 text-[12.5px] leading-[1.6] text-ink3">{luecken}</div>
+        {lueckenListe && lueckenListe.length > 0 ? (
+          <>
+            {/* Jede Lücke ist eine Zeile im Verzeichnis: der Zug und wie oft er
+                kam, darunter der Weg dorthin und was das Buch an der Stelle
+                kennt, am Ende der Griff, der ihn übernimmt. */}
+            <div className="max-h-[420px] overflow-y-auto">
+              {lueckenListe.map((gap) => {
+                const zug = notationLine([...gap.path_sans, gap.san], locale).split(" ").pop();
+                return (
+                  <div
+                    key={`${gap.node_id}-${gap.side}-${gap.san}`}
+                    data-luecke={gap.san}
+                    className="flex items-center gap-3 border-b border-line py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12.5px] text-ink">
+                        {t(gap.mine ? "rep.gapMine" : "rep.gapTheirs", {
+                          san: zug ?? translateSan(gap.san, locale),
+                          n: deInt(gap.count),
+                        })}
+                      </div>
+                      <div className="mt-0.5 truncate">
+                        <Zugfolge gross={13}>
+                          {notationLine(gap.path_sans, locale) || t("rep.startPos")}
+                        </Zugfolge>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-ink3">
+                        {t("rep.gapBook", {
+                          sans: gap.book_sans.map((san) => translateSan(san, locale)).join(" / "),
+                        })}
+                        {" · "}
+                        <span className="blatt-zahl">{de(gap.score_pct)} %</span>
+                      </div>
+                    </div>
+                    {onUebernehmen && (
+                      <button
+                        type="button"
+                        onClick={() => onUebernehmen(gap)}
+                        title={t("rep.gapAdopt")}
+                        aria-label={t("rep.gapAdopt")}
+                        className="flex h-11 w-11 flex-none items-center justify-center border border-line text-[18px] text-accent hover:border-ink"
+                      >
+                        +
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {lueckenNote && (
+              <div className="mt-2 text-[11px] leading-[1.55] text-ink3">{lueckenNote}</div>
+            )}
+          </>
+        ) : (
+          <div className="mt-2 text-[12.5px] leading-[1.6] text-ink3">{luecken}</div>
+        )}
       </div>
     </div>
   );

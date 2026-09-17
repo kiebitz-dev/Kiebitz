@@ -79,7 +79,7 @@ import { replaySans } from "../lib/position";
 import { shareHistory } from "../lib/share/notation";
 import { isStoreCapture } from "../lib/storeCapture";
 import { batchDataChanges } from "../lib/changes";
-import { CoverageCard, GapsCard } from "./repertoire/RepertoireStats";
+import { COVERAGE_PLIES, CoverageCard, GapsCard } from "./repertoire/RepertoireStats";
 
 export default function Repertoire() {
   const backend = useBackendInfo();
@@ -1343,6 +1343,11 @@ function LiveRepertoire() {
                 ? `${t("rep.coverageOf", { g: deInt(stats.games_checked) })} · ${t("rep.coveragePlies", { n: deInt(stats.plies) })}`
                 : ""
             }
+            tiefe={{ werte: COVERAGE_PLIES, aktiv: plies, onWaehlen: setPlies }}
+            seiten={stats?.by_side}
+            lueckenListe={gaps}
+            onUebernehmen={adoptGap}
+            lueckenNote={t("rep.gapsNote")}
             luecken={
               gaps == null
                 ? t("common.loading")

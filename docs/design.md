@@ -159,6 +159,36 @@ Its rules:
   a whole and stands full width under the index and the print — the phone's
   order, two steps later.
 
+  A sixth sweep, after 1.4, closed the last list of things the mode did not
+  have. The **puzzles** had neither the filter (source, motif, the band from
+  the plan) nor the last 25 attempts: the filter is words on hairlines now, the
+  chosen one underlined, and the history is the same covered section the
+  ordinary card is, a tournament-book table once opened. Choosing lives on the
+  page (`pickSource`, `pickTheme`, `useAttemptHistory` in `pages/Puzzles.tsx`),
+  so both layouts pick the same way. The **repertoire's gaps** were a number:
+  each gap is a line now — the move and how often it came, the path to it, the
+  book's answer and its score, and a + that takes it into the book — and the
+  **coverage** can be read per colour and at 6, 8, 12 or 16 plies again. The
+  **games** entry can delete a game (the confirmation is the same dialog), the
+  **analysis** head has its way to the original on chess.com or lichess, the
+  **dashboard** carries the two profile links under its running head, and
+  the **findings** say which window they come from (`WindowNote` with `blatt`)
+  on the Insights and under the coach. The training sheet got its **next
+  unit** back: the one thing to start now, at a rule in its area's colour, the
+  start as a hairline switch row, and tomorrow's note once the day is done —
+  the rest of the day stays on the plan board.
+
+  The same sweep added something to both layouts at once: the **rating
+  history** on the Insights overview. The start shows the four most active
+  modes over six months and should stay a glance; the Insights answer the
+  longer question — a range of 3, 6 or 12 months or all time, every
+  platform/mode pair, each switchable, and per line the current rating, the
+  change, peak and low with their day, and the games. One computation
+  (`lib/ratingHistory.ts`, sharing `historyPoints` with the start), two sheets:
+  a Recharts card over there, a drawn figure with its table here
+  (`pages/blatt/insights/WertungsverlaufBlatt.tsx`), where the table row is the
+  legend and the switch at once.
+
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template
   library — neither copying it nor handing it back works. Its state moves out

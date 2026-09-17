@@ -865,6 +865,49 @@ export default function Games({
     </>
   );
 
+  /**
+   * Die Rückfrage vor dem Löschen · ein Dialog ist kein Satz, er gehört in
+   * beide Fassungen unverändert (wie der Teilen-Dialog der Puzzles).
+   */
+  const deleteDialog = deleteConfirmOpen && selected?.dbId && (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-game-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !deleting) setDeleteConfirmOpen(false);
+      }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50">
+        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-loss-soft text-loss">
+            <AlertTriangle size={18} />
+          </div>
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">Kiebitz</div>
+            <h2 id="delete-game-title" className="text-[16px] font-semibold">{t("games.deleteTitle")}</h2>
+          </div>
+        </div>
+        <p className="px-5 py-4 text-[13px] leading-relaxed text-ink2">
+          {t("games.deleteConfirm", { opponent: selected.opponent })}
+        </p>
+        <div className="flex justify-end gap-2 border-t border-line bg-panel2/40 px-5 py-3.5">
+          <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting}>{t("common.cancel")}</Button>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={deleteSelected}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-1.5 text-[12.5px] font-medium text-loss transition-colors hover:border-loss disabled:opacity-45"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            {deleting ? t("games.deleting") : t("games.deleteConfirmAction")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   /** Farbe der Importmeldung · sie steht auf der Seite und im Blatt. */
   const importNoteCls =
     importTone === "warning"
@@ -1292,6 +1335,15 @@ export default function Games({
             selected?.dbId != null ? () => openAnalysis(selected.dbId!) : undefined
           }
           analysiert={selected?.analyzed}
+          loeschen={
+            selected?.dbId != null
+              ? {
+                  onClick: () => setDeleteConfirmOpen(true),
+                  laeuft: deleting,
+                  fehler: deleteError,
+                }
+              : undefined
+          }
           onOriginal={
             selected && selected.source !== "manual"
               ? () =>
@@ -1304,6 +1356,7 @@ export default function Games({
               : undefined
           }
         />
+        {deleteDialog}
       </Suspense>
     );
   }
@@ -1830,44 +1883,7 @@ export default function Games({
         </MobileSheet>
       )}
 
-      {deleteConfirmOpen && selected?.dbId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-game-title"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !deleting) setDeleteConfirmOpen(false);
-          }}
-        >
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50">
-            <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-loss-soft text-loss">
-                <AlertTriangle size={18} />
-              </div>
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-accent">Kiebitz</div>
-                <h2 id="delete-game-title" className="text-[16px] font-semibold">{t("games.deleteTitle")}</h2>
-              </div>
-            </div>
-            <p className="px-5 py-4 text-[13px] leading-relaxed text-ink2">
-              {t("games.deleteConfirm", { opponent: selected.opponent })}
-            </p>
-            <div className="flex justify-end gap-2 border-t border-line bg-panel2/40 px-5 py-3.5">
-              <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting}>{t("common.cancel")}</Button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={deleteSelected}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-1.5 text-[12.5px] font-medium text-loss transition-colors hover:border-loss disabled:opacity-45"
-              >
-                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                {deleting ? t("games.deleting") : t("games.deleteConfirmAction")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {deleteDialog}
     </div>
   );
 }

@@ -35,6 +35,7 @@ import {
   Zugfolge,
   type Feld,
 } from "../../components/blatt/Satz";
+import { openExternal } from "../../lib/ext";
 import { useI18n, type Locale } from "../../lib/i18n";
 import { translateSan } from "../../lib/notation";
 import { criticalPly } from "../../lib/blatt";
@@ -187,6 +188,11 @@ export interface DashboardBlattProps {
    * anders bedienen lässt als die Seite, die er ersetzt.
    */
   onFilter?: (filter: GamesFilter) => void;
+  /**
+   * Die eigenen Profile auf chess.com und lichess · dieselben zwei Wege wie
+   * im Kopf der gewöhnlichen Fassung. Leer in den Store-Aufnahmen.
+   */
+  profile?: { plattform: string; href: string }[];
 }
 
 /** Zugfolge in der Notation der Oberflächensprache, mit den Urteilen daneben. */
@@ -407,6 +413,7 @@ export default function DashboardBlatt({
   onAllePartien,
   onPartie,
   onFilter,
+  profile = [],
 }: DashboardBlattProps) {
   const { t, locale } = useI18n();
   const heute = new Date();
@@ -648,6 +655,29 @@ export default function DashboardBlatt({
     year: "numeric",
   });
 
+  // Unter dem Kolumnentitel, rechtsbündig · wie ein Verweis am Kopf der
+  // Seite. Jede Plattform in ihrer Hausfarbe, ein Pfeil sagt „nach draußen".
+  const profilZeile = profile.length > 0 && (
+    <div className="flex justify-end gap-x-4">
+      {profile.map((profil) => (
+        <a
+          key={profil.plattform}
+          href={profil.href}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => {
+            event.preventDefault();
+            openExternal(profil.href);
+          }}
+          className="flex min-h-11 items-center text-[12px] hover:underline"
+          style={{ color: plattformFarbe(profil.plattform) }}
+        >
+          {profil.plattform} ↗
+        </a>
+      ))}
+    </div>
+  );
+
   const diagrammBlock = diagramm && (
     <div className="flex-none">
       <Diagramm
@@ -685,6 +715,7 @@ export default function DashboardBlatt({
     return (
       <div className="flex flex-col px-3.5 pb-6 pt-3">
         <Kolumnentitel links={t("blatt.dashTitleShort")} rechts={kurzDatum} />
+        {profilZeile}
         {diagramm && (
           <div className="mt-3">
             <Formularkopf felder={diagramm.felder.slice(0, 2)} spalten="1fr 1fr" />
@@ -742,6 +773,7 @@ export default function DashboardBlatt({
           </>
         }
       />
+      {profilZeile}
 
       {diagramm && (
         <div className="mt-4 flex items-end">

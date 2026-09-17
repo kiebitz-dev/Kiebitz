@@ -111,7 +111,16 @@ pub(crate) fn replace_own_game_puzzles(
             })
         .clamp(600, 2800);
         let id = format!("own:{game_id}:{}", candidate.ply);
-        let themes = format!("ownGame {} {} oneMove", candidate.phase, candidate.judgment);
+        // Das Motiv des verpassten Zugs steht hinten · Lichess führt das
+        // tragende Motiv vorn, die Oberfläche sucht es aber in allen
+        // Schlüsseln (siehe `motivTheorie` in lib/motivtheorie.ts).
+        let motif = crate::motifs::solution_theme(&candidate.fen, &candidate.best_uci)
+            .map(|name| format!(" {name}"))
+            .unwrap_or_default();
+        let themes = format!(
+            "ownGame {} {} oneMove{motif}",
+            candidate.phase, candidate.judgment
+        );
         conn.execute(
             "INSERT OR REPLACE INTO puzzles
              (id, fen, moves, rating, themes, opening_tags, source,
@@ -140,9 +149,10 @@ type MoveEvalRow = (u32, Option<i32>, Option<i32>, String, String, String);
 /// neu. Die Marke wandert mit den Auswahlregeln mit: `v2` fasst Wiederholungen
 /// derselben verpassten Idee zusammen, lässt aussichtslose Stellungen weg und
 /// begrenzt die Zahl je Partie · ohne erneuten Durchlauf behielten bestehende
-/// Datenbanken ihren alten, deutlich größeren Bestand.
+/// Datenbanken ihren alten, deutlich größeren Bestand. `v3` gibt jeder Aufgabe
+/// das Motiv ihres verpassten Zugs mit (`motifs::solution_theme`).
 fn backfill_own_puzzles(conn: &Connection) -> Result<(), String> {
-    if db::meta_get(conn, "own_puzzles_backfilled_v2").is_some() {
+    if db::meta_get(conn, "own_puzzles_backfilled_v3").is_some() {
         return Ok(());
     }
     let games: Vec<(i64, String, String, i64)> = {
@@ -238,7 +248,7 @@ fn backfill_own_puzzles(conn: &Connection) -> Result<(), String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-    db::meta_set(conn, "own_puzzles_backfilled_v2", "1")
+    db::meta_set(conn, "own_puzzles_backfilled_v3", "1")
 }
 
 // ── Import ───────────────────────────────────────────────────────────────────

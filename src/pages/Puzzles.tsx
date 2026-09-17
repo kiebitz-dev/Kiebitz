@@ -555,6 +555,36 @@ function TrainerView({
     });
   };
   const history = stats.history.length >= 2 ? stats.history : [stats.personal_rating, stats.personal_rating];
+
+  /**
+   * Die Auswahl · Herkunft, Motiv und das Band aus dem Plan.
+   *
+   * Beide Fassungen setzen sie verschieden (Chips dort, Wörter auf einer
+   * Linie im Blatt), gewählt wird aber hier und nur hier.
+   */
+  const ownLocked = !ownPuzzleGate.unlocked && !ownPuzzleGate.pending;
+  const pickSource = (value: "all" | "own" | "lichess") => {
+    // Aufgaben aus den eigenen verpassten Zügen sind eine Plus-Funktion. Der
+    // Filter bleibt sichtbar und erklärt sich beim Antippen.
+    if (value === "own" && ownLocked) {
+      openPlusDialog("personal_puzzles");
+      return;
+    }
+    setSource(value);
+    load(theme, value);
+  };
+  const pickTheme = (value: string) => {
+    setTheme(value);
+    load(value);
+  };
+  const clearBand = () => {
+    setBand(null);
+    // `band` steht erst im nächsten Render neu · deshalb geht das aufgehobene
+    // Band ausdrücklich mit in den Aufruf.
+    load(theme, source, null);
+  };
+  /** Die letzten 25 Versuche · geladen erst, wenn jemand sie aufschlägt. */
+  const attempts = useAttemptHistory();
   const themeStats = stats.themes
     .filter((t) => !["short", "long", "veryLong", "oneMove", "advantage", "crushing", "equality", "mate", "middlegame", "opening", "ownGame", "blunder", "mistake"].includes(t.theme))
     .slice(0, 5);
@@ -1031,6 +1061,24 @@ function TrainerView({
                 }
               : undefined
           }
+          auswahl={{
+            quellen: (["all", "own", "lichess"] as const).map((value) => ({
+              label: t(value === "all" ? "pz.sourceAll" : value === "own" ? "pz.sourceOwn" : "pz.sourceLichess"),
+              aktiv: source === value,
+              plus: value === "own" && ownLocked,
+              onClick: () => pickSource(value),
+            })),
+            motive: [
+              { label: t("pz.allThemes"), aktiv: theme === "", onClick: () => pickTheme("") },
+              ...FILTER_THEMES.map((ft) => ({
+                label: themeLabel(ft, locale),
+                aktiv: theme === ft,
+                onClick: () => pickTheme(ft),
+              })),
+            ],
+            band: band ? { lo: band.min, hi: band.max, onAufheben: clearBand } : undefined,
+          }}
+          versuche={attempts}
           motiv={
             motiv
               ? {
@@ -1173,21 +1221,10 @@ function TrainerView({
                   Plus-Funktion. Der Filter bleibt sichtbar und erklärt sich
                   beim Antippen · verschwinden wäre der schlechtere Weg. */}
               {(["all", "own", "lichess"] as const).map((value) => (
-                <Chip
-                  key={value}
-                  active={source === value}
-                  onClick={() => {
-                    if (value === "own" && !ownPuzzleGate.unlocked && !ownPuzzleGate.pending) {
-                      openPlusDialog("personal_puzzles");
-                      return;
-                    }
-                    setSource(value);
-                    load(theme, value);
-                  }}
-                >
+                <Chip key={value} active={source === value} onClick={() => pickSource(value)}>
                   <span className="inline-flex items-center gap-1.5">
                     {t(value === "all" ? "pz.sourceAll" : value === "own" ? "pz.sourceOwn" : "pz.sourceLichess")}
-                    {value === "own" && !ownPuzzleGate.unlocked && !ownPuzzleGate.pending && (
+                    {value === "own" && ownLocked && (
                       <Sparkles size={11} className="text-accent" />
                     )}
                   </span>
@@ -1195,11 +1232,11 @@ function TrainerView({
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Chip active={theme === ""} onClick={() => { setTheme(""); load(""); }}>
+              <Chip active={theme === ""} onClick={() => pickTheme("")}>
                 {t("pz.allThemes")}
               </Chip>
               {FILTER_THEMES.map((ft) => (
-                <Chip key={ft} active={theme === ft} onClick={() => { setTheme(ft); load(ft); }}>
+                <Chip key={ft} active={theme === ft} onClick={() => pickTheme(ft)}>
                   {themeLabel(ft, locale)}
                 </Chip>
               ))}
@@ -1211,12 +1248,7 @@ function TrainerView({
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setBand(null);
-                    // `band` steht erst im nächsten Render neu · deshalb geht
-                    // das aufgehobene Band ausdrücklich mit in den Aufruf.
-                    load(theme, source, null);
-                  }}
+                  onClick={clearBand}
                   className="rounded-md border border-line px-2 py-0.5 text-[11.5px] text-ink3 transition-colors hover:text-ink"
                 >
                   {t("pz.bandClear")}
@@ -1228,7 +1260,7 @@ function TrainerView({
             </div>
           </Card>
 
-          <PuzzleHistory />
+          <PuzzleHistory {...attempts} />
         </div>
       </div>
 
@@ -1251,9 +1283,17 @@ function TrainerView({
   );
 }
 
-/** Verlauf der letzten Versuche · standardmäßig zugeklappt. */
-function PuzzleHistory() {
-  const { locale, t } = useI18n();
+/**
+ * Die letzten 25 Versuche · aufgeschlagen oder zu, und erst geladen, wenn
+ * jemand sie aufschlägt. Beide Fassungen lesen denselben Stand.
+ */
+export interface AttemptHistory {
+  open: boolean;
+  onToggle: () => void;
+  rows: AttemptRow[] | null;
+}
+
+function useAttemptHistory(): AttemptHistory {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<AttemptRow[] | null>(null);
 
@@ -1269,13 +1309,21 @@ function PuzzleHistory() {
       .catch(() => setRows([]));
   }, [open, rows]);
 
+  const onToggle = useCallback(() => setOpen((value) => !value), []);
+  return { open, onToggle, rows };
+}
+
+/** Verlauf der letzten Versuche · standardmäßig zugeklappt. */
+function PuzzleHistory({ open, onToggle, rows }: AttemptHistory) {
+  const { locale, t } = useI18n();
+
   return (
     <Card
       title={t("pz.history")}
       action={
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={onToggle}
           aria-expanded={open}
           className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] text-ink3 hover:bg-panel2 hover:text-ink"
         >

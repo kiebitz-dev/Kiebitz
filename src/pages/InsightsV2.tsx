@@ -17,6 +17,8 @@ import { listGameSummaries, type GameSummary } from "../lib/db";
 import { errorStats, type PhaseErrors } from "../lib/analysis";
 import { puzzleInsights, type PuzzleInsights } from "../lib/puzzles";
 import { buildInsights } from "../lib/stats";
+import { buildRatingHistory, type RatingRange } from "../lib/ratingHistory";
+import RatingHistoryCard from "./insights/RatingHistoryCard";
 import { deepInsights, type DeepInsights } from "../lib/insights";
 import { buildDna, weakestAxis } from "../lib/dna";
 import {
@@ -29,6 +31,7 @@ import {
 import { de, deInt } from "../lib/format";
 import { useDiagramMode } from "../lib/diagramMode";
 import { Befund } from "../components/blatt/Befund";
+import WindowNote from "../components/WindowNote";
 import { Rubrik } from "../components/blatt/Satz";
 
 /** Das Profil kommt nach · siehe Dashboard.tsx. */
@@ -145,6 +148,33 @@ export default function InsightsV2({
   const puzzleData = desktop ? puzzles : demoPuzzleInsights();
   const analysisErrors = desktop ? errors : DEMO_ERRORS;
 
+  // Der Ratingverlauf · Zeitraum und ausgeblendete Reihen hält die Seite,
+  // damit beide Fassungen denselben Stand zeigen. Ab Werk stehen die vier
+  // aktivsten Reihen im Bild, wie auf dem Start; `umgeschaltet` merkt sich nur,
+  // was davon abweicht, so bleibt die Wahl auch über einen Zeitraumwechsel.
+  const [ratingRange, setRatingRange] = usePageMemory<RatingRange>("insights.ratingRange", "12m");
+  const [umgeschaltet, setUmgeschaltet] = useState<ReadonlySet<string>>(new Set());
+  const ratingHistory = useMemo(
+    () => buildRatingHistory(analysisRecords, { locale, range: ratingRange }),
+    [analysisRecords, locale, ratingRange]
+  );
+  const ratingHidden = useMemo(
+    () =>
+      new Set(
+        ratingHistory.series
+          .filter((series, index) => (index >= 4) !== umgeschaltet.has(series.id))
+          .map((series) => series.id)
+      ),
+    [ratingHistory, umgeschaltet]
+  );
+  const toggleRatingSeries = (id: string) =>
+    setUmgeschaltet((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const dna = useMemo(
     () => (deepData ? buildDna(deepData, live) : []),
     [deepData, live]
@@ -226,6 +256,7 @@ export default function InsightsV2({
               );
             })}
           </div>
+          <WindowNote window={deepData.window} blatt />
         </div>
       );
     };
@@ -357,6 +388,14 @@ export default function InsightsV2({
               <div className="py-3 text-[12.5px] text-ink3">{t("ins.noGames")}</div>
             )
           }
+          befundeZeitraum={<WindowNote window={deepData.window} blatt />}
+          wertungsverlauf={{
+            daten: ratingHistory,
+            zeitraum: ratingRange,
+            onZeitraum: setRatingRange,
+            ausgeblendet: ratingHidden,
+            onUmschalten: toggleRatingSeries,
+          }}
           genauigkeit={monate
             .map((month) => month.accuracy)
             .filter((value): value is number => value != null)}
@@ -472,6 +511,15 @@ export default function InsightsV2({
               findings={findings}
               onAction={onAction}
               onOpenGame={(gameId) => openAnalysis(gameId)}
+              ratingHistory={
+                <RatingHistoryCard
+                  data={ratingHistory}
+                  range={ratingRange}
+                  onRange={setRatingRange}
+                  hidden={ratingHidden}
+                  onToggle={toggleRatingSeries}
+                />
+              }
             />
           )}
           {/* Die Übersicht ist die grundlegende Statistik und bleibt frei.

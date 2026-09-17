@@ -5,6 +5,7 @@
  * soll ich arbeiten"), dann das Profil, dann die Kennzahlen. Alles andere liegt
  * in den Fachreitern.
  */
+import type { ReactNode } from "react";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import { Compass, Crosshair, Sparkles } from "lucide-react";
 import { Card } from "../../components/ui";
@@ -27,6 +28,7 @@ export default function Overview({
   findings,
   onAction,
   onOpenGame,
+  ratingHistory,
 }: {
   deep: DeepInsights;
   live: LiveInsights;
@@ -34,6 +36,8 @@ export default function Overview({
   findings: Finding[];
   onAction: (finding: Finding) => void;
   onOpenGame: (gameId: number, ply: number) => void;
+  /** Der Ratingverlauf · fertig von der Seite, die Zeitraum und Auswahl hält. */
+  ratingHistory?: ReactNode;
 }) {
   const { t } = useI18n();
   const top = topFindings(findings);
@@ -104,6 +108,8 @@ export default function Overview({
         )}
         <WindowNote window={deep.window} className="mt-3 border-t border-line pt-3" />
       </Card>
+
+      {ratingHistory}
 
       <div className="grid gap-4 min-[900px]:grid-cols-[1.1fr_1fr]">
         <Card
