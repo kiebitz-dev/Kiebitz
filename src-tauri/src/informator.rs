@@ -86,7 +86,7 @@ fn square_of(coord: Coord) -> String {
 
 fn is_light(coord: Coord) -> bool {
     // Rang 8 hat den Index 0 · a8 ist ein helles Feld.
-    (coord.file().index() + coord.rank().index()) % 2 == 0
+    (coord.file().index() + coord.rank().index()).is_multiple_of(2)
 }
 
 fn color_letter(color: Color) -> &'static str {

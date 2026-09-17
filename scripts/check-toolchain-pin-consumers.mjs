@@ -7,6 +7,7 @@ const values = pinEnvironment(pins);
 const consumers = [
   ".github/workflows/ci.yml",
   ".github/workflows/release.yml",
+  ".github/workflows/android-apk.yml",
   "scripts/build-stockfish-android.ps1",
   "scripts/build-play-aab.ps1",
   "src-tauri/gen/android/app/build.gradle.kts",
@@ -38,11 +39,17 @@ const requireText = (file, text) => {
 
 requireText(".github/workflows/ci.yml", "scripts/export-toolchain-pins.mjs --github-env");
 requireText(".github/workflows/release.yml", "scripts/export-toolchain-pins.mjs --github-env");
-const releaseExports = contents
-  .get(".github/workflows/release.yml")
-  .match(/scripts\/export-toolchain-pins\.mjs --github-env/g)?.length ?? 0;
-if (releaseExports !== 3) {
-  throw new Error(`release.yml must load pins in all three consumer jobs (found ${releaseExports})`);
+requireText(".github/workflows/android-apk.yml", "scripts/export-toolchain-pins.mjs --github-env");
+// Drei Jobs brauchen die Pins: Stockfish-Quelle und Desktop in release.yml,
+// Android in android-apk.yml, das release.yml aufruft und auch allein läuft.
+const pinExports = (file) =>
+  contents.get(file).match(/scripts\/export-toolchain-pins\.mjs --github-env/g)?.length ?? 0;
+const releaseExports = pinExports(".github/workflows/release.yml");
+const androidExports = pinExports(".github/workflows/android-apk.yml");
+if (releaseExports !== 2 || androidExports !== 1) {
+  throw new Error(
+    `release.yml and android-apk.yml must load pins in all three consumer jobs (found ${releaseExports} + ${androidExports})`,
+  );
 }
 requireText("scripts/build-stockfish-android.ps1", "config\\toolchain-pins.json");
 requireText("scripts/build-play-aab.ps1", "config\\toolchain-pins.json");
