@@ -10,12 +10,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   begruendeZug,
   erklaereFazit,
-  fazitKernsatz,
   erklaereZug,
   kommentiereZug,
   type Zugzeile,
 } from "./erklaerung";
 import { zugfakten } from "./zugfakten";
+import { fazitKernsatz } from "./fazit";
 import { loadLocale, translator } from "./locales/registry";
 import { setFormatLocale } from "./format";
 

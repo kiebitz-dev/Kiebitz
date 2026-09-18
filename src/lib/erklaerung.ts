@@ -651,7 +651,7 @@ const VERDICT_KEYS = [
   "verdict.result.luckyWin",
 ] as const;
 
-interface Baustein {
+export interface Baustein {
   key: string;
   params?: Record<string, string | number>;
 }
@@ -670,7 +670,7 @@ export function erklaereFazit(
 }
 
 /** Die gültigen Bausteine eines gespeicherten Fazits · Unbekanntes fällt weg. */
-function fazitBausteine(verdict: string | undefined): Baustein[] {
+export function fazitBausteine(verdict: string | undefined): Baustein[] {
   if (!verdict) return [];
   let parsed: unknown;
   try {
@@ -687,39 +687,7 @@ function fazitBausteine(verdict: string | undefined): Baustein[] {
   );
 }
 
-/**
- * Welcher Satz des Fazits allein stehen darf · der aussagekräftigste zuerst.
- *
- * Die Übersicht vor der Partie hat Platz für einen Satz, und der erste des
- * Fazits (die Note) wiederholt nur die Genauigkeit, die daneben schon als
- * Zahl steht. Vorn steht deshalb, was keine Zahl daneben sagen kann: dass
- * Ergebnis und Spiel nicht zusammenpassen, wo es gekippt ist, was sich
- * wiederholt hat. Die Note bleibt der Rückfall — sie gibt es immer.
- */
-const FAZIT_VORRANG = [
-  "verdict.result.",
-  "verdict.turningPoint",
-  "verdict.recurring",
-  "verdict.phase.",
-  "verdict.versus.",
-  "verdict.errors.",
-  "verdict.grade.",
-];
-
-/** Der eine Satz des Fazits für die Übersicht · `null` ohne Fazit. */
-export function fazitKernsatz(
-  verdict: string | undefined,
-  options: { t: TFunc; locale: Locale }
-): string | null {
-  const bausteine = fazitBausteine(verdict);
-  for (const praefix of FAZIT_VORRANG) {
-    const treffer = bausteine.find((entry) => entry.key.startsWith(praefix));
-    if (treffer) return fazitSatz(treffer, options);
-  }
-  return null;
-}
-
-function fazitSatz(entry: Baustein, options: { t: TFunc; locale: Locale }): string {
+export function fazitSatz(entry: Baustein, options: { t: TFunc; locale: Locale }): string {
   const { t, locale } = options;
   const params: Record<string, string | number> = {};
   for (const [name, value] of Object.entries(entry.params ?? {})) {

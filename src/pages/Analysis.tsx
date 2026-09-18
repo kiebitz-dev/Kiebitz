@@ -103,7 +103,6 @@ import { accuraciesFromMoveEvals } from "../lib/accuracy";
 import {
   begruendeZug,
   erklaereZug,
-  fazitKernsatz,
   istBemaengelt,
   kommentiereZug,
   LINIE,
@@ -123,6 +122,7 @@ import {
 } from "../lib/nochmal";
 import { recordAttempt } from "../lib/puzzles";
 import { partieRating } from "../lib/partierating";
+import { fazitKernsatz } from "../lib/fazit";
 import { soundForMoment } from "../lib/boardSound";
 import { playBoardSound } from "../lib/sound";
 import {

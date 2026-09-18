@@ -45,8 +45,18 @@ const limits = {
   // Luft. Dasselbe Verhältnis tragen die vier Grenzen darüber und darunter
   // auch — zwei Prozent sind eng genug, dass ein versehentlich mitgezogenes
   // Paket auffällt, und weit genug, dass ein Absatz Text es nicht tut.
-  startupRouteJs: 456 * 1024,
-  startupRouteGzip: 153 * 1024,
+  //
+  // September 2026: 456,5 KiB schon mit dem Store-Aufnahmemodus, dann der
+  // Spielbericht der Analyse (Bewertungen, Durchgang, „Nochmal", Übersicht,
+  // Buchzüge). Nachgeprüft, dass kein Paket mitgezogen wurde: Die Startroute
+  // wuchs um 2,8 KiB, davon 1,6 KiB englischer Oberflächentext (das eine
+  // Wörterbuch im Startbündel), der Rest verteilt auf `erklaerung`,
+  // `analysis` und den Einstiegschunk. Was nur die Analyse braucht, liegt
+  // seither außerhalb — die gerechneten Töne (lib/soundSynth.ts) und der
+  // Kernsatz des Fazits (lib/fazit.ts) —, das holte 0,8 KiB zurück.
+  // Gemessen: 458,4 KiB und 153,5 KiB gzip, dazu wieder rund zwei Prozent.
+  startupRouteJs: 468 * 1024,
+  startupRouteGzip: 157 * 1024,
   singleJs: 450 * 1024,
   // Sieben Farbwelten kosten rund 6 KiB CSS (src/themes.css) · das ist der
   // Preis dafür, dass der Themenwechsel ein Attributwechsel bleibt und kein
@@ -67,7 +77,12 @@ const limits = {
   // Klapplisten, Rollbalken und Kalender, die kein Stylesheet erreicht),
   // die Fläche der Auswahleinträge im Diagramm-Modus und die Rubrik
   // „Anmerkungen" in den Einstellungen. Gemessen sind es damit 79,8 KiB.
-  css: 82 * 1024,
+  //
+  // 82 KiB rissen mit dem Spielbericht der Analyse: die Animation der
+  // Glanzmarke samt ihren Ausnahmen für abbestellte Bewegung und
+  // Store-Aufnahmen und die Utility-Klassen von Übersicht und „Nochmal".
+  // Gemessen 82,3 KiB, dazu rund zwei Prozent.
+  css: 84 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht
