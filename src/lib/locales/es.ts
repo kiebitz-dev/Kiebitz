@@ -1206,6 +1206,8 @@ export const es: Record<Key, string> = {
   "set.annotationsSummary": "Lo que el análisis escribe junto a las jugadas",
   "set.annotateOwnOnly": "Solo en mis jugadas",
   "set.annotateOwnOnlyNote": "El juicio y la explicación quedan entonces solo junto a las jugadas que hiciste tú. El análisis sigue cubriendo toda la partida · la precisión y el balance se mantienen completos.",
+  "set.boardSigns": "Signos del Informador en el tablero",
+  "set.boardSignsNote": "En el modo diagrama, △, los peones doblados y la valoración de la posición aparecen entonces también en el tablero y junto a los nombres. La clave de signos de abajo se mantiene siempre.",
   "set.sound": "Tablero y sonido",
   "set.soundSummary": "Sonidos de jugada, captura y mate · pista de tema en el entrenamiento",
   "set.soundToggle": "Sonidos del tablero",

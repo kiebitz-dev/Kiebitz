@@ -79,22 +79,54 @@ export function leseZeichen(raw: unknown): InformatorZeichen[] {
 
 /**
  * Die Zeichen aufs Brett · je Feld in der Reihenfolge, in der sie gelesen
- * werden sollen. Freibauern und Doppelbauern stehen nur dann auf dem Brett,
- * wenn es sonst nichts zu sagen gibt: Neben einer Idee und einem Angriff
- * wären sie Rauschen, und im Schlüssel stehen sie ohnehin.
+ * werden sollen. Linien und Diagonalen bleiben dem Schlüssel: Sie reichen
+ * über viele Felder, und ein Zeichen auf jedem davon wäre Rauschen.
+ *
+ * Frei- und Doppelbauern stehen immer mit auf dem Brett. Früher wichen sie
+ * einer Idee oder einem Angriff · dann verschwanden sie aber von einem Zug
+ * zum nächsten, obwohl die Bauern noch genauso standen, und das las sich wie
+ * ein Fehler und nicht wie Zurückhaltung.
  */
 export function brettZeichen(zeichen: readonly InformatorZeichen[]): Map<string, InformatorZeichen[]> {
   const out = new Map<string, InformatorZeichen[]>();
-  const anmerkung = zeichen.some((z) => ["nag", "idea", "attack", "against"].includes(z.kind));
   for (const z of zeichen) {
     if (!z.squares) continue;
     if (z.kind === "file" || z.kind === "diagonal") continue;
-    if (anmerkung && (z.kind === "passed" || z.kind === "doubled")) continue;
     for (const feld of z.squares) {
       const liste = out.get(feld) ?? [];
       liste.push(z);
       out.set(feld, liste);
     }
+  }
+  return out;
+}
+
+/** Zeichen, die die ganze Stellung betreffen und kein Feld haben. */
+const STELLUNG = new Set<ZeichenArt>([
+  "eval",
+  "bishop_pair",
+  "opposite_bishops",
+  "same_bishops",
+  "ending",
+  "time_trouble",
+]);
+
+/**
+ * Die Zeichen ohne Feld · an den Rand des Bretts, wie im Buch unter das
+ * Diagramm. Wer eine Seite hat (Läuferpaar, Zeitnot), steht an ihrem Namen,
+ * alles andere (Bewertung, Läuferfarben, Endspiel) unter dem Brett.
+ */
+export function randZeichen(zeichen: readonly InformatorZeichen[]): {
+  weiss: InformatorZeichen[];
+  schwarz: InformatorZeichen[];
+  stellung: InformatorZeichen[];
+} {
+  const out = { weiss: [] as InformatorZeichen[], schwarz: [] as InformatorZeichen[], stellung: [] as InformatorZeichen[] };
+  for (const z of schluesselFolge(zeichen)) {
+    if (!STELLUNG.has(z.kind) || (z.squares && z.squares.length > 0)) continue;
+    if (z.side === "w") out.weiss.push(z);
+    else if (z.side === "b") out.schwarz.push(z);
+    else out.stellung.push(z);
   }
   return out;
 }

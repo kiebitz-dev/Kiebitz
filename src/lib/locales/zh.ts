@@ -1206,6 +1206,8 @@ export const zh: Record<Key, string> = {
   "set.annotationsSummary": "分析在着法旁写下的内容",
   "set.annotateOwnOnly": "只标注自己的着法",
   "set.annotateOwnOnlyNote": "评判与讲解将只出现在你自己走的着法旁。分析仍覆盖整盘棋，准确率与统计保持完整。",
+  "set.boardSigns": "在棋盘上显示信息符号",
+  "set.boardSignsNote": "在图解模式下，△、叠兵和局面评估也会显示在棋盘上和姓名旁。下方的符号说明始终保留。",
   "set.sound": "棋盘与音效",
   "set.soundSummary": "走子、吃子和将杀音效 · 战术训练中的主题提示",
   "set.soundToggle": "棋盘音效",

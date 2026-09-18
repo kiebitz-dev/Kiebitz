@@ -1231,6 +1231,8 @@ export const de = {
   "set.annotationsSummary": "Was die Analyse zu den Zügen schreibt",
   "set.annotateOwnOnly": "Nur zu eigenen Zügen",
   "set.annotateOwnOnlyNote": "Urteil und Erklärung stehen dann allein an den Zügen, die du selbst gespielt hast. Gerechnet wird weiter über die ganze Partie · Genauigkeit und Bilanz bleiben vollständig.",
+  "set.boardSigns": "Informator-Zeichen aufs Brett",
+  "set.boardSignsNote": "Im Diagramm-Modus stehen △, Doppelbauern und die Bewertung der Stellung dann auch auf dem Brett und an den Namen. Der Zeichenschlüssel darunter bleibt immer stehen.",
   "set.sound": "Brett & Ton",
   "set.soundSummary": "Zug-, Schlag- und Mattklänge · Motivhinweis im Puzzle-Training",
   "set.soundToggle": "Klänge auf dem Brett",

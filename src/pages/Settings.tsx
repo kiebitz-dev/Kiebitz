@@ -115,6 +115,7 @@ import { configureAutoSync, useSyncStatus } from "../lib/syncManager";
 import { applyReminderSchedule, sendTestReminder } from "../lib/notify";
 import { indexPositions } from "../lib/analysis";
 import { playBoardSound, setBoardSoundEnabled, setBoardSoundVolume } from "../lib/sound";
+import { setBoardSignsEnabled } from "../lib/boardSigns";
 import PlusSection from "./settings/PlusSection";
 import { PlusBadge, PlusBadgeButton } from "../components/PlusLock";
 import { usePlus, usePlusGate } from "../lib/plus/usePlus";
@@ -551,6 +552,7 @@ export default function SettingsPage({
       // am Schieber gedreht und dann abgebrochen wurde.
       setBoardSoundEnabled(applied.sound_enabled);
       setBoardSoundVolume(applied.sound_volume / 100);
+      setBoardSignsEnabled(applied.board_signs !== false);
       // Auto-Sync an die gespeicherten Werte anpassen (Mobile-Client).
       configureAutoSync({
         isMobile: mobile,
@@ -1204,20 +1206,40 @@ export default function SettingsPage({
       summary: t("set.annotationsSummary"),
       content:
         desktop && draft ? (
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={draft.annotate_own_only}
-              onChange={(e) => patch({ annotate_own_only: e.target.checked })}
-              className="mt-0.5 h-4 w-4 accent-accent"
-            />
-            <span>
-              <span className="block text-[13px] text-ink">{t("set.annotateOwnOnly")}</span>
-              <span className="block text-[12px] leading-relaxed text-ink3">
-                {t("set.annotateOwnOnlyNote")}
+          <>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={draft.annotate_own_only}
+                onChange={(e) => patch({ annotate_own_only: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span>
+                <span className="block text-[13px] text-ink">{t("set.annotateOwnOnly")}</span>
+                <span className="block text-[12px] leading-relaxed text-ink3">
+                  {t("set.annotateOwnOnlyNote")}
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            <label className="mt-5 flex cursor-pointer items-start gap-3 border-t border-line pt-4">
+              <input
+                type="checkbox"
+                checked={draft.board_signs !== false}
+                onChange={(e) => {
+                  patch({ board_signs: e.target.checked });
+                  // Sofort sichtbar wie der Ton · gespeichert wird mit dem Rest.
+                  setBoardSignsEnabled(e.target.checked);
+                }}
+                className="mt-0.5 h-4 w-4 accent-accent"
+              />
+              <span>
+                <span className="block text-[13px] text-ink">{t("set.boardSigns")}</span>
+                <span className="block text-[12px] leading-relaxed text-ink3">
+                  {t("set.boardSignsNote")}
+                </span>
+              </span>
+            </label>
+          </>
         ) : (
           desktopOnly
         ),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brettZeichen, leseZeichen, schluesselFolge } from "./informator";
+import { brettZeichen, leseZeichen, randZeichen, schluesselFolge } from "./informator";
 
 describe("informator signs", () => {
   it("reads stored JSON and drops kinds this build cannot explain", () => {
@@ -14,17 +14,26 @@ describe("informator signs", () => {
     expect(leseZeichen(undefined)).toEqual([]);
   });
 
-  it("keeps pawn structure off the board once there is an annotation", () => {
-    const quiet = brettZeichen([{ kind: "passed", squares: ["e4"] }]);
-    expect([...quiet.keys()]).toEqual(["e4"]);
-
+  it("keeps pawn structure on the board next to an annotation", () => {
     const annotated = brettZeichen([
-      { kind: "passed", squares: ["e4"] },
-      { kind: "against", squares: ["g8", "e5"] },
-      { kind: "nag", value: "??", squares: ["e5"] },
+      { kind: "doubled", squares: ["g3", "g2"] },
+      { kind: "attack", squares: ["e3"], san: "Qxe3+" },
+      { kind: "file", squares: ["d1", "d8"] },
     ]);
-    expect([...annotated.keys()].sort()).toEqual(["e5", "g8"]);
-    expect(annotated.get("e5")?.map((z) => z.kind)).toEqual(["against", "nag"]);
+    expect([...annotated.keys()].sort()).toEqual(["e3", "g2", "g3"]);
+  });
+
+  it("puts signs without a square beside the board, by side", () => {
+    const rand = randZeichen([
+      { kind: "same_bishops" },
+      { kind: "doubled", squares: ["f6"] },
+      { kind: "bishop_pair", side: "b" },
+      { kind: "eval", value: "-/+" },
+      { kind: "time_trouble", side: "w" },
+    ]);
+    expect(rand.stellung.map((z) => z.kind)).toEqual(["eval", "same_bishops"]);
+    expect(rand.schwarz.map((z) => z.kind)).toEqual(["bishop_pair"]);
+    expect(rand.weiss.map((z) => z.kind)).toEqual(["time_trouble"]);
   });
 
   it("orders the key from verdict to structure", () => {

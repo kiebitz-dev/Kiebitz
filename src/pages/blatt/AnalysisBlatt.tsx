@@ -40,7 +40,7 @@ import {
   Weg,
   type Feld,
 } from "../../components/blatt/Satz";
-import { Zeichenschluessel } from "../../components/blatt/Zeichen";
+import { Randzeichen, Zeichenschluessel } from "../../components/blatt/Zeichen";
 import type { InformatorZeichen } from "../../lib/informator";
 // Die Sperre wird im Modus nicht neu gebaut, sondern neu gesetzt · dieselbe
 // Regel wie beim Einstellungsformular, siehe `.blatt-formular` in blatt.css.
@@ -1145,6 +1145,10 @@ export default function AnalysisBlatt({
    * Lauf der Partie, und eine Zeile, die nach rechts wächst, schöbe irgendwann
    * die Wertung aus dem Satz. Gerechnet wird sie nicht hier · sie kommt wie das
    * Brett fertig von der Seite, aus derselben Stellung.
+   *
+   * Rechts stehen die Informator-Zeichen ohne Feld: an jeder Seite die, die
+   * sie betreffen, unter dem Brett zusätzlich die der ganzen Stellung ·
+   * dort, wo das Buch die Bewertung unter das Diagramm setzt.
    */
   const spieler = (seite: Brettseite, unten_: boolean) => (
     <div className={`flex items-start gap-[9px] ${unten_ ? "pt-[9px]" : "pb-[9px]"}`}>
@@ -1160,6 +1164,12 @@ export default function AnalysisBlatt({
         </span>
         {seite.geschlagen}
       </span>
+      {zeichen && zeichen.length > 0 && (
+        <span className="mt-[3px] flex flex-none items-center gap-3">
+          <Randzeichen zeichen={zeichen} teil={seite.farbe === "white" ? "weiss" : "schwarz"} />
+          {unten_ && <Randzeichen zeichen={zeichen} teil="stellung" />}
+        </span>
+      )}
     </div>
   );
 

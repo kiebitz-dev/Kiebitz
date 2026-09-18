@@ -18,10 +18,12 @@
  * Analyse entschieden (`src-tauri/src/informator.rs`, `lib/informator.ts`).
  */
 import type { ReactNode } from "react";
+import { useBoardSigns } from "../../lib/boardSigns";
 import { fenSquares } from "../../lib/boardSound";
 import { useI18n } from "../../lib/i18n";
 import {
   brettZeichen,
+  randZeichen,
   schluesselFolge,
   type InformatorZeichen,
   type ZeichenArt,
@@ -183,13 +185,24 @@ export function Glyphe({
   );
 }
 
-/** Die vier Ecken eines Feldes · in dieser Reihenfolge besetzt. */
+/**
+ * Die vier Ecken eines Feldes · in dieser Reihenfolge besetzt.
+ *
+ * Oben rechts zuerst, obwohl dort auch der Marker der Auto-Analyse sitzt
+ * („!!", „?"): Den gibt es auf genau einem Feld, dem Zielfeld des letzten
+ * Zuges. Oben links stehen dagegen auf einer ganzen Linie die Ziffern der
+ * Koordinaten. Deshalb weicht nur das eine Feld mit Marker aus, siehe
+ * `MIT_MARKE`, statt dass alle anderen in die Ziffern rücken.
+ */
 const ECKEN = [
   { top: "3%", right: "3%" },
   { top: "3%", left: "3%" },
   { bottom: "3%", right: "3%" },
   { bottom: "3%", left: "3%" },
 ] as const;
+
+/** Die Ecken des Feldes, auf dem der Marker steht · oben rechts ist belegt. */
+const MIT_MARKE = [ECKEN[1], ECKEN[3], ECKEN[2]] as const;
 
 /**
  * Die Zeichen auf den 64 Feldern · eine Ebene über einem Brett.
@@ -207,13 +220,17 @@ export function Zeichenebene({
   zeichen,
   fen,
   orientation = "white",
+  marke,
 }: {
   zeichen: readonly InformatorZeichen[];
   fen: string;
   orientation?: "white" | "black";
+  /** Das Feld mit dem Marker der Auto-Analyse · dort bleibt oben rechts frei. */
+  marke?: string;
 }) {
+  const an = useBoardSigns();
   const felder = brettZeichen(zeichen);
-  if (felder.size === 0) return null;
+  if (!an || felder.size === 0) return null;
   const board = fenSquares(fen) ?? [];
   return (
     <div
@@ -230,6 +247,7 @@ export function Zeichenebene({
         const zeile = orientation === "white" ? 8 - rang : rang - 1;
         const besetzt = Boolean(board[(8 - rang) * 8 + datei]);
         const mitte = !besetzt && liste.length === 1;
+        const ecken = feld === marke ? MIT_MARKE : ECKEN;
         return (
           <div
             key={feld}
@@ -247,11 +265,11 @@ export function Zeichenebene({
                 <Glyphe zeichen={liste[0]} groesse="100%" rand />
               </span>
             ) : (
-              liste.slice(0, 4).map((z, index) => (
+              liste.slice(0, ecken.length).map((z, index) => (
                 <span
                   key={`${z.kind}-${index}`}
                   className="absolute flex h-[40%] min-w-[40%] items-center justify-center border border-ink bg-bg px-[1px]"
-                  style={ECKEN[index]}
+                  style={ecken[index]}
                 >
                   <Glyphe zeichen={z} groesse="82%" />
                 </span>
@@ -280,21 +298,9 @@ const URTEIL: Record<string, Key> = {
   "??": "inf.nag.blunder",
 };
 
-/**
- * Der Zeichenschlüssel · je Zeichen eine Zeile, Zeichen links, Bedeutung
- * kursiv daneben. Er nennt nur, was auf dieser Stellung wirklich steht ·
- * ein Band druckt den ganzen Schlüssel einmal vorn, eine Seite nicht.
- */
-export function Zeichenschluessel({
-  zeichen,
-  titel = true,
-}: {
-  zeichen: readonly InformatorZeichen[];
-  /** Die Kolumne „Zeichenschlüssel" darüber · fehlt, wo schon eine Rubrik steht. */
-  titel?: boolean;
-}) {
+/** Die Bedeutung eines Zeichens als Satz · für den Schlüssel und die Tooltips. */
+function useZeichenText(): (z: InformatorZeichen) => string | null {
   const { t, locale } = useI18n();
-  if (zeichen.length === 0) return null;
   const felder = (liste?: string[]) => (liste ?? []).join(", ");
   const seite = (side?: "w" | "b") => t(side === "b" ? "common.black" : "common.white");
   const text = (z: InformatorZeichen): string | null => {
@@ -331,6 +337,25 @@ export function Zeichenschluessel({
         return null;
     }
   };
+  return text;
+}
+
+/**
+ * Der Zeichenschlüssel · je Zeichen eine Zeile, Zeichen links, Bedeutung
+ * kursiv daneben. Er nennt nur, was auf dieser Stellung wirklich steht ·
+ * ein Band druckt den ganzen Schlüssel einmal vorn, eine Seite nicht.
+ */
+export function Zeichenschluessel({
+  zeichen,
+  titel = true,
+}: {
+  zeichen: readonly InformatorZeichen[];
+  /** Die Kolumne „Zeichenschlüssel" darüber · fehlt, wo schon eine Rubrik steht. */
+  titel?: boolean;
+}) {
+  const { t } = useI18n();
+  const text = useZeichenText();
+  if (zeichen.length === 0) return null;
   const zeilen = schluesselFolge(zeichen)
     .map((z) => ({ z, text: text(z) }))
     .filter((zeile): zeile is { z: InformatorZeichen; text: string } => Boolean(zeile.text));
@@ -349,5 +374,37 @@ export function Zeichenschluessel({
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Die Zeichen ohne Feld · am Rand des Bretts, klein wie im Buch unter dem
+ * Diagramm. Bewertung, Läuferfarben und Endspiel stehen unter dem Brett, das
+ * Läuferpaar und die Zeitnot an der Seite, die sie betreffen. Hängt an
+ * derselben Einstellung wie die Zeichen auf den Feldern.
+ */
+export function Randzeichen({
+  zeichen,
+  teil,
+}: {
+  zeichen: readonly InformatorZeichen[];
+  teil: "weiss" | "schwarz" | "stellung";
+}) {
+  const an = useBoardSigns();
+  const text = useZeichenText();
+  const liste = randZeichen(zeichen)[teil];
+  if (!an || liste.length === 0) return null;
+  return (
+    <span data-testid={`informator-rand-${teil}`} className="flex flex-none items-center gap-1.5 text-ink">
+      {liste.map((z, index) => {
+        const bedeutung = text(z) ?? undefined;
+        return (
+          <span key={`${z.kind}-${index}`} title={bedeutung} className="inline-flex">
+            <Glyphe zeichen={z} groesse={15} />
+            {bedeutung && <span className="sr-only">{bedeutung}</span>}
+          </span>
+        );
+      })}
+    </span>
   );
 }

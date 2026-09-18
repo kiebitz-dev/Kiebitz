@@ -1213,6 +1213,8 @@ export const en: Record<Key, string> = {
   "set.annotationsSummary": "What the analysis writes next to the moves",
   "set.annotateOwnOnly": "Only for my own moves",
   "set.annotateOwnOnlyNote": "Judgement and explanation then stand only next to the moves you played yourself. The analysis still covers the whole game · accuracy and the tally stay complete.",
+  "set.boardSigns": "Informator signs on the board",
+  "set.boardSignsNote": "In diagram mode, △, doubled pawns and the assessment of the position then also appear on the board and next to the names. The key to signs below always stays.",
   "set.sound": "Board & sound",
   "set.soundSummary": "Move, capture and checkmate sounds · theme hint in puzzle training",
   "set.soundToggle": "Board sounds",

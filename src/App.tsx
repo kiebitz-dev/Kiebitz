@@ -34,6 +34,7 @@ import { getSettings, type Settings } from "./lib/settings";
 import { syncInfo } from "./lib/sync";
 import { configureAutoSync, useSyncStatus } from "./lib/syncManager";
 import { setBoardSoundEnabled, setBoardSoundVolume } from "./lib/sound";
+import { setBoardSignsEnabled } from "./lib/boardSigns";
 import { installCrashReporter, logEvent } from "./lib/diag";
 import { onDeviceShake } from "./lib/shake";
 import {
@@ -253,6 +254,7 @@ export default function App() {
       .then((s) => {
         setBoardSoundEnabled(s.sound_enabled);
         setBoardSoundVolume(s.sound_volume / 100);
+        setBoardSignsEnabled(s.board_signs !== false);
       })
       .catch(() => {});
   }, [backend.mode]);

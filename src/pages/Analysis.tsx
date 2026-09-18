@@ -123,7 +123,7 @@ import {
 import { recordAttempt } from "../lib/puzzles";
 import { partieRating } from "../lib/partierating";
 import { fazitKernsatz } from "../lib/fazit";
-import { soundForMoment } from "../lib/boardSound";
+import { soundsForMoment, soundsForTransition } from "../lib/boardSound";
 import { playBoardSound } from "../lib/sound";
 import {
   acpl,
@@ -1232,6 +1232,16 @@ export default function Analysis({
 
   /** Eine Empfehlung bis zu ihrem n-ten Halbzug aufs Brett legen. */
   const spieleVariante = (variante: Variante, halbzuege: number) => {
+    // Das Brett klingt nur, wenn ein Zug dazukommt. Eine Empfehlung ersetzt
+    // aber oft den Partiezug (6.Bc4 statt 6.Bf4), oder der Klick springt
+    // mehrere Züge weit · dann bleibt das Brett stumm, und der Klang des
+    // angeklickten Zuges kommt von hier.
+    const ziel = [...sans.slice(0, variante.basePly), ...variante.sans.slice(0, halbzuege)];
+    const nachher = replaySans(ziel, undefined, openedFen).fen;
+    if (nachher !== fen && soundsForTransition(fen, nachher).length === 0) {
+      const vorher = replaySans(ziel.slice(0, -1), undefined, openedFen).fen;
+      soundsForTransition(vorher, nachher).forEach((kind) => playBoardSound(kind));
+    }
     setVariation({
       basePly: variante.basePly,
       sans: variante.sans.slice(0, halbzuege),
@@ -1590,7 +1600,8 @@ export default function Analysis({
     if (!moment) return;
     setMomentIndex(index);
     goToPly(moment.ply);
-    playBoardSound(soundForMoment(moment.judgment));
+    // Der Glanz setzt ein, wenn das Blatt aufliegt.
+    soundsForMoment(moment.judgment).forEach((kind, index) => playBoardSound(kind, index * 0.2));
   };
 
   /**
@@ -2011,8 +2022,13 @@ export default function Analysis({
             >
               {judgmentMark(moment.judgment, 11)}
             </span>
-            <span className="min-w-0 truncate text-[12px] text-ink2">
-              {t(`an.walk.${moment.art}` as Key)}
+            {/* Die Leiste ist schmal · die Kategorie passt, der Satz dazu
+                nur noch als Tooltip. */}
+            <span
+              className="min-w-0 truncate text-[12px] text-ink2"
+              title={t(`an.walk.${moment.art}` as Key)}
+            >
+              {judgmentLabel(t, moment.judgment)}
             </span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
@@ -2122,7 +2138,12 @@ export default function Analysis({
           overlay={
             brettZeichenListe.length > 0 ? (
               <Suspense fallback={null}>
-                <Zeichenebene zeichen={brettZeichenListe} fen={fen} orientation={orientation} />
+                <Zeichenebene
+                  zeichen={brettZeichenListe}
+                  fen={fen}
+                  orientation={orientation}
+                  marke={currentQuality ? currentTarget : undefined}
+                />
               </Suspense>
             ) : null
           }
@@ -3265,8 +3286,12 @@ export default function Analysis({
               Urteile, und eine Bilanz aus neun Nullen ist keine Auskunft. */}
           {!scratch && (
           <Card title={live ? t("an.myMoves") : t("an.autoAnnotation")}>
+            {/* Nur was vorkommt, wie im Blatt · eine Zeile „Großartig 0"
+                sagt nichts über die Partie. */}
             <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
-              {(["brilliant", "great", "best", "excellent", "good", "book", "miss", "inaccuracy", "mistake", "blunder"] as MoveJudgment[]).map((quality) => (
+              {(["brilliant", "great", "best", "excellent", "good", "book", "miss", "inaccuracy", "mistake", "blunder"] as MoveJudgment[])
+                .filter((quality) => summary[quality] > 0)
+                .map((quality) => (
                 <li key={quality} className="flex min-w-0 justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1 truncate" style={{ color: JUDGMENT_COLOR[quality] }}>
                     {judgmentMark(quality, 13)} <span className="truncate">{judgmentLabel(t, quality)}</span>
