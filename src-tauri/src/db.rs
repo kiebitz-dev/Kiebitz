@@ -8,7 +8,7 @@ pub struct Db(pub Mutex<Connection>);
 
 /// Current SQLite schema version. It is stored only after the complete
 /// migration has committed successfully.
-const SCHEMA_VERSION: i64 = 21;
+const SCHEMA_VERSION: i64 = 22;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GameRecord {
@@ -1728,6 +1728,27 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM move_evals", [], |row| row.get(0))
             .unwrap();
         assert_eq!(moves, 1, "die Analyse selbst bleibt unberührt");
+    }
+
+    #[test]
+    fn init_adds_signs_to_a_v21_database() {
+        // Datenbanken aus 1.5.0 stehen auf 21, die Zeichen-Spalten kamen mit 22 ·
+        // ohne Versionssprung bricht jede Analyse mit "no such column: signs" ab.
+        let conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE move_evals DROP COLUMN signs;
+             ALTER TABLE move_evals DROP COLUMN signs_version;
+             ALTER TABLE games DROP COLUMN end_signs;
+             PRAGMA user_version = 21;",
+        )
+        .unwrap();
+
+        init(&conn).unwrap();
+
+        assert!(column_exists(&conn, "move_evals", "signs").unwrap());
+        assert!(column_exists(&conn, "move_evals", "signs_version").unwrap());
+        assert!(column_exists(&conn, "games", "end_signs").unwrap());
     }
 
     #[test]
