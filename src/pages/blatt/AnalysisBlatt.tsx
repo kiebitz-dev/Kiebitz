@@ -311,6 +311,11 @@ export interface AnalysisBlattProps {
    * nicht ein zweites Mal — siehe `griffe`.
    */
   durchgang?: ReactNode;
+  /**
+   * „Nochmal“ zum gezeigten Zug · Angebot oder laufender Versuch, fertig
+   * von der Seite wie die Leiste des Durchgangs.
+   */
+  nochmal?: ReactNode;
   zuege: SatzZug[];
   /** Der gezeigte Halbzug · die Marke in der Kurve und im Satz. */
   ply: number;
@@ -517,6 +522,7 @@ export default function AnalysisBlatt({
   zeichen,
   griffe,
   durchgang,
+  nochmal,
   zuege,
   ply,
   onPly,
@@ -684,6 +690,7 @@ export default function AnalysisBlatt({
     <div>
       <Rubrik>{frei ? t("an.freeBoard") : t("blatt.theGame")}</Rubrik>
       {durchgang && <div className="blatt-formular mt-2.5">{durchgang}</div>}
+      {nochmal && <div className="blatt-formular mt-2.5">{nochmal}</div>}
       {/* Die Züge aus einem geteilten Link stehen vor den eigenen und sind
           nicht anklickbar · die Stellungen davor reisen nicht mit, nur ihre
           Notation. Dieselbe Regel wie in der gewöhnlichen Fassung. */}

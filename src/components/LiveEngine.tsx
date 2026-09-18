@@ -120,6 +120,7 @@ export default function LiveEngine({
   onBestMove,
   onMove,
   blatt = false,
+  verdeckt = false,
 }: {
   fen: string;
   demoLines: { eval: string; depth: number; line: string }[];
@@ -138,6 +139,15 @@ export default function LiveEngine({
    * Engine-Anschluss wäre ein zweiter Ort, an dem dieselbe Suche startet.
    */
   blatt?: boolean;
+  /**
+   * Die Linien verdecken, die Engine aber weiterrechnen lassen.
+   *
+   * Beim „Nochmal" in der Analyse steht die Stellung vor dem eigenen Fehler
+   * auf dem Brett, und die erste Linie wäre die Lösung. Gebraucht wird die
+   * Engine trotzdem: Ihre Bewertung sagt, was ein Versuch kostet. Also läuft
+   * sie weiter und meldet über `onEval`, nur ihre Züge stehen nicht da.
+   */
+  verdeckt?: boolean;
 }) {
   const t = useT();
   const [engine, setEngine] = useState<EngineState>({ mode: "checking" });
@@ -409,7 +419,17 @@ export default function LiveEngine({
             </div>
 
             <div className={blatt ? "flex flex-col" : "flex flex-col gap-2"}>
-              {ordered.length > 0
+              {verdeckt ? (
+                <div
+                  className={
+                    blatt
+                      ? "border-b border-line py-[7px] text-[12px] text-ink3"
+                      : "rounded-lg border border-dashed border-line2 px-3 py-4 text-center text-[12px] text-ink3"
+                  }
+                >
+                  {t("eng.hiddenForRetry")}
+                </div>
+              ) : ordered.length > 0
                 ? ordered.map((l) => (
                     <EngineLineCard
                       key={l.multipv}

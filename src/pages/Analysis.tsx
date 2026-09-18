@@ -104,6 +104,15 @@ import { zugfakten } from "../lib/zugfakten";
 import VariationLine, { aktiveZuege, type Variante } from "../components/VariationLine";
 import { useDiagramMode } from "../lib/diagramMode";
 import { momente } from "../lib/durchgang";
+import {
+  aufgabenKennung,
+  beurteileVersuch,
+  engineZahl,
+  geloest,
+  nochmalMoeglich,
+  type Rueckmeldung,
+} from "../lib/nochmal";
+import { recordAttempt } from "../lib/puzzles";
 import { soundForMoment } from "../lib/boardSound";
 import { playBoardSound } from "../lib/sound";
 import {
@@ -465,6 +474,30 @@ export default function Analysis({
   const [ply, setPly] = useState(0);
   /** Der laufende Durchgang · Index in `momentListe`, `null` heißt: keiner. */
   const [momentIndex, setMomentIndex] = useState<number | null>(null);
+  /**
+   * Der laufende „Nochmal"-Versuch · siehe lib/nochmal.ts.
+   *
+   * `basis` ist die Bewertung der Stellung vor dem Zug. Sie kommt aus der
+   * gespeicherten Analyse und wird von der laufenden Engine überschrieben,
+   * sobald diese sich zu derselben Stellung geäußert hat: Gegen die eigene
+   * Zahl gemessen ist die Auskunft über den Versuch eine Auskunft über den
+   * Zug und nicht über die Suchtiefe.
+   */
+  const [retry, setRetry] = useState<{
+    ply: number;
+    versuche: number;
+    /** Der letzte Versuch als UCI · leer, solange keiner gespielt ist. */
+    gespielt: string;
+    basis: number | null;
+    urteil: Rueckmeldung | null;
+    geloest: boolean;
+    /** Beim Trainer verbucht · genau einmal je Versuch. */
+    gemeldet: boolean;
+    /** Die Lösung steht offen · dann ist der Versuch vorbei. */
+    aufgedeckt: boolean;
+    /** Die Aufgabe im Trainer ist damit abgehakt · nur dann steht es da. */
+    imTrainer: boolean;
+  } | null>(null);
   const [liveEval, setLiveEval] = useState<{ cp: number | null; mate: number | null } | null>(null);
   const [liveBestUci, setLiveBestUci] = useState<string | null>(null);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
@@ -727,10 +760,9 @@ export default function Analysis({
    * sonst nur die eigenen — es ist der Durchgang durch die eigene Partie und
    * nicht durch die des Gegners.
    */
-  const momentListe = useMemo(
-    () => momente(viewMoves, live && game.color === "black" ? "black" : live && game.color ? "white" : null),
-    [viewMoves, live, game]
-  );
+  const meineFarbe: "white" | "black" | null =
+    live && game.color ? (game.color === "black" ? "black" : "white") : null;
+  const momentListe = useMemo(() => momente(viewMoves, meineFarbe), [viewMoves, meineFarbe]);
 
   // Notizen und Tags der gewählten Partie in die Eingaben übernehmen.
   useEffect(() => {
@@ -782,6 +814,7 @@ export default function Analysis({
     // Ein Durchgang gehört zu einer Partie · in der nächsten wäre „Moment 3
     // von 5" eine Zählung durch fremde Halbzüge.
     setMomentIndex(null);
+    setRetry(null);
   }, [selectedId, sans.length]);
 
   const openedFen = opened?.fen;
@@ -857,6 +890,26 @@ export default function Analysis({
         setVariation((current) => current
           ? { ...current, sans: [...current.sans, move.san] }
           : { basePly: ply, sans: [move.san] });
+        // Ein Versuch zählt nur aus der Stellung vor dem Fehler selbst · wer
+        // in der eigenen Variante weiterzieht, spielt nach, er versucht nicht.
+        if (retry && !retry.geloest && !retry.aufgedeckt && !variation && ply === retry.ply - 1) {
+          const gespielt = `${move.from}${move.to}${move.promotion ?? ""}`;
+          if (retry.versuche >= 1 && !retry.gemeldet) meldeVersuch(retry.ply, false);
+          const urteil = beurteileVersuch({
+            gespielt,
+            beste: viewMoves[retry.ply - 1]?.bestUci,
+            basis: retry.basis,
+            nachher: null,
+            weiss: retry.ply % 2 === 1,
+          });
+          setRetry((r) => r && {
+            ...r,
+            versuche: r.versuche + 1,
+            gespielt,
+            urteil,
+            geloest: geloest(urteil),
+          });
+        }
       }
       setScratchSelected(null);
       setLiveEval(null);
@@ -1496,6 +1549,108 @@ export default function Analysis({
     goToPly(moment.ply);
     playBoardSound(soundForMoment(moment.judgment));
   };
+
+  /**
+   * Den Versuch beim Aufgabentrainer verbuchen · einmal, wie dort.
+   *
+   * Der Trainer zählt nur den ersten Versuch (`solvedFirstTry` in
+   * pages/Puzzles.tsx), und dieselbe Regel gilt hier: Wer beim ersten Zug
+   * trifft, hat die Aufgabe gelöst und bekommt sie nicht noch einmal
+   * vorgelegt; wer daneben liegt, hat sie verfehlt, auch wenn der zweite Zug
+   * sitzt. Gibt es zu dem Halbzug keine Aufgabe, lehnt das Backend ab, und es
+   * bleibt beim Versuch auf dem Brett.
+   */
+  const meldeVersuch = (retryPly: number, solved: boolean) => {
+    if (!live || game.id == null) return;
+    setRetry((r) => (r ? { ...r, gemeldet: true } : r));
+    recordAttempt(aufgabenKennung(game.id, retryPly), solved)
+      .then(() => {
+        if (solved) setRetry((r) => (r && r.ply === retryPly ? { ...r, imTrainer: true } : r));
+      })
+      .catch(() => {});
+  };
+
+  /** „Nochmal" · zurück vor den eigenen Fehler, ohne Lösung auf dem Brett. */
+  const starteNochmal = (retryPly: number) => {
+    setMomentIndex(null);
+    goToPly(retryPly - 1);
+    const davor = retryPly >= 2 ? viewMoves[retryPly - 2] : null;
+    setRetry({
+      ply: retryPly,
+      versuche: 0,
+      gespielt: "",
+      basis: davor ? (davor.evalCp == null && davor.mateIn == null ? null : evalNum(davor.evalCp, davor.mateIn)) : 20,
+      urteil: null,
+      geloest: false,
+      gemeldet: false,
+      aufgedeckt: false,
+      imTrainer: false,
+    });
+  };
+
+  /** Den nächsten Versuch vorbereiten · die Stellung vor dem Fehler. */
+  const nochEinmal = () => {
+    if (!retry) return;
+    goToPly(retry.ply - 1);
+    setRetry({ ...retry, urteil: null, gespielt: "" });
+  };
+
+  /** Aufgeben · die Lösung zeigen und den Versuch als verfehlt verbuchen. */
+  const deckeAuf = () => {
+    if (!retry) return;
+    if (retry.versuche >= 1 && !retry.gemeldet) meldeVersuch(retry.ply, false);
+    goToPly(retry.ply - 1);
+    setRetry((r) => (r ? { ...r, aufgedeckt: true } : r));
+  };
+
+  const beendeNochmal = () => {
+    if (retry && retry.versuche >= 1 && !retry.gemeldet) meldeVersuch(retry.ply, false);
+    setRetry(null);
+  };
+
+  // Solange die Stellung vor dem Fehler steht, ist die Engine-Bewertung die
+  // Grundlinie · dieselbe Engine, die gleich den Versuch bewertet.
+  const retryWartet = !!retry && !variation && !retry.gespielt && ply === retry.ply - 1;
+  const liveZahl = engineZahl(liveEval);
+  useEffect(() => {
+    if (!retryWartet || liveZahl == null) return;
+    setRetry((r) => (r && !r.gespielt && r.basis !== liveZahl ? { ...r, basis: liveZahl } : r));
+  }, [retryWartet, liveZahl]);
+
+  // Nach einem fremden Zug sagt die Engine, was er kostet · und schärft das
+  // Urteil nach, solange sie tiefer rechnet und der Versuch nicht gelöst ist.
+  const retryRechnet =
+    !!retry && !!variation && !!retry.gespielt && !retry.geloest && !retry.aufgedeckt
+    && retry.urteil?.art !== "gefunden";
+  useEffect(() => {
+    if (!retryRechnet || liveZahl == null) return;
+    setRetry((r) => {
+      if (!r || !r.gespielt || r.geloest) return r;
+      const urteil = beurteileVersuch({
+        gespielt: r.gespielt,
+        beste: viewMoves[r.ply - 1]?.bestUci,
+        basis: r.basis,
+        nachher: liveZahl,
+        weiss: r.ply % 2 === 1,
+      });
+      const alt = r.urteil;
+      if (alt && alt.art === urteil.art && ("kosten" in alt ? alt.kosten : -1) === ("kosten" in urteil ? urteil.kosten : -1)) {
+        return r;
+      }
+      return { ...r, urteil, geloest: geloest(urteil) };
+    });
+  }, [retryRechnet, liveZahl, viewMoves]);
+
+  // Gelöst · beim ersten Versuch zählt das auch im Aufgabentrainer.
+  useEffect(() => {
+    if (!retry || !retry.geloest || retry.gemeldet) return;
+    meldeVersuch(retry.ply, retry.versuche === 1);
+    playBoardSound("glanz");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retry?.geloest, retry?.gemeldet]);
+
+  /** Der Versuch ist offen · die Lösung darf nirgends auf dem Brett stehen. */
+  const retryVerdeckt = !!retry && !retry.geloest && !retry.aufgedeckt;
   /**
    * Was von dieser Stellung nach draußen geht.
    *
@@ -1620,6 +1775,89 @@ export default function Analysis({
    * Blatt setzt sie mit `blatt-formular` neu und baut sie nicht ein zweites
    * Mal.
    */
+  const nochmalTeil = () => {
+    if (!retry) {
+      // Angeboten wird es am eigenen, bemängelten Zug · genau dort, wo man
+      // die Anmerkung zu ihm gerade liest.
+      if (!live || variation || !nochmalMoeglich(viewMoves[ply - 1], ply, meineFarbe)) return null;
+      return (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2">
+          <span className="min-w-0 text-[12px] text-ink3">{t("an.retryOffer")}</span>
+          <Button onClick={() => starteNochmal(ply)} compact>
+            <RotateCcw size={13} /> {t("an.retry")}
+          </Button>
+        </div>
+      );
+    }
+    const ziel = viewMoves[retry.ply - 1];
+    const loesung = (() => {
+      const vorher = stellungVor(sans, retry.ply - 1);
+      if (!vorher || !ziel?.bestUci) return "";
+      try {
+        return new Chess(vorher).move({
+          from: ziel.bestUci.slice(0, 2),
+          to: ziel.bestUci.slice(2, 4),
+          promotion: ziel.bestUci.length > 4 ? ziel.bestUci[4] : undefined,
+        }).san;
+      } catch {
+        return "";
+      }
+    })();
+    const u = retry.urteil;
+    const satz = retry.aufgedeckt
+      ? t("an.retrySolution", { san: loesung })
+      : !u
+        ? t("an.retryPrompt")
+        : u.art === "gefunden"
+          ? t("an.retryFound")
+          : u.art === "gleichwertig"
+            ? t("an.retryEqual")
+            : u.art === "teurer"
+              ? t("an.retryCosts", { loss: de(u.kosten / 100, 1) })
+              : t("an.retryPending");
+    const farbe = retry.geloest
+      ? "var(--color-win)"
+      : u?.art === "teurer"
+        ? "var(--color-warn)"
+        : "var(--color-accent)";
+    const vorbei = retry.geloest || retry.aufgedeckt;
+    return (
+      <div className="rounded-lg border-l-2 bg-panel2 px-3 py-2" style={{ borderColor: farbe }}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink3">
+            {t("an.retryTitle", { n: Math.ceil(retry.ply / 2) })}
+          </span>
+          {retry.versuche > 0 && (
+            <span className="text-[11px] tabular-nums text-ink3">
+              {t("an.retryAttempts", { n: retry.versuche })}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[13px] leading-relaxed" style={{ color: u || retry.aufgedeckt ? farbe : undefined }}>
+          {satz}
+        </p>
+        {retry.imTrainer && (
+          <p className="mt-0.5 text-[11.5px] text-ink3">{t("an.retryPuzzleDone")}</p>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {!vorbei && retry.gespielt && (
+            <Button onClick={nochEinmal} primary compact>
+              <RotateCcw size={13} /> {t("an.retryAgain")}
+            </Button>
+          )}
+          {!vorbei && (
+            <Button onClick={deckeAuf} compact>
+              {t("an.retryReveal")}
+            </Button>
+          )}
+          <Button onClick={beendeNochmal} compact>
+            {t("an.retryClose")}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const durchgangLeiste = () => {
     if (momentListe.length === 0) return null;
     const laufend = momentIndex != null && momentIndex < momentListe.length;
@@ -1741,7 +1979,7 @@ export default function Analysis({
           onSquareClick={scratch || live ? onBoardSquareClick : undefined}
           lastMove={boardLastMove}
           squareStyles={selectionStyles(fen, scratchSelected)}
-          arrows={variation || scratch ? liveArrows : previewArrows}
+          arrows={retryVerdeckt ? [] : variation || scratch ? liveArrows : previewArrows}
           badges={currentQuality && currentTarget ? [{
             // Der Schlüssel trägt den Halbzug · so geht der Marker auch dann
             // wieder auf, wenn man denselben Zug ein zweites Mal ansteuert.
@@ -2398,6 +2636,7 @@ export default function Analysis({
               demoLines={scratch || loadingGame ? [] : featuredGame.pvLines}
               onEval={(cp, mate) => setLiveEval({ cp, mate })}
               onBestMove={setLiveBestUci}
+              verdeckt={retryVerdeckt}
               onMove={(uci) => playBoardMove(uci.slice(0, 2), uci.slice(2, 4), uci[4] ?? "q")}
             />
           }
@@ -2508,6 +2747,7 @@ export default function Analysis({
             gewicht: blattAnalysen[index]?.gewicht,
           }))}
           durchgang={durchgangLeiste()}
+          nochmal={nochmalTeil()}
           ply={ply}
           onPly={goToPly}
           kurve={evalSeries.map((point) => point.eval)}
@@ -2805,7 +3045,8 @@ export default function Analysis({
                   die Zeile mit dem ersten Klick verschwunden, und nachspielen
                   hieße: einen Zug ansehen. Was darin steht, gehört dann zu
                   dem Zug, von dem die Variante abzweigt. */}
-              {(currentComment || varianten.length > 0) && (
+              {nochmalTeil() && <div className="mt-3">{nochmalTeil()}</div>}
+              {!retryVerdeckt && (currentComment || varianten.length > 0) && (
                 <div className="mt-3 rounded-lg border-l-2 bg-panel2 px-3 py-2 text-[12.5px] leading-relaxed text-ink2"
                   style={{ borderColor: ankerMove?.judgment ? JUDGMENT_COLOR[ankerMove.judgment] : "var(--color-accent)" }}>
                   <span className="font-medium" style={{ color: ankerMove?.judgment ? JUDGMENT_COLOR[ankerMove.judgment] : "var(--color-accent)" }}>
@@ -2890,6 +3131,7 @@ export default function Analysis({
             demoLines={scratch || loadingGame ? [] : featuredGame.pvLines}
             onEval={(cp, mate) => setLiveEval({ cp, mate })}
             onBestMove={setLiveBestUci}
+            verdeckt={retryVerdeckt}
             onMove={(uci) => playBoardMove(uci.slice(0, 2), uci.slice(2, 4), uci[4] ?? "q")}
           />
 

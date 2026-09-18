@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   chessdbQuery: vi.fn(),
   searchPosition: vi.fn(),
+  recordAttempt: vi.fn(),
   engineMove: "f1c4",
   diagram: false,
 }));
@@ -52,6 +53,10 @@ vi.mock("../lib/analysis", () => ({
   onAnalysisProgress: () => Promise.resolve(() => {}),
   searchPosition: (...args: unknown[]) => mocks.searchPosition(...args),
   startAnalysis: mocks.startAnalysis,
+}));
+vi.mock("../lib/puzzles", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/puzzles")>()),
+  recordAttempt: (...args: unknown[]) => mocks.recordAttempt(...args),
 }));
 vi.mock("../components/Board", () => ({
   default: ({ fen, onPieceDrop, draggable, muted, mouseDrag, arrows, badges, orientation }: {
@@ -216,6 +221,7 @@ beforeEach(() => {
   mocks.setGameTags.mockImplementation((_id: number, tags: string[]) => Promise.resolve(tags));
   mocks.engineMove = "f1c4";
   mocks.diagram = false;
+  mocks.recordAttempt.mockResolvedValue({ rating_before: 1500, rating_after: 1508, delta: 8 });
 });
 
 afterEach(() => {
@@ -367,6 +373,64 @@ describe("Analysis page", () => {
     // Zug, also stehen auch weiter beide Zeilen da.
     expect(screen.getByRole("button", { name: "Variante bis 3.Nf3 nachspielen" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Variante bis 3.Bc4 nachspielen" })).toBeTruthy();
+  });
+
+  describe("retry", () => {
+    /** Die Stellung nach 1.e4 e5 · dort beginnt der Versuch zu 2.Nf3?? */
+    const VOR_DEM_FEHLER = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR";
+
+    async function nochmalBeiNf3() {
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+      fireEvent.click(await screen.findByRole("button", { name: /^Nf3/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /Nochmal/ }));
+      await waitFor(() =>
+        expect(screen.getAllByTestId("analysis-board")[0].dataset.fen).toContain(VOR_DEM_FEHLER)
+      );
+    }
+
+    it("puts the position before the own mistake on the board without the answer", async () => {
+      await nochmalBeiNf3();
+      expect(screen.getByText("Du bist am Zug. Die Lösung ist verdeckt.")).toBeTruthy();
+      // Keine Pfeile: Der grüne wäre die Lösung, der orange der eigene Fehler.
+      expect(screen.getAllByTestId("analysis-board")[0].dataset.arrows).toBe("[]");
+    });
+
+    it("confirms the move at once and ticks off the puzzle on the first try", async () => {
+      await nochmalBeiNf3();
+      fireEvent.click(screen.getByRole("button", { name: "play engine move" }));
+
+      expect(await screen.findByText("Das war es.")).toBeTruthy();
+      await waitFor(() => expect(mocks.recordAttempt).toHaveBeenCalledWith("own:7:3", true));
+      expect(await screen.findByText("Die Aufgabe dazu ist im Trainer abgehakt.")).toBeTruthy();
+    });
+
+    it("counts a wrong first try as missed once the solution is shown", async () => {
+      mocks.engineMove = "b1c3";
+      await nochmalBeiNf3();
+      fireEvent.click(screen.getByRole("button", { name: "play engine move" }));
+      // Ohne Engine-Zahl gibt es kein Preisschild · nur die ehrliche Auskunft.
+      expect(await screen.findByText(/Nicht der Zug der Analyse/)).toBeTruthy();
+      expect(mocks.recordAttempt).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Lösung zeigen" }));
+      expect(await screen.findByText("Besser war Bc4.")).toBeTruthy();
+      expect(mocks.recordAttempt).toHaveBeenCalledWith("own:7:3", false);
+      expect(mocks.recordAttempt).toHaveBeenCalledTimes(1);
+    });
+
+    it("is not offered on the opponent's moves", async () => {
+      mocks.gameAnalysis.mockResolvedValue([
+        ...betterLineRows.slice(0, 3).map((row) => ({ ...row, judgment: "" })),
+        { ...betterLineRows[3], judgment: "blunder" },
+      ]);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+      fireEvent.click(await screen.findByRole("button", { name: /^Nc6/ }));
+      await waitFor(() => expect(screen.getAllByText(/Patzer/).length).toBeGreaterThan(0));
+      expect(screen.queryByRole("button", { name: /Nochmal/ })).toBeNull();
+    });
   });
 
   describe("navigation", () => {
@@ -1006,6 +1070,19 @@ describe("Analysis page", () => {
       expect(picker.closest("[data-tour='analysis-run']")?.className).toContain("blatt-formular");
       // Am freien Brett trägt die Engine die rechte Spalte.
       expect(screen.getByTestId("live-engine")).toBeTruthy();
+    });
+
+    it("offers the retry on the sheet as well and hides the answer there too", async () => {
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+      fireEvent.click(await screen.findByRole("button", { name: /^2\.Nf3/ }));
+      const nochmal = await screen.findByRole("button", { name: /Nochmal/ });
+      expect(nochmal.closest(".blatt-formular")).toBeTruthy();
+
+      fireEvent.click(nochmal);
+      expect(await screen.findByText("Du bist am Zug. Die Lösung ist verdeckt.")).toBeTruthy();
+      expect(screen.getAllByTestId("analysis-board")[0].dataset.arrows).toBe("[]");
     });
 
     it("writes no demo annotation onto a move played on the free board", async () => {
