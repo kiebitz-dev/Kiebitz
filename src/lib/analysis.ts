@@ -136,6 +136,26 @@ export function onAnalysisDone(cb: (p: AnalysisAllDone) => void): Promise<Unlist
   });
 }
 
+// ── Buchtiefe ────────────────────────────────────────────────────────────────
+
+/** Wie weit eine Partie in der Theorie lief · siehe src-tauri/src/book.rs. */
+export interface BookLine {
+  /** So viele Halbzüge ab dem Start sind als Buch belegt. */
+  plies: number;
+  /**
+   * `true`: Danach ging die Partie nachweislich aus dem Buch. `false`: Ab dort
+   * wissen die Quellen nichts mehr, und die alte Faustregel übernimmt.
+   */
+  decided: boolean;
+  /** `own` (Referenzdatenbank) oder `masters` (Explorer-Zwischenspeicher). */
+  source: string;
+}
+
+/** Nur lokale Quellen, nie das Netz · `null`, wenn keine etwas weiß. */
+export function bookLine(moves: string): Promise<BookLine | null> {
+  return invoke<BookLine | null>("book_line", { moves });
+}
+
 // ── Fehler nach Spielphase ───────────────────────────────────────────────────
 
 export interface PhaseErrors {

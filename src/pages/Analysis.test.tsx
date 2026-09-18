@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   chessdbQuery: vi.fn(),
   searchPosition: vi.fn(),
   recordAttempt: vi.fn(),
+  bookLine: vi.fn(),
   engineMove: "f1c4",
   diagram: false,
 }));
@@ -46,6 +47,7 @@ vi.mock("../lib/settings", () => ({
   refdbStatus: mocks.refdbStatus,
 }));
 vi.mock("../lib/analysis", () => ({
+  bookLine: (...args: unknown[]) => mocks.bookLine(...args),
   cancelAnalysis: vi.fn(),
   gameAnalysis: mocks.gameAnalysis,
   onAnalysisDone: () => Promise.resolve(() => {}),
@@ -222,6 +224,7 @@ beforeEach(() => {
   mocks.engineMove = "f1c4";
   mocks.diagram = false;
   mocks.recordAttempt.mockResolvedValue({ rating_before: 1500, rating_after: 1508, delta: 8 });
+  mocks.bookLine.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -373,6 +376,18 @@ describe("Analysis page", () => {
     // Zug, also stehen auch weiter beide Zeilen da.
     expect(screen.getByRole("button", { name: "Variante bis 3.Nf3 nachspielen" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Variante bis 3.Bc4 nachspielen" })).toBeTruthy();
+  });
+
+  it("takes book moves from the local sources and ends them where the data does", async () => {
+    mocks.gameAnalysis.mockResolvedValue(bestMoveRows);
+    mocks.bookLine.mockResolvedValue({ plies: 2, decided: true, source: "own" });
+    render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+    await gameOnBoard("7");
+
+    expect(mocks.bookLine).toHaveBeenCalledWith("e4 e5 Nf3 Nc6");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^e5/ }).title).toBe("Buchzug"));
+    // 2.Nf3 hätte die Faustregel noch als Buch gezählt · die Daten nicht.
+    expect(screen.getByRole("button", { name: /^Nf3/ }).title).toBe("Bester Zug");
   });
 
   describe("overview", () => {

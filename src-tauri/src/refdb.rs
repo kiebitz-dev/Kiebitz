@@ -200,6 +200,19 @@ pub fn ref_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("reference.sqlite"))
 }
 
+/// Nur lesend öffnen · für Abfragen, die nichts anlegen und nichts umziehen.
+///
+/// `open` legt fehlende Tabellen an und übernimmt Altbestände; das ist beim
+/// Import und in der Buchkarte richtig, bei der Buchtiefe einer Partie
+/// (`book.rs`) aber ein Schreibzugriff auf eine Zehn-Gigabyte-Datei für eine
+/// reine Nachfrage.
+pub(crate) fn open_readonly(path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())?;
+    let _ = conn.pragma_update(None, "busy_timeout", "10000");
+    Ok(conn)
+}
+
 fn open(path: &Path) -> Result<Connection, String> {
     let conn = Connection::open(path).map_err(|e| e.to_string())?;
     let _ = conn.pragma_update(None, "journal_mode", "WAL");

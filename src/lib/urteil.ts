@@ -1,5 +1,5 @@
 import { Chess } from "chess.js";
-import type { MoveEvalRow } from "./analysis";
+import type { BookLine, MoveEvalRow } from "./analysis";
 import { winProb } from "./evaluation";
 
 /**
@@ -265,7 +265,30 @@ function lage(wp: number): 0 | 1 | 2 {
 
 // ── Die Zugliste ─────────────────────────────────────────────────────────────
 
-export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[] {
+/** Bis zu diesem Halbzug nimmt die Faustregel Buch an · siehe `buchzug`. */
+const FAUSTREGEL_PLIES = 16;
+
+/**
+ * Ist der Halbzug ein Buchzug?
+ *
+ * Wo die Buchtiefe aus echten Daten vorliegt (`book_line` in
+ * src-tauri/src/book.rs), entscheidet sie: bis dahin Buch, danach nicht. Nur
+ * wo die Quellen schweigen — keine Referenzdatenbank, nichts im Zwischen-
+ * speicher des Explorers, oder die Partie läuft über das hinaus, was sie
+ * kennen —, bleibt es bei der alten Faustregel: die ersten sechzehn Halbzüge,
+ * sofern sie kaum etwas kosten.
+ */
+function buchzug(i: number, drop: number, buch: BookLine | null | undefined): boolean {
+  if (buch && i < buch.plies) return true;
+  if (buch && buch.decided) return false;
+  return i < FAUSTREGEL_PLIES && drop < 0.03;
+}
+
+export function rowsToViewMoves(
+  sans: string[],
+  rows: MoveEvalRow[],
+  buch?: BookLine | null
+): ViewMove[] {
   const byPly = new Map(rows.map((r) => [r.ply, r]));
   const chess = new Chess();
   /**
@@ -336,9 +359,14 @@ export function rowsToViewMoves(sans: string[], rows: MoveEvalRow[]): ViewMove[]
         gezogen.to !== letztesZiel &&
         lage(meinWp(currentEval)) > lage(meinWp(evalDavor)) &&
         meinWp(currentEval) - meinWp(evalDavor) >= WENDE_SPRUNG;
-      if (opferkandidat && istOpfer(fenVor, chess.fen(), weiss)) judgment = "brilliant";
+      // Ein belegter Buchzug geht allem vor: Ein Opfer aus der Theorie ist
+      // auswendig gelernt und kein Fund. Die Faustregel dagegen steht hinter
+      // Opfer und Wendepunkt — sie rät nur.
+      const belegt = !!buch && i < buch.plies;
+      if (belegt) judgment = "book";
+      else if (opferkandidat && istOpfer(fenVor, chess.fen(), weiss)) judgment = "brilliant";
       else if (wendekandidat && gezogen && !istGeschenk(fenVor, gezogen)) judgment = "great";
-      else if (i < 16 && drop < 0.03) judgment = "book";
+      else if (buchzug(i, drop, buch)) judgment = "book";
       else if (isBest) judgment = "best";
       else if (drop < 0.03) judgment = "excellent";
       else if (drop < 0.1) judgment = "good";

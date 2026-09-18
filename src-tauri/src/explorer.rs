@@ -120,7 +120,7 @@ fn as_i64(value: &serde_json::Value) -> i64 {
     value.as_i64().unwrap_or(0)
 }
 
-fn parse_response(source: &str, json: &str) -> ExplorerResult {
+pub(crate) fn parse_response(source: &str, json: &str) -> ExplorerResult {
     let value: serde_json::Value = match serde_json::from_str(json) {
         Ok(v) => v,
         Err(_) => {

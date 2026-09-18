@@ -127,6 +127,46 @@ describe("move judgments", () => {
     expect(moves[21].judgment).toBe("miss");
   });
 
+  describe("book moves", () => {
+    it("guesses the first sixteen quiet plies without a source", () => {
+      const moves = rowsToViewMoves(RUY, rows(RUY_UCI, {}), null);
+      expect(moves.slice(0, 16).every((m) => m.judgment === "book")).toBe(true);
+      expect(moves[16].judgment).not.toBe("book");
+    });
+
+    it("ends the book where the data says the game left it", () => {
+      // The reference database knows the Ruy Lopez to 5.O-O and not 5...Be7.
+      const moves = rowsToViewMoves(RUY, rows(RUY_UCI, {}), { plies: 9, decided: true, source: "own" });
+      expect(moves.slice(0, 9).every((m) => m.judgment === "book")).toBe(true);
+      // Ply ten would pass the rule of thumb · the data overrules it.
+      expect(moves[9].judgment).toBe("best");
+    });
+
+    it("falls back to the rule of thumb where the sources fall silent", () => {
+      const moves = rowsToViewMoves(RUY, rows(RUY_UCI, {}), { plies: 6, decided: false, source: "masters" });
+      expect(moves.slice(0, 16).every((m) => m.judgment === "book")).toBe(true);
+    });
+
+    it("keeps a book sacrifice a book move", () => {
+      // Theory learnt by heart is not a find.
+      const moves = rowsToViewMoves(GREEK, rows(GREEK_UCI, { 10: 30, 11: 60 }), {
+        plies: 11,
+        decided: true,
+        source: "own",
+      });
+      expect(moves[10].judgment).toBe("book");
+    });
+
+    it("never hides an error from the analysis behind the book", () => {
+      const moves = rowsToViewMoves(RUY, rows(RUY_UCI, {}, {}, { 5: "inaccuracy" }), {
+        plies: 9,
+        decided: true,
+        source: "own",
+      });
+      expect(moves[4].judgment).toBe("inaccuracy");
+    });
+  });
+
   it("shows a mark next to every judgment that has one", () => {
     const mitKuerzel = (Object.keys(NAG) as (keyof typeof NAG)[]).filter((k) => NAG[k] !== "");
     const ohneSymbol = mitKuerzel.filter((k) => !["best", "good"].includes(k));

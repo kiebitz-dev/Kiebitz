@@ -55,6 +55,7 @@ import {
   type ChessDbResult,
 } from "../lib/settings";
 import {
+  bookLine,
   cancelAnalysis,
   gameAnalysis,
   onAnalysisDone,
@@ -63,6 +64,7 @@ import {
   searchPosition,
   startAnalysis,
   type AnalysisProgress,
+  type BookLine,
   type MoveEvalRow,
   type PositionSearch,
 } from "../lib/analysis";
@@ -479,6 +481,12 @@ export default function Analysis({
     { basePly: number; sans: string[]; anker?: number } | null
   >(null);
   const [rows, setRows] = useState<MoveEvalRow[] | null>(null);
+  /**
+   * Wie weit die Partie im Buch lief · aus Referenzdatenbank und Explorer-
+   * Zwischenspeicher, nie aus dem Netz (src-tauri/src/book.rs). `null` heißt:
+   * keine Quelle weiß etwas, und die Zugliste bleibt bei der Faustregel.
+   */
+  const [buch, setBuch] = useState<BookLine | null>(null);
   const [ply, setPly] = useState(0);
   /**
    * Die Übersicht vor der Partie · offen, bis man in die Züge geht.
@@ -725,6 +733,23 @@ export default function Analysis({
 
   // Zug-Sicht: Demo im Web, echte Partie auf dem Desktop.
   const live = desktop && game != null;
+
+  // Buchtiefe der gewählten Partie · lokal und schnell; schlägt sie fehl,
+  // bleibt es bei der Faustregel, und niemand muss davon erfahren.
+  const buchZuege = live ? game.moves : "";
+  useEffect(() => {
+    setBuch(null);
+    if (!buchZuege) return;
+    let aktuell = true;
+    bookLine(buchZuege)
+      .then((line) => {
+        if (aktuell) setBuch(line);
+      })
+      .catch(() => {});
+    return () => {
+      aktuell = false;
+    };
+  }, [buchZuege]);
   /**
    * Bekommt dieser Halbzug seine Anmerkung zu sehen?
    *
@@ -764,8 +789,8 @@ export default function Analysis({
         judgment: m.nag ? byNag[m.nag] : undefined,
       }));
     }
-    return rowsToViewMoves(sans, live ? rows ?? [] : []);
-  }, [desktop, live, sans, rows]);
+    return rowsToViewMoves(sans, live ? rows ?? [] : [], live ? buch : null);
+  }, [desktop, live, sans, rows, buch]);
 
   const analyzedRows = live ? (rows?.length ?? 0) > 0 : !loadingGame;
 

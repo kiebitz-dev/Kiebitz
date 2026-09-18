@@ -1,6 +1,7 @@
 mod ads;
 mod analysis;
 mod billing;
+mod book;
 mod build_info;
 mod cbh;
 mod chess;
@@ -701,6 +702,7 @@ pub fn run() {
             billing::billing_acknowledge,
             chessdb::chessdb_query,
             explorer::explorer_query,
+            book::book_line,
             refdb::refdb_status,
             refdb::refdb_precheck,
             refdb::refdb_import,
