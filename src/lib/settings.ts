@@ -53,7 +53,7 @@ export interface Settings {
    * die Anzeige. Siehe `zeigtUrteil` in pages/Analysis.tsx.
    */
   annotate_own_only: boolean;
-  /** Informator-Zeichen aufs Brett · im Diagramm-Modus, siehe lib/boardSigns.ts. */
+  /** Informator-Zeichen aufs Brett · siehe lib/boardSigns.ts. */
   board_signs: boolean;
   import_months: number;
   puzzle_goal: number;

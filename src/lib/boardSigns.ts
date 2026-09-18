@@ -3,7 +3,7 @@
  *
  * Wie die Brettklänge in `sound.ts` hängt der Wert an einem Modul und nicht
  * an einer Seite: Gezeichnet werden die Zeichen von `Zeichenebene` auf jedem
- * Brett des Diagramm-Modus, und keine dieser Stellen soll die Einstellungen
+ * Brett, das sie trägt, und keine dieser Stellen soll die Einstellungen
  * selbst lesen. App.tsx setzt den gespeicherten Stand beim Start, die
  * Einstellungsseite beim Umschalten. Der Zeichenschlüssel hängt nicht daran.
  */

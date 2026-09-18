@@ -2444,7 +2444,7 @@ export default function SettingsPage({
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
               <button
                 type="button"
-                onClick={() => openExternal("https://github.com/sponsors/Torim98")}
+                onClick={() => openExternal("https://github.com/sponsors/kiebitz-dev")}
                 className="inline-flex items-center gap-1 text-[12.5px] text-accent transition-colors hover:text-ink"
               >
                 <ExternalLink size={12} /> {t("set.aboutSupportGithub")}

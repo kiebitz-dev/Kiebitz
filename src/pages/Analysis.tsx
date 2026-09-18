@@ -140,9 +140,16 @@ import {
 import { LeereSeite } from "../components/blatt/LeereSeite";
 import { Laufzettel } from "../components/blatt/Laufzettel";
 const AnalysisBlatt = lazy(() => import("./blatt/AnalysisBlatt"));
-// Die Informator-Zeichen stehen nur im Blatt · ihre Ebene lädt erst mit ihm.
+// Die Informator-Zeichen laden erst, wenn eine Stellung welche trägt · die
+// Startseite soll dafür nichts tragen.
 const Zeichenebene = lazy(() =>
   import("../components/blatt/Zeichen").then((module) => ({ default: module.Zeichenebene }))
+);
+const Randzeichen = lazy(() =>
+  import("../components/blatt/Zeichen").then((module) => ({ default: module.Randzeichen }))
+);
+const Zeichenschluessel = lazy(() =>
+  import("../components/blatt/Zeichen").then((module) => ({ default: module.Zeichenschluessel }))
 );
 
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
@@ -1395,7 +1402,7 @@ export default function Analysis({
   const currentPly = variation?.basePly ?? ply;
 
   /**
-   * Die Informator-Zeichen der gezeigten Stellung · nur im Blatt.
+   * Die Informator-Zeichen der gezeigten Stellung · in beiden Fassungen.
    *
    * Gerechnet hat sie der Analyselauf (src-tauri/src/informator.rs): Die
    * Zeile des nächsten Halbzugs trägt die Stellung davor, die Partie selbst
@@ -1404,7 +1411,7 @@ export default function Analysis({
    * eine falsche Anmerkung.
    */
   const alleStellungsZeichen = useMemo((): InformatorZeichen[] => {
-    if (!diagramMode || variation || scratch || loadingGame) return [];
+    if (variation || scratch || loadingGame) return [];
     if (live) {
       if (ply === sans.length) return leseZeichen(game.end_signs);
       return rows?.find((row) => row.ply === ply + 1)?.signs ?? [];
@@ -1412,7 +1419,7 @@ export default function Analysis({
     if (desktop) return [];
     if (ply === sans.length) return featuredGame.endSigns;
     return featuredGame.signs[ply] ?? [];
-  }, [diagramMode, variation, scratch, loadingGame, live, ply, sans.length, game, rows, desktop]);
+  }, [variation, scratch, loadingGame, live, ply, sans.length, game, rows, desktop]);
 
   // ── Uhren ────────────────────────────────────────────────────────────────
   // Nur echte Partien bringen Zeitdaten mit; fehlen sie, entfällt die Anzeige
@@ -1806,14 +1813,24 @@ export default function Analysis({
             advantage={white ? captured.diff : -captured.diff}
           />
         </div>
-        {hasClocks && (
-          <ClockBadge
-            centiseconds={white ? clockView.white : clockView.black}
-            active={white === whiteToMove}
-            spent={spentBy(white)}
-            locale={locale}
-          />
-        )}
+        {/* Rechts die Informator-Zeichen ohne Feld, wie im Blatt: an jeder
+            Seite die ihren, unter dem Brett die der ganzen Stellung. */}
+        <div className="flex shrink-0 items-center gap-3">
+          {stellungsZeichen.length > 0 && (
+            <Suspense fallback={null}>
+              <Randzeichen zeichen={stellungsZeichen} teil={white ? "weiss" : "schwarz"} />
+              {!top && <Randzeichen zeichen={stellungsZeichen} teil="stellung" />}
+            </Suspense>
+          )}
+          {hasClocks && (
+            <ClockBadge
+              centiseconds={white ? clockView.white : clockView.black}
+              active={white === whiteToMove}
+              spent={spentBy(white)}
+              locale={locale}
+            />
+          )}
+        </div>
       </div>
     );
   };
@@ -3124,6 +3141,13 @@ export default function Analysis({
           {playerLine(false)}
           {variationHint}
           {boardControls(false)}
+          {stellungsZeichen.length > 0 && (
+            <div className="ml-[calc(var(--board-gutter)-var(--board-bleed))] mt-3 border-t border-line pt-3">
+              <Suspense fallback={null}>
+                <Zeichenschluessel zeichen={stellungsZeichen} satz="dashboard" />
+              </Suspense>
+            </div>
+          )}
         </div>
 
         {/* Zugliste + Eval-Graph.

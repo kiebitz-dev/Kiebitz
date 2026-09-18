@@ -348,10 +348,16 @@ function useZeichenText(): (z: InformatorZeichen) => string | null {
 export function Zeichenschluessel({
   zeichen,
   titel = true,
+  satz = "blatt",
 }: {
   zeichen: readonly InformatorZeichen[];
   /** Die Kolumne „Zeichenschlüssel" darüber · fehlt, wo schon eine Rubrik steht. */
   titel?: boolean;
+  /**
+   * Im Blatt kursiv in der Buchschrift, im Dashboard-Modus in dessen Schrift
+   * und mit dessen Rubrikzeile · dieselben Zeilen, ein anderer Satz.
+   */
+  satz?: "blatt" | "dashboard";
 }) {
   const { t } = useI18n();
   const text = useZeichenText();
@@ -362,14 +368,26 @@ export function Zeichenschluessel({
   if (zeilen.length === 0) return null;
   return (
     <div data-testid="informator-schluessel">
-      {titel && <div className="blatt-feld text-ink3">{t("inf.key")}</div>}
+      {titel && (
+        <div
+          className={
+            satz === "blatt" ? "blatt-feld text-ink3" : "text-[11px] font-medium uppercase tracking-wide text-ink3"
+          }
+        >
+          {t("inf.key")}
+        </div>
+      )}
       <ul className={`${titel ? "mt-1.5" : ""} flex flex-col gap-[3px]`}>
         {zeilen.map(({ z, text: bedeutung }, index) => (
           <li key={`${z.kind}-${index}`} className="flex items-center gap-2 text-ink">
             <span className="flex w-[18px] flex-none justify-center">
               <Glyphe zeichen={z} groesse={14} />
             </span>
-            <span className="buch min-w-0 text-[12.5px] italic leading-[1.35] text-ink2">{bedeutung}</span>
+            <span
+              className={`min-w-0 text-[12.5px] leading-[1.35] text-ink2 ${satz === "blatt" ? "buch italic" : ""}`}
+            >
+              {bedeutung}
+            </span>
           </li>
         ))}
       </ul>

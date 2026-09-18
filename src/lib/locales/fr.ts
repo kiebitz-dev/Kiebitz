@@ -1207,7 +1207,7 @@ export const fr: Record<Key, string> = {
   "set.annotateOwnOnly": "Seulement mes coups",
   "set.annotateOwnOnlyNote": "Le jugement et l'explication ne figurent alors qu'à côté des coups que vous avez joués. L'analyse porte toujours sur toute la partie · la précision et le bilan restent complets.",
   "set.boardSigns": "Signes de l'Informateur sur l'échiquier",
-  "set.boardSignsNote": "En mode diagramme, △, les pions doublés et l'évaluation de la position figurent alors aussi sur l'échiquier et à côté des noms. La clé des signes en dessous reste toujours affichée.",
+  "set.boardSignsNote": "△, les pions doublés et l'évaluation de la position figurent alors aussi sur l'échiquier et à côté des noms. La clé des signes en dessous reste toujours affichée.",
   "set.sound": "Échiquier et son",
   "set.soundSummary": "Sons de coup, de prise et de mat · indication du thème à l'entraînement",
   "set.soundToggle": "Sons de l'échiquier",

@@ -76,7 +76,7 @@ pub struct Settings {
     /// weil die Fehler des Gegners erklären, warum die Partie so lief.
     pub annotate_own_only: bool,
     /// Die Informator-Zeichen der Analyse (△, ⩲, Doppelbauern …) auch aufs
-    /// Brett setzen · nur im Diagramm-Modus. Der Zeichenschlüssel darunter
+    /// Brett setzen, in beiden Layoutmodi. Der Zeichenschlüssel darunter
     /// bleibt in jedem Fall stehen. Ab Werk an.
     pub board_signs: bool,
     /// Monatsfenster für den Schnell-Import ("Neueste importieren").
