@@ -98,7 +98,14 @@ import {
 } from "../lib/clocks";
 import { tcLabel } from "../lib/gameUi";
 import { accuraciesFromMoveEvals } from "../lib/accuracy";
-import { begruendeZug, erklaereZug, istBemaengelt, kommentiereZug, LINIE } from "../lib/erklaerung";
+import {
+  begruendeZug,
+  erklaereZug,
+  fazitKernsatz,
+  istBemaengelt,
+  kommentiereZug,
+  LINIE,
+} from "../lib/erklaerung";
 import { fortsetzung } from "../lib/folge";
 import { zugfakten } from "../lib/zugfakten";
 import VariationLine, { aktiveZuege, type Variante } from "../components/VariationLine";
@@ -113,6 +120,7 @@ import {
   type Rueckmeldung,
 } from "../lib/nochmal";
 import { recordAttempt } from "../lib/puzzles";
+import { partieRating } from "../lib/partierating";
 import { soundForMoment } from "../lib/boardSound";
 import { playBoardSound } from "../lib/sound";
 import {
@@ -472,6 +480,14 @@ export default function Analysis({
   >(null);
   const [rows, setRows] = useState<MoveEvalRow[] | null>(null);
   const [ply, setPly] = useState(0);
+  /**
+   * Die Übersicht vor der Partie · offen, bis man in die Züge geht.
+   *
+   * Sie steht beim Öffnen einer Partie und klappt mit dem ersten Schritt in
+   * die Partie ein (`goToPly`), denn dann liest man Züge und keine Bilanz
+   * mehr. Wiederholen lässt sie sich über die Leiste darunter.
+   */
+  const [uebersichtOffen, setUebersichtOffen] = useState(true);
   /** Der laufende Durchgang · Index in `momentListe`, `null` heißt: keiner. */
   const [momentIndex, setMomentIndex] = useState<number | null>(null);
   /**
@@ -815,6 +831,7 @@ export default function Analysis({
     // von 5" eine Zählung durch fremde Halbzüge.
     setMomentIndex(null);
     setRetry(null);
+    setUebersichtOffen(true);
   }, [selectedId, sans.length]);
 
   const openedFen = opened?.fen;
@@ -1530,6 +1547,7 @@ export default function Analysis({
     setLiveEval(null);
     setLiveBestUci(null);
     setPly(Math.max(0, Math.min(sans.length, next)));
+    setUebersichtOffen(false);
   };
 
   /**
@@ -1775,6 +1793,80 @@ export default function Analysis({
    * Blatt setzt sie mit `blatt-formular` neu und baut sie nicht ein zweites
    * Mal.
    */
+  /**
+   * Die Übersicht vor der Partie · Rating, Genauigkeit, Bilanz, ein Satz.
+   *
+   * Kein zweiter Datenweg: Genauigkeit und Gegner-Elo stehen schon in den
+   * Karten daneben (`accuracyCells`, `playerLine`), die Bilanz ist `summary`,
+   * der Satz kommt aus dem gespeicherten Fazit (`verdict.rs`). Hier wird nur
+   * zusammengestellt, und das Partie-Rating ist eine Zeile Rechnung auf
+   * diesen Zahlen (lib/partierating.ts, dort auch die Herleitung).
+   */
+  const uebersichtTeil = () => {
+    if (!live || !analyzedRows) return null;
+    const meine = accuracyCells[0]?.mine ?? null;
+    const gegner = accuracyCells[0]?.opponent ?? null;
+    const rating = partieRating(game.opp_elo, meine, gegner);
+    const satz = fazitKernsatz(game.verdict, { t, locale });
+    const reihe = (["brilliant", "great", "best", "excellent", "good", "book", "miss", "inaccuracy", "mistake", "blunder"] as MoveJudgment[])
+      .filter((quality) => summary[quality] > 0);
+    const prozent = (wert: number | null) => (wert == null ? "–" : `${de(wert, 1)} %`);
+    return (
+      <div className="border-b border-line px-3 py-3" data-testid="game-overview">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          {rating != null && (
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wide text-ink3">{t("an.ovRatingLabel")}</div>
+              <div className="text-[22px] font-semibold leading-tight tabular-nums">
+                {t("an.ovRating", { rating: deInt(rating) })}
+              </div>
+              <div className="text-[11px] text-ink3">
+                {t("an.ovRatingHow", { opp: deInt(game.opp_elo), gap: `${(meine ?? 0) - (gegner ?? 0) >= 0 ? "+" : "−"}${de(Math.abs((meine ?? 0) - (gegner ?? 0)), 1)}` })}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-4 text-right">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-ink3">{t("an.ovYou")}</div>
+              <div className="text-[15px] font-semibold tabular-nums">{prozent(meine)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-ink3">{t("an.ovOpponent")}</div>
+              <div className="text-[15px] font-semibold tabular-nums text-ink2">{prozent(gegner)}</div>
+            </div>
+          </div>
+        </div>
+        {reihe.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-1.5" aria-label={t("an.myMoves")}>
+            {reihe.map((quality) => (
+              <li
+                key={quality}
+                title={judgmentLabel(t, quality)}
+                className="flex items-center gap-1 rounded-md bg-panel2 px-1.5 py-0.5 text-[12px] font-semibold tabular-nums"
+                style={{ color: JUDGMENT_COLOR[quality] }}
+              >
+                <span aria-hidden="true">{judgmentMark(quality, 12)}</span>
+                <span className="sr-only">{judgmentLabel(t, quality)}</span>
+                {summary[quality]}
+              </li>
+            ))}
+          </ul>
+        )}
+        {satz && <p className="mt-3 text-[12.5px] leading-relaxed text-ink2">{satz}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {momentListe.length > 0 && (
+            <Button onClick={() => geheZuMoment(0)} primary compact>
+              <Play size={13} /> {t("an.ovStart")}
+            </Button>
+          )}
+          <Button onClick={() => setUebersichtOffen(false)} compact>
+            {t("an.ovToMoves")}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const nochmalTeil = () => {
     if (!retry) {
       // Angeboten wird es am eigenen, bemängelten Zug · genau dort, wo man
@@ -1859,17 +1951,26 @@ export default function Analysis({
   };
 
   const durchgangLeiste = () => {
-    if (momentListe.length === 0) return null;
     const laufend = momentIndex != null && momentIndex < momentListe.length;
+    const uebersicht = !laufend && !retry && uebersichtOffen ? uebersichtTeil() : null;
+    if (uebersicht) return uebersicht;
+    if (momentListe.length === 0) return null;
     if (!laufend) {
       return (
         <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
           <span className="min-w-0 truncate text-[12px] text-ink3">
             {t("an.walkOffer", { n: momentListe.length })}
           </span>
-          <Button onClick={() => geheZuMoment(0)} compact>
-            <Play size={13} /> {t("an.walkStart")}
-          </Button>
+          <span className="flex shrink-0 items-center gap-1">
+            {live && analyzedRows && (
+              <Button onClick={() => setUebersichtOffen(true)} compact>
+                {t("an.ovShow")}
+              </Button>
+            )}
+            <Button onClick={() => geheZuMoment(0)} compact>
+              <Play size={13} /> {t("an.walkStart")}
+            </Button>
+          </span>
         </div>
       );
     }

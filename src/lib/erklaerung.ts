@@ -666,6 +666,11 @@ export function erklaereFazit(
   verdict: string | undefined,
   options: { t: TFunc; locale: Locale }
 ): string[] {
+  return fazitBausteine(verdict).map((entry) => fazitSatz(entry, options));
+}
+
+/** Die gültigen Bausteine eines gespeicherten Fazits · Unbekanntes fällt weg. */
+function fazitBausteine(verdict: string | undefined): Baustein[] {
   if (!verdict) return [];
   let parsed: unknown;
   try {
@@ -674,26 +679,61 @@ export function erklaereFazit(
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  const { t, locale } = options;
-  const out: string[] = [];
-  for (const entry of parsed as Baustein[]) {
-    if (!entry || typeof entry.key !== "string") continue;
-    if (!(VERDICT_KEYS as readonly string[]).includes(entry.key)) continue;
-    const params: Record<string, string | number> = {};
-    for (const [name, value] of Object.entries(entry.params ?? {})) {
-      if (name === "acc" || name === "opp") {
-        params[name] = de(Number(value), 1);
-      } else if (name === "san") {
-        params[name] = translateSan(String(value), locale);
-      } else if (name === "motif") {
-        params[name] = isMotif(String(value))
-          ? t(`expl.motif.${value}` as Key)
-          : String(value);
-      } else {
-        params[name] = value as string | number;
-      }
-    }
-    out.push(t(entry.key as Key, params));
+  return (parsed as Baustein[]).filter(
+    (entry) =>
+      !!entry &&
+      typeof entry.key === "string" &&
+      (VERDICT_KEYS as readonly string[]).includes(entry.key)
+  );
+}
+
+/**
+ * Welcher Satz des Fazits allein stehen darf · der aussagekräftigste zuerst.
+ *
+ * Die Übersicht vor der Partie hat Platz für einen Satz, und der erste des
+ * Fazits (die Note) wiederholt nur die Genauigkeit, die daneben schon als
+ * Zahl steht. Vorn steht deshalb, was keine Zahl daneben sagen kann: dass
+ * Ergebnis und Spiel nicht zusammenpassen, wo es gekippt ist, was sich
+ * wiederholt hat. Die Note bleibt der Rückfall — sie gibt es immer.
+ */
+const FAZIT_VORRANG = [
+  "verdict.result.",
+  "verdict.turningPoint",
+  "verdict.recurring",
+  "verdict.phase.",
+  "verdict.versus.",
+  "verdict.errors.",
+  "verdict.grade.",
+];
+
+/** Der eine Satz des Fazits für die Übersicht · `null` ohne Fazit. */
+export function fazitKernsatz(
+  verdict: string | undefined,
+  options: { t: TFunc; locale: Locale }
+): string | null {
+  const bausteine = fazitBausteine(verdict);
+  for (const praefix of FAZIT_VORRANG) {
+    const treffer = bausteine.find((entry) => entry.key.startsWith(praefix));
+    if (treffer) return fazitSatz(treffer, options);
   }
-  return out;
+  return null;
+}
+
+function fazitSatz(entry: Baustein, options: { t: TFunc; locale: Locale }): string {
+  const { t, locale } = options;
+  const params: Record<string, string | number> = {};
+  for (const [name, value] of Object.entries(entry.params ?? {})) {
+    if (name === "acc" || name === "opp") {
+      params[name] = de(Number(value), 1);
+    } else if (name === "san") {
+      params[name] = translateSan(String(value), locale);
+    } else if (name === "motif") {
+      params[name] = isMotif(String(value))
+        ? t(`expl.motif.${value}` as Key)
+        : String(value);
+    } else {
+      params[name] = value as string | number;
+    }
+  }
+  return t(entry.key as Key, params);
 }

@@ -375,6 +375,74 @@ describe("Analysis page", () => {
     expect(screen.getByRole("button", { name: "Variante bis 3.Bc4 nachspielen" })).toBeTruthy();
   });
 
+  describe("overview", () => {
+    /** Eine gerechnete Partie mit beiden Genauigkeiten und einem Fazit. */
+    const reviewedGame = {
+      ...excludedGame,
+      analysis_excluded: false,
+      analyzed: true,
+      opp_elo: 1400,
+      accuracy: 84.0,
+      opponent_accuracy: 82.0,
+      verdict: JSON.stringify([
+        { key: "verdict.grade.solid", params: { acc: 84 } },
+        { key: "verdict.turningPoint", params: { n: 2, san: "Nf3" } },
+      ]),
+    };
+
+    it("opens the game with rating, accuracies, judgment row and one sentence", async () => {
+      mocks.listGames.mockResolvedValue([reviewedGame]);
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+
+      const overview = await screen.findByTestId("game-overview");
+      // 1400 + 55,3 × 2 Punkte Vorsprung = 1510.
+      expect(within(overview).getByText("Gespielt wie 1.510")).toBeTruthy();
+      expect(within(overview).getByText(/gegen 1.400/)).toBeTruthy();
+      expect(within(overview).getByText("84,0 %")).toBeTruthy();
+      expect(within(overview).getByText("82,0 %")).toBeTruthy();
+      // Der Satz, den keine Zahl daneben sagt · nicht die Note.
+      expect(within(overview).getByText(/Gekippt ist es bei 2\. Nf3/)).toBeTruthy();
+      // Die Symbolreihe zählt die eigenen Züge · hier genau ein Patzer.
+      expect(within(overview).getByTitle("Patzer").textContent).toContain("1");
+    });
+
+    it("starts the walk-through from the overview and folds it away", async () => {
+      mocks.listGames.mockResolvedValue([reviewedGame]);
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+
+      fireEvent.click(await screen.findByRole("button", { name: /Durchgang starten/ }));
+      expect(await screen.findByText(/Moment 1 von 1/)).toBeTruthy();
+      expect(screen.queryByTestId("game-overview")).toBeNull();
+    });
+
+    it("folds away as soon as one steps into the moves", async () => {
+      mocks.listGames.mockResolvedValue([reviewedGame]);
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+      await screen.findByTestId("game-overview");
+
+      fireEvent.click(screen.getByRole("button", { name: /^e4/ }));
+      await waitFor(() => expect(screen.queryByTestId("game-overview")).toBeNull());
+      // Und kommt über die Leiste zurück.
+      fireEvent.click(screen.getByRole("button", { name: "Übersicht" }));
+      expect(await screen.findByTestId("game-overview")).toBeTruthy();
+    });
+
+    it("shows no invented rating without the opponent's rating", async () => {
+      mocks.listGames.mockResolvedValue([{ ...reviewedGame, opp_elo: 0 }]);
+      mocks.gameAnalysis.mockResolvedValue(betterLineRows);
+      render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+      await gameOnBoard("7");
+      const overview = await screen.findByTestId("game-overview");
+      expect(within(overview).queryByText(/Gespielt wie/)).toBeNull();
+    });
+  });
+
   describe("retry", () => {
     /** Die Stellung nach 1.e4 e5 · dort beginnt der Versuch zu 2.Nf3?? */
     const VOR_DEM_FEHLER = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR";

@@ -10,6 +10,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   begruendeZug,
   erklaereFazit,
+  fazitKernsatz,
   erklaereZug,
   kommentiereZug,
   type Zugzeile,
@@ -452,6 +453,22 @@ describe("Fazit der Partie", () => {
       { key: "verdict.erfunden", params: {} },
     ]);
     expect(erklaereFazit(mit, { t: de(), locale: "de" })).toHaveLength(1);
+  });
+
+  it("nimmt für die Übersicht den Satz, den keine Zahl daneben sagt", () => {
+    // Die Note wiederholt nur die Genauigkeit · vorn steht der Wendepunkt.
+    expect(fazitKernsatz(fazit, { t: de(), locale: "de" })).toContain("Nxe5");
+    // Ein Widerspruch zwischen Spiel und Ergebnis geht allem vor.
+    const glueck = JSON.stringify([
+      { key: "verdict.grade.shaky", params: { acc: 58 } },
+      { key: "verdict.turningPoint", params: { n: 17, san: "Nxe5" } },
+      { key: "verdict.result.luckyWin", params: {} },
+    ]);
+    expect(fazitKernsatz(glueck, { t: de(), locale: "de" })).toContain("Gewonnen hat");
+    // Und ohne alles andere bleibt die Note.
+    const nurNote = JSON.stringify([{ key: "verdict.grade.solid", params: { acc: 84.2 } }]);
+    expect(fazitKernsatz(nurNote, { t: de(), locale: "de" })).toContain("84,2");
+    expect(fazitKernsatz(undefined, { t: de(), locale: "de" })).toBeNull();
   });
 
   it("verträgt ein fehlendes oder kaputtes Fazit", () => {

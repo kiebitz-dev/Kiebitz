@@ -209,6 +209,35 @@ turning point, and a recurring motif when it recurred. Every block has a
 condition under which it stays out — a sentence that says nothing makes the
 paragraph longer and worse.
 
+The overview in front of a game shows one of these sentences, not all of them:
+`fazitKernsatz` picks the first that no number next to it already says —
+result against play, turning point, recurring motif, weakest phase, the
+comparison, the tally, and only then the grade, which just repeats the
+accuracy printed beside it.
+
+## The game rating
+
+"Played like 1510" in the overview is a single-game performance: the
+opponent's rating plus 55.3 points per percentage point of accuracy ahead,
+capped at ±400 like any one-game performance, rounded to ten
+(`lib/partierating.ts`).
+
+The 55.3 comes from 1344 of the author's analysed games with both accuracies
+and an opponent rating (18 Sep 2026). Two findings decided the form:
+
+- Accuracy on its own hardly predicts rating: across all 2688 player sides
+  r = 0.15, 2.7 rating points per accuracy point, ±236 scatter. A table of the
+  form "86 % means 1650" would be noise, so there is none.
+- The *gap* between both accuracies predicts the result well. A symmetric
+  logistic fit P(point) = 1 / (1 + e^(−b·Δ)) gives b = 0.3185 and matches the
+  actual score in every band of Δ within a few points. Turned into a rating
+  difference with the Elo formula, 400 · log10(p / (1 − p)), that is linear in
+  Δ: 400 / ln 10 · b = 55.3.
+
+The cap is reached at about seven points of gap; 616 of the 1344 games sit
+there. Without an opponent rating or without both accuracies there is no
+number at all.
+
 ## Storage
 
 Additive columns only, schema version 20:
