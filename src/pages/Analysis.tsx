@@ -22,6 +22,7 @@ import {
   Cpu,
   FlipVertical2,
   Layers,
+  LayoutGrid,
   Loader2,
   MoreHorizontal,
   Save,
@@ -140,6 +141,8 @@ import {
 import { LeereSeite } from "../components/blatt/LeereSeite";
 import { Laufzettel } from "../components/blatt/Laufzettel";
 const AnalysisBlatt = lazy(() => import("./blatt/AnalysisBlatt"));
+/** Der Stellungseditor kommt erst, wenn jemand ihn öffnet. */
+const PositionEditor = lazy(() => import("../components/PositionEditor"));
 // Die Informator-Zeichen laden erst, wenn eine Stellung welche trägt · die
 // Startseite soll dafür nichts tragen.
 const Zeichenebene = lazy(() =>
@@ -587,6 +590,8 @@ export default function Analysis({
   const [flipped, setFlipped] = useState(false);
   /** Brett allein · siehe components/FocusBoard.tsx. */
   const [focused, setFocused] = useState(false);
+  /** Stellungseditor offen · siehe components/PositionEditor.tsx. */
+  const [editing, setEditing] = useState(false);
   /**
    * Ausgangsstellung des freien Bretts · normalerweise die Grundstellung, nach
    * einem geteilten Link die Stellung aus dem Link.
@@ -2392,6 +2397,24 @@ export default function Analysis({
   };
 
   /**
+   * Eine aufgebaute oder eingefügte Stellung ans freie Brett · derselbe Weg
+   * wie eine geteilte Stellung, nur ohne Link davor.
+   */
+  const openPosition = (fen: string) => {
+    setEditing(false);
+    setOpened({ kind: "analysis", fen, orientation: fen.split(" ")[1] === "b" ? "black" : "white" });
+    setSelectedId(null);
+    setFlipped(false);
+    setScratchSans([]);
+    setScratchSelected(null);
+    setVariation(null);
+    setPly(0);
+    setLiveEval(null);
+    setLiveBestUci(null);
+    setNotice(null);
+  };
+
+  /**
    * Die Nebengriffe zum Brett · Brett drehen, teilen, Fokus und · am freien
    * Brett · von vorn anfangen.
    *
@@ -2424,6 +2447,9 @@ export default function Analysis({
           <Share2 size={15} /> {t("sh.title")}
         </MenuItem>
         {!inFocus && <FocusMenuItem onClick={() => setFocused(true)} />}
+        <MenuItem onClick={() => setEditing(true)}>
+          <LayoutGrid size={15} /> {t("pe.open")}
+        </MenuItem>
         {scratch && (
           <MenuItem onClick={newBoard}>
             <RotateCcw size={15} /> {t("an.newBoard")}
@@ -2439,6 +2465,9 @@ export default function Analysis({
           <Share2 size={15} />
         </Button>
         {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+        <Button onClick={() => setEditing(true)} title={t("pe.open")} label={t("pe.open")} compact>
+          <LayoutGrid size={15} />
+        </Button>
         {scratch && (
           <Button onClick={newBoard} title={t("an.newBoard")}>
             <RotateCcw size={15} /> {t("an.newBoard")}
@@ -3062,6 +3091,15 @@ export default function Analysis({
           {boardRow("analysis-blatt-focus")}
         </FocusBoard>
         {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
+        {editing && (
+          <Suspense fallback={null}>
+            <PositionEditor
+              initialFen={fen}
+              onClose={() => setEditing(false)}
+              onAnalyze={({ fen: next }) => openPosition(next)}
+            />
+          </Suspense>
+        )}
       </Suspense>
     );
   }
@@ -3529,6 +3567,15 @@ export default function Analysis({
       </FocusBoard>
 
       {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}
+      {editing && (
+        <Suspense fallback={null}>
+          <PositionEditor
+            initialFen={fen}
+            onClose={() => setEditing(false)}
+            onAnalyze={({ fen: next }) => openPosition(next)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
