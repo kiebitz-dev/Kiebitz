@@ -314,6 +314,14 @@ export class VariantChess {
     return found;
   }
 
+  /**
+   * Führt einen Zug aus, den `moves()` eben geliefert hat · ohne ihn erst
+   * wiederzufinden. Für Schleifen über alle Züge (Perft, Engine-Turnier).
+   */
+  play(move: VariantMove): void {
+    this.apply(move);
+  }
+
   undo(): VariantMove | null {
     const last = this.stack.pop();
     if (!last) return null;
@@ -572,7 +580,7 @@ export function perft(game: VariantChess, depth: number): number {
   if (depth === 1) return moves.length;
   let nodes = 0;
   for (const move of [...moves]) {
-    game.move(move.castle ? move.uci : move.san);
+    game.play(move);
     nodes += perft(game, depth - 1);
     game.undo();
   }

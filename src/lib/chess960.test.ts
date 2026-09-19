@@ -27,13 +27,17 @@ const CHESS960: [string, number][] = [
 ];
 
 describe("VariantChess", () => {
+  // Perft über zehntausende Knoten braucht auf einem CI-Runner mehrere
+  // Sekunden · die Vorgabe von fünf reicht dort nicht.
+  const PERFT_TIMEOUT = 60_000;
+
   it.each(STANDARD)("counts standard chess like Stockfish: %s", (fen, depth, nodes) => {
     expect(perft(new VariantChess(fen), depth)).toBe(nodes);
-  });
+  }, PERFT_TIMEOUT);
 
   it.each(CHESS960)("counts Chess960 like Stockfish: %s", (fen, nodes) => {
     expect(perft(new VariantChess(fen, { chess960: true }), 3)).toBe(nodes);
-  });
+  }, PERFT_TIMEOUT);
 
   it("castles in Chess960 by moving the king onto its rook", () => {
     const game = new VariantChess("1k6/8/8/8/8/8/8/RK2R3 w KQ - 0 1", { chess960: true });
