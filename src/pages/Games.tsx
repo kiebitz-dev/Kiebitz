@@ -619,7 +619,12 @@ export default function Games({
     const path = await openDialog({
       multiple: false,
       directory: false,
-      filters: [{ name: "Portable Game Notation", extensions: ["pgn"] }],
+      // Scid- und ChessBase-Datenbanken wandelt das Backend beim Lesen in PGN
+      // um (siehe `read_pgn_file`) · für den Import ist es dieselbe Datei.
+      filters: [
+        { name: "PGN / Scid / ChessBase", extensions: ["pgn", "si4", "cbh"] },
+        { name: "Portable Game Notation", extensions: ["pgn"] },
+      ],
     });
     if (typeof path === "string") setPgnPath(path);
   };

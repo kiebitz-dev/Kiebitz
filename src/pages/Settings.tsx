@@ -2248,7 +2248,10 @@ export default function SettingsPage({
                         multiple: false,
                         directory: false,
                         filters: [
-                          { name: "PGN / En Croissant", extensions: ["pgn", "zst", "db3"] },
+                          {
+                            name: "PGN / En Croissant / Scid / ChessBase",
+                            extensions: ["pgn", "zst", "db3", "si4", "cbh"],
+                          },
                         ],
                       });
                       if (typeof chosen === "string") {

@@ -943,8 +943,8 @@ fn run_import(app: &tauri::AppHandle, path: String) -> Result<(u64, i64, u64, u6
     if !source.exists() {
         return Err(format!("Datei nicht gefunden: {path}"));
     }
-    if crate::cbh::is_chessbase(&source) {
-        return Err(crate::cbh::UNSUPPORTED_HINT.to_string());
+    if let Some(hint) = crate::cbh::unsupported_hint(&source) {
+        return Err(hint.to_string());
     }
     let bytes_total = std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0);
 
@@ -1001,6 +1001,26 @@ fn run_import(app: &tauri::AppHandle, path: String) -> Result<(u64, i64, u64, u6
 
     let (cancelled, skipped) = if is_db3(&source) {
         import_db3(&source, &mut ingest, state, &mut progress)?
+    } else if crate::si4::is_si4(&source) {
+        let total = crate::si4::info(&source)?.games;
+        import_foreign(
+            &mut ingest,
+            state,
+            total,
+            bytes_total,
+            &mut progress,
+            |each| crate::si4::for_each_game(&source, each),
+        )?
+    } else if crate::cbh::is_chessbase(&source) {
+        let total = crate::cbh::count(&source)?;
+        import_foreign(
+            &mut ingest,
+            state,
+            total,
+            bytes_total,
+            &mut progress,
+            |each| crate::cbh::for_each_game(&source, each),
+        )?
     } else {
         (import_pgn(&source, &mut ingest, state, &mut progress)?, 0)
     };
@@ -1100,6 +1120,66 @@ fn import_pgn(
         Some(e) => Err(e),
         None => Ok(cancelled),
     }
+}
+
+/// Liest eine Scid- oder ChessBase-Datenbank · beide liefern Partien einzeln
+/// an `each`, der Rest ist derselbe wie bei `.db3`: Sonderstellungen gehören
+/// nicht in ein Buch, das von der Grundstellung aus rechnet, und was sich
+/// nicht lesen ließ, wird gezählt statt geraten.
+fn import_foreign(
+    ingest: &mut Ingest,
+    state: tauri::State<RefDbState>,
+    total: u64,
+    bytes_total: u64,
+    progress: &mut impl FnMut(u64, u64, &str),
+    read: impl FnOnce(&mut dyn FnMut(u64, Option<crate::si4::Si4Game>) -> bool) -> Result<u64, String>,
+) -> Result<(bool, u64), String> {
+    let mut cancelled = false;
+    let mut rejected: u64 = 0;
+    let mut failure: Option<String> = None;
+    let mut last_progress: u64 = 0;
+    read(&mut |n, game| {
+        if state.cancel.load(Ordering::SeqCst) {
+            cancelled = true;
+            return false;
+        }
+        match game {
+            Some(game) if game.start_fen.is_none() => {
+                if let Err(e) = ingest.absorb(RawGame {
+                    white: game.white,
+                    black: game.black,
+                    white_elo: game.white_elo,
+                    black_elo: game.black_elo,
+                    result: game.result,
+                    date: game.date,
+                    event: game.event,
+                    eco: game.eco,
+                    sans: game.sans,
+                }) {
+                    failure = Some(e);
+                    return false;
+                }
+            }
+            _ => rejected += 1,
+        }
+        if n - last_progress >= PROGRESS_GAMES {
+            last_progress = n;
+            let done = if total > 0 {
+                (bytes_total as f64 * (n as f64 / total as f64)) as u64
+            } else {
+                0
+            };
+            progress(ingest.kept, done, "reading");
+        }
+        true
+    })?;
+    if let Some(e) = failure {
+        return Err(e);
+    }
+    if rejected > 0 {
+        log::warn!("Referenz-Import: {rejected} von {total} Partien übergangen");
+    }
+    Ok((cancelled, rejected))
 }
 
 /// Eine Spalte als Text, egal was tatsächlich darin steht.

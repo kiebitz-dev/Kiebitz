@@ -16,7 +16,7 @@ shipped alongside this one.
 Where a library offers a choice of licenses, one has been selected; the
 full set it was offered under is shown as "offered".
 
-Components: 60 npm packages, 644 Rust crates.
+Components: 60 npm packages, 644 Rust crates, 1 ported source file(s).
 
 
 ============================================================================
@@ -732,6 +732,10 @@ Rust crates (644)
   zvariant 5.15.0 — MIT
   zvariant_derive 5.15.0 — MIT
   zvariant_utils 4.2.0 — MIT
+
+Ported source code (1)
+----------------------------------------------------------------------------
+  cbh2pgn 42b3592 — MIT
 
 
 ============================================================================
@@ -5362,6 +5366,9 @@ Applies to:
   victory-vendor 37.3.6 (npm)  [offered: MIT AND ISC]
       Copyright (c) Formidable
       https://github.com/FormidableLabs/victory
+  cbh2pgn 42b3592 (ported)
+      Copyright (c) 2022 Dominik Klein
+      https://github.com/asdfjkl/cbh2pgn
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated

@@ -27,6 +27,7 @@ mod repertoire;
 mod review;
 mod settings;
 mod share;
+mod si4;
 mod study;
 mod sync;
 mod systembars;
@@ -226,11 +227,47 @@ fn read_pgn_file(path: String) -> Result<String, String> {
     if path.as_os_str().is_empty() {
         return Err("Kein PGN-Pfad angegeben.".into());
     }
+    // Scid und ChessBase kommen als PGN heraus · der Import der eigenen
+    // Partien liest danach denselben Text wie bei einer PGN-Datei.
+    if let Some(hint) = cbh::unsupported_hint(&path) {
+        return Err(hint.into());
+    }
+    if si4::is_si4(&path) || cbh::is_chessbase(&path) {
+        return foreign_as_pgn(&path);
+    }
     let meta = std::fs::metadata(&path).map_err(|e| format!("PGN nicht lesbar: {e}"))?;
     if meta.len() > 64 * 1024 * 1024 {
         return Err("PGN-Datei ist größer als 64 MB.".into());
     }
     std::fs::read_to_string(path).map_err(|e| format!("PGN nicht lesbar: {e}"))
+}
+
+/// Eine Scid- oder ChessBase-Datenbank als PGN-Text.
+///
+/// Partien aus einer Sonderstellung bleiben draußen: In der eigenen
+/// Partienliste beginnt jede Zugfolge in der Grundstellung. Eine eigene
+/// Sammlung hat selten mehr als ein paar tausend Partien; für eine
+/// Millionensammlung ist die Referenzdatenbank der Weg.
+fn foreign_as_pgn(path: &std::path::Path) -> Result<String, String> {
+    const LIMIT: usize = 200_000;
+    let mut out = String::new();
+    let mut kept = 0usize;
+    let mut each = |_: u64, game: Option<si4::Si4Game>| {
+        if let Some(game) = game.filter(|g| g.start_fen.is_none() && !g.sans.is_empty()) {
+            out.push_str(&si4::to_pgn(&game));
+            kept += 1;
+        }
+        kept < LIMIT
+    };
+    if si4::is_si4(path) {
+        si4::for_each_game(path, &mut each)?;
+    } else {
+        cbh::for_each_game(path, &mut each)?;
+    }
+    if kept == 0 {
+        return Err("In dieser Datenbank steht keine lesbare Partie aus der Grundstellung.".into());
+    }
+    Ok(out)
 }
 
 #[tauri::command]

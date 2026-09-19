@@ -265,10 +265,43 @@ function collectCargo() {
   return packages;
 }
 
+// ── Portierter Quelltext ────────────────────────────────────────────────────
+
+/**
+ * Code, der nicht als Paket kommt, sondern übertragen im eigenen Quelltext
+ * steht. Er trägt dieselbe Pflicht wie eine Abhängigkeit: Der Lizenztext muss
+ * das Binary begleiten. Der Text liegt je Eintrag unter
+ * `scripts/ported-licenses/<name>/LICENSE`.
+ */
+const PORTED = [
+  {
+    name: "cbh2pgn",
+    version: "42b3592",
+    declared: "MIT",
+    author: "Dominik Klein",
+    repository: "https://github.com/asdfjkl/cbh2pgn",
+    // Übertragen nach src-tauri/src/cbh.rs: Zugtabellen und Entschleierung
+    // des ChessBase-Formats.
+  },
+];
+
+function collectPorted() {
+  return PORTED.map((entry) => ({
+    ecosystem: "ported",
+    name: entry.name,
+    version: entry.version,
+    declared: entry.declared,
+    spdxList: requiredLicenses(entry.declared),
+    dir: join(ROOT, "scripts", "ported-licenses", entry.name),
+    author: entry.author,
+    repository: entry.repository,
+  }));
+}
+
 // ── Zusammenbauen ───────────────────────────────────────────────────────────
 
 function build() {
-  const packages = [...collectNpm(), ...collectCargo()].sort(
+  const packages = [...collectNpm(), ...collectCargo(), ...collectPorted()].sort(
     (a, b) => a.ecosystem.localeCompare(b.ecosystem) || a.name.localeCompare(b.name) || a.version.localeCompare(b.version),
   );
 
@@ -338,6 +371,7 @@ function build() {
 function render({ packages, groups, missing }) {
   const npm = packages.filter((pkg) => pkg.ecosystem === "npm");
   const cargo = packages.filter((pkg) => pkg.ecosystem === "cargo");
+  const ported = packages.filter((pkg) => pkg.ecosystem === "ported");
   const lines = [];
   const rule = (char) => char.repeat(76);
 
@@ -363,7 +397,9 @@ function render({ packages, groups, missing }) {
     ].join("\n"),
   );
   lines.push("");
-  lines.push(`Components: ${npm.length} npm packages, ${cargo.length} Rust crates.`);
+  lines.push(
+    `Components: ${npm.length} npm packages, ${cargo.length} Rust crates, ${ported.length} ported source file(s).`,
+  );
   lines.push("");
   lines.push("");
 
@@ -373,6 +409,7 @@ function render({ packages, groups, missing }) {
   for (const [label, list] of [
     ["npm packages", npm],
     ["Rust crates", cargo],
+    ["Ported source code", ported],
   ]) {
     lines.push("");
     lines.push(`${label} (${list.length})`);

@@ -113,6 +113,18 @@ page the share worker serves, and on the preview image that chat apps fetch.
 The drawings stay unmodified there too: they are placed on a board, not
 redrawn.
 
+## ChessBase format tables (MIT)
+
+The ChessBase reader (`src-tauri/src/cbh.rs`) carries the move tables and the
+de-obfuscation table of **cbh2pgn** by Dominik Klein, ported from Python to
+Rust: <https://github.com/asdfjkl/cbh2pgn>, MIT license, Copyright (c) 2022
+Dominik Klein. The license text lives in
+[`scripts/ported-licenses/cbh2pgn/LICENSE`](scripts/ported-licenses/cbh2pgn/LICENSE)
+and is bundled with the app through the generated license file below.
+
+The Scid reader (`src-tauri/src/si4.rs`) contains no third-party code; it
+follows the published description of the `.si4` format.
+
 ## Wooden chess-piece recordings (CC0 1.0)
 
 The short board sounds are edited excerpts from **"chess pieces.wav"** by
