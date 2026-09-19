@@ -527,6 +527,7 @@ pub async fn set_settings(
             .map_err(|e| e.to_string())? = normalized.clone();
         app.state::<live::LiveEngine>().shutdown();
         app.state::<endgame::EndgameEngine>().shutdown();
+        app.state::<crate::play::PlayEngine>().shutdown();
         Ok(normalized)
     })
     .await
@@ -834,6 +835,7 @@ pub fn factory_reset(app: tauri::AppHandle) -> Result<(), String> {
     }
     app.state::<live::LiveEngine>().shutdown();
     app.state::<endgame::EndgameEngine>().shutdown();
+    app.state::<crate::play::PlayEngine>().shutdown();
     Ok(())
 }
 

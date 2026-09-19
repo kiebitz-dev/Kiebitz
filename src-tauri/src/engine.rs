@@ -256,8 +256,21 @@ impl UciEngine {
     /// gewöhnlicher Fehler zurück, ohne dass die Engine sie je zu sehen bekommt.
     pub fn analyze(&mut self, fen: &str, depth: u32) -> Result<AnalysisResult, String> {
         let fen = crate::chess::engine_fen(fen)?;
-        self.send(&format!("position fen {fen}"))?;
-        self.send(&format!("go depth {depth}"))?;
+        self.search(&format!("position fen {fen}"), &format!("go depth {depth}"))
+    }
+
+    /// Eine Suche mit frei gewählter Stellung und Begrenzung · für das Spiel
+    /// gegen die Engine, das Züge statt einer FEN schickt (damit die Engine
+    /// Wiederholungen kennt) und nach Zeit statt nach Tiefe sucht.
+    ///
+    /// Beide Kommandos müssen vorher geprüft sein: Was hier ankommt, geht
+    /// wörtlich an den Prozess.
+    pub fn search(&mut self, position: &str, go: &str) -> Result<AnalysisResult, String> {
+        if position.contains(|c: char| c.is_control()) || go.contains(|c: char| c.is_control()) {
+            return Err("Ungültiges Engine-Kommando".into());
+        }
+        self.send(position)?;
+        self.send(go)?;
 
         let mut result = AnalysisResult {
             bestmove: String::new(),

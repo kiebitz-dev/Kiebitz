@@ -30,6 +30,7 @@ import {
   Share2,
   Sparkles,
   Square,
+  Swords,
   Zap,
   RotateCcw,
   Play,
@@ -90,6 +91,7 @@ import { de, deInt, deShort } from "../lib/format";
 import { openExternal } from "../lib/ext";
 import { evalLabel, winProb } from "../lib/evaluation";
 import { replaySans } from "../lib/position";
+import { needsChess960 } from "../lib/chess960";
 import { plyOffset, shareHistory } from "../lib/share/notation";
 import { selectionStyles } from "../lib/boardMoves";
 import {
@@ -453,10 +455,16 @@ type BookView =
 export default function Analysis({
   targetGameId,
   shared = null,
+  line = null,
+  onPlay,
 }: {
   targetGameId: number | null;
   /** Stellung aus einem geteilten Link · sie eröffnet das freie Brett. */
   shared?: SharePayload | null;
+  /** Eine Zugfolge ab einer Stellung · etwa die Partie gegen die Engine. */
+  line?: { fen: string; sans: string[]; chess960: boolean } | null;
+  /** Aus der gezeigten Stellung gegen die Engine weiterspielen. */
+  onPlay?: (fen: string, chess960: boolean) => void;
 }) {
   const backend = useBackendInfo();
   const { locale, t } = useI18n();
@@ -639,6 +647,21 @@ export default function Analysis({
     setLiveBestUci(null);
     setNotice(shared.title?.trim() || t("sh.opened"));
   }, [shared, t]);
+
+  // Eine Zugfolge ab einer Stellung · aufs freie Brett, am Ende stehend.
+  useEffect(() => {
+    if (!line) return;
+    setOpened({ kind: "analysis", fen: line.fen, orientation: "white" });
+    setSelectedId(null);
+    setFlipped(false);
+    setScratchSans(line.sans);
+    setScratchSelected(null);
+    setVariation(null);
+    setPly(line.sans.length);
+    setLiveEval(null);
+    setLiveBestUci(null);
+    setNotice(null);
+  }, [line]);
 
   // Analyse-Events.
   useEffect(() => {
@@ -2450,6 +2473,11 @@ export default function Analysis({
         <MenuItem onClick={() => setEditing(true)}>
           <LayoutGrid size={15} /> {t("pe.open")}
         </MenuItem>
+        {onPlay && (
+          <MenuItem onClick={() => onPlay(fen, needsChess960(fen))}>
+            <Swords size={15} /> {t("play.fromHere")}
+          </MenuItem>
+        )}
         {scratch && (
           <MenuItem onClick={newBoard}>
             <RotateCcw size={15} /> {t("an.newBoard")}
@@ -2468,6 +2496,11 @@ export default function Analysis({
         <Button onClick={() => setEditing(true)} title={t("pe.open")} label={t("pe.open")} compact>
           <LayoutGrid size={15} />
         </Button>
+        {onPlay && (
+          <Button onClick={() => onPlay(fen, needsChess960(fen))} title={t("play.fromHere")} label={t("play.fromHere")} compact>
+            <Swords size={15} />
+          </Button>
+        )}
         {scratch && (
           <Button onClick={newBoard} title={t("an.newBoard")}>
             <RotateCcw size={15} /> {t("an.newBoard")}
@@ -3573,6 +3606,7 @@ export default function Analysis({
             initialFen={fen}
             onClose={() => setEditing(false)}
             onAnalyze={({ fen: next }) => openPosition(next)}
+            onPlay={onPlay ? ({ fen: next, chess960 }) => onPlay(next, chess960) : undefined}
           />
         </Suspense>
       )}

@@ -32,8 +32,14 @@ const limits = {
   // (rund 106 KiB) trägt nur noch, wer auf Deutsch liest.
   //
   // Entscheidend für die Ladezeit ist `initialGzip`; Fließtext komprimiert gut.
-  initialJs: 400 * 1024,
-  initialGzip: 132 * 1024,
+  //
+  // September 2026: Stellungseditor und „Gegen die Engine" brachten 68
+  // Oberflächentexte mit, und das englische Wörterbuch ist der Teil davon,
+  // der im Startbündel liegt. Nachgeprüft, dass kein Paket mitkam: Editor,
+  // Spielseite und Chess960-Regeln sind eigene, nachgeladene Chunks.
+  // Gemessen: 400,9 KiB und 132,2 KiB gzip, dazu rund zwei Prozent.
+  initialJs: 409 * 1024,
+  initialGzip: 135 * 1024,
   // Die beiden Grenzen der Startroute standen zuletzt so dicht am Gemessenen,
   // dass sie nichts mehr prüften, sondern nur noch abwarteten: 445,4 von 450
   // KiB und 149,2 von 150 KiB gzip. Über fünf Veröffentlichungen hinweg wuchs

@@ -25,6 +25,7 @@ import {
   Puzzle as PuzzleIcon,
   RefreshCw,
   Settings as SettingsIcon,
+  Swords,
   X,
 } from "lucide-react";
 import { useBackendInfo } from "./lib/backend";
@@ -84,6 +85,7 @@ const pageLoaders = {
   dashboard: () => import("./pages/Dashboard"),
   games: () => import("./pages/Games"),
   analysis: () => import("./pages/Analysis"),
+  play: () => import("./pages/Play"),
   repertoire: () => import("./pages/Repertoire"),
   endgame: () => import("./pages/Endgame"),
   puzzles: () => import("./pages/Puzzles"),
@@ -96,6 +98,7 @@ const pageLoaders = {
 const Dashboard = lazy(pageLoaders.dashboard);
 const Games = lazy(pageLoaders.games);
 const Analysis = lazy(pageLoaders.analysis);
+const Play = lazy(pageLoaders.play);
 const Repertoire = lazy(pageLoaders.repertoire);
 const Endgame = lazy(pageLoaders.endgame);
 const Puzzles = lazy(pageLoaders.puzzles);
@@ -110,6 +113,7 @@ const LIKELY_NEXT_PAGES: Record<PageId, PageId[]> = {
   dashboard: ["games", "study"],
   games: ["analysis", "dashboard"],
   analysis: ["games", "insights"],
+  play: ["analysis", "games"],
   repertoire: ["study", "games"],
   endgame: ["study", "puzzles"],
   puzzles: ["study", "analysis"],
@@ -136,6 +140,7 @@ const nav: { id: PageId; labelKey: Key; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
   { id: "games", labelKey: "nav.games", icon: Database },
   { id: "analysis", labelKey: "nav.analysis", icon: Activity },
+  { id: "play", labelKey: "nav.play", icon: Swords },
   { id: "repertoire", labelKey: "nav.repertoire", icon: BookOpen },
   { id: "puzzles", labelKey: "nav.puzzles", icon: PuzzleIcon },
   { id: "endgame", labelKey: "nav.endgame", icon: Crown },
@@ -152,6 +157,7 @@ const bottomNav = BOTTOM_NAV.map((id) => nav.find((n) => n.id === id)!);
 // Ziele, die später unter "Training" einziehen. Sie markieren schon jetzt den
 // passenden Tab, damit die Leiste nie ganz ohne Auswahl dasteht.
 const NAV_PARENT: Partial<Record<PageId, PageId>> = {
+  play: "analysis",
   repertoire: "study",
   endgame: "study",
   puzzles: "study",
@@ -800,7 +806,15 @@ export default function App() {
         <Games openAnalysis={openAnalysis} initialFilter={route.filter ?? null} />
       )}
       {page === "analysis" && (
-        <Analysis targetGameId={route.gameId ?? null} shared={route.shared ?? null} />
+        <Analysis
+          targetGameId={route.gameId ?? null}
+          shared={route.shared ?? null}
+          line={route.line ?? null}
+          onPlay={(fen, chess960) => push("play", { play: { fen, chess960 } })}
+        />
+      )}
+      {page === "play" && (
+        <Play initial={route.play ?? null} openAnalysis={(line) => push("analysis", { line })} />
       )}
       {page === "repertoire" && <Repertoire />}
       {page === "endgame" && <Endgame initialCategory={route.endgameCategory} />}

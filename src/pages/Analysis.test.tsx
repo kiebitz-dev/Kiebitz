@@ -749,6 +749,25 @@ describe("Analysis page", () => {
     expect(subject.history).toBe("1.e4 e5");
   });
 
+  it("opens a game played against the engine on the free board, at its end", async () => {
+    const line = {
+      fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      sans: ["e4", "e5", "Nf3"],
+      chess960: false,
+    };
+    const onPlay = vi.fn();
+    render(<LocaleProvider><Analysis targetGameId={null} line={line} onPlay={onPlay} /></LocaleProvider>);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("analysis-board").dataset.fen).toBe(
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+      )
+    );
+    // Von hier aus geht es mit derselben Stellung zurück ans Spielbrett.
+    fireEvent.click(screen.getByTitle("Ab hier gegen die Engine"));
+    expect(onPlay).toHaveBeenCalledWith("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2", false);
+  });
+
   it("shows database player names with parenthesized ratings and previews the next move", async () => {
     mocks.listGames.mockResolvedValue([{ ...excludedGame, moves: "e4 e5 Nf3 Nc6 Bc4" }]);
     mocks.gameAnalysis.mockResolvedValue([

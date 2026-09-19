@@ -20,6 +20,7 @@ export type PageId =
   | "dashboard"
   | "games"
   | "analysis"
+  | "play"
   | "repertoire"
   | "endgame"
   | "puzzles"
@@ -46,6 +47,10 @@ export interface Route {
   reportType?: "feedback" | "crash" | "feature";
   /** Analyse: Stellung aus einem geteilten Link (`kiebitz://p/…`). */
   shared?: SharePayload | null;
+  /** Analyse: eine Zugfolge ab einer Stellung · etwa eine Partie gegen die Engine. */
+  line?: { fen: string; sans: string[]; chess960: boolean } | null;
+  /** Spielen: Stellung, aus der gegen die Engine gespielt wird. */
+  play?: { fen: string; chess960: boolean } | null;
 }
 
 export type RouteParams = Omit<Route, "page">;
@@ -57,6 +62,7 @@ const PAGES: readonly PageId[] = [
   "dashboard",
   "games",
   "analysis",
+  "play",
   "repertoire",
   "endgame",
   "puzzles",

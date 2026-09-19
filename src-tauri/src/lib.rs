@@ -17,6 +17,7 @@ mod insights;
 mod legal;
 mod live;
 mod motifs;
+mod play;
 mod plus;
 mod puzzles;
 mod refdb;
@@ -552,6 +553,7 @@ pub fn run() {
             app.manage(analysis::AnalysisState::default());
             app.manage(live::LiveEngine::default());
             app.manage(endgame::EndgameEngine::default());
+            app.manage(play::PlayEngine::default());
             app.manage(puzzles::PuzzleImportState::default());
             app.manage(refdb::RefDbState::default());
             app.manage(sync::SyncServer::default());
@@ -714,6 +716,7 @@ pub fn run() {
             endgame::endgame_move,
             endgame::endgame_record,
             endgame::endgame_stats,
+            play::play_move,
             study::study_data,
             study::study_calendar,
             study::save_study_template,
