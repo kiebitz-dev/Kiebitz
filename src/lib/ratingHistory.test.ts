@@ -67,6 +67,17 @@ describe("buildRatingHistory", () => {
     expect(data.history.length).toBe(184);
   });
 
+  it("leaves chess.com games without readable moves out of the line", () => {
+    Date.now = () => new Date(2026, 7, 31, 9).getTime();
+    // Ein altes Daily-960 · eigene Wertung, Züge nicht lesbar.
+    const variant = g({ played_ts: ts(2026, 7, 20), my_elo: 730, moves: "" });
+    const data = buildRatingHistory([...records, variant], { locale: "en", range: "6m" });
+    const rapid = data.summaries.find((row) => row.series.id === "chess.com-rapid")!;
+    expect(rapid.current).toBe(1510);
+    expect(rapid.low).toBe(1480);
+    expect(rapid.games).toBe(3);
+  });
+
   it("switches to weekly points beyond a year and still ends today", () => {
     Date.now = () => new Date(2026, 7, 31, 9).getTime();
     const data = buildRatingHistory(

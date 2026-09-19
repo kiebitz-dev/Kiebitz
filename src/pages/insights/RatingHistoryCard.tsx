@@ -11,7 +11,8 @@
  * Gerechnet wird in `buildRatingHistory` (lib/stats.ts); die Seite hält
  * Zeitraum und Auswahl, damit beide Fassungen denselben Stand zeigen.
  */
-import { Card, Chip } from "../../components/ui";
+import { Check } from "lucide-react";
+import { Card, Menu, MenuItem } from "../../components/ui";
 import RatingHistoryChart from "../../components/RatingHistoryChart";
 import { RATING_COLORS, chart } from "../../components/chartTheme";
 import { useMobileShell } from "../../components/MobileShell";
@@ -45,13 +46,17 @@ export default function RatingHistoryCard({
     <Card
       title={t("ins.ratingTitle")}
       action={
-        <div className="flex flex-wrap justify-end gap-1.5">
+        // Eine Schaltfläche mit Klappliste statt vier Chips: Auf Telefonbreite
+        // brachen die Chips in zwei Reihen um und drückten den Titel an den
+        // Rand. Der gewählte Zeitraum steht auf der Schaltfläche selbst.
+        <Menu label={t(RANGE_KEY[range])}>
           {RATING_RANGES.map((value) => (
-            <Chip key={value} active={range === value} onClick={() => onRange(value)}>
+            <MenuItem key={value} onClick={() => onRange(value)}>
+              <Check size={15} className={range === value ? "text-accent" : "invisible"} />
               {t(RANGE_KEY[value])}
-            </Chip>
+            </MenuItem>
           ))}
-        </div>
+        </Menu>
       }
     >
       {data.series.length === 0 ? (

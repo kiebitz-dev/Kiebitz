@@ -46,6 +46,8 @@ interface CcGame {
   pgn?: string;
   end_time: number;
   time_class: string;
+  /** "chess" für normales Schach, sonst die Variante ("chess960", …). */
+  rules?: string;
   white: CcSide;
   black: CcSide;
   accuracies?: { white?: number; black?: number };
@@ -101,6 +103,11 @@ export async function importChessCom(
     const monthGames: CcGame[] = (await monthRes.json()).games ?? [];
 
     for (const g of monthGames) {
+      // Varianten führen auf chess.com eine eigene Wertung, stehen aber unter
+      // demselben Modus · im Ratingverlauf sprang die Daily-Linie dadurch
+      // zwischen Daily und Daily-960 hin und her. Ihre Züge liest chess.js
+      // ohnehin nicht, analysieren ließen sie sich also auch nicht.
+      if (g.rules && g.rules !== "chess") continue;
       const iAmWhite = g.white.username.toLowerCase() === user.toLowerCase();
       const me = iAmWhite ? g.white : g.black;
       const opp = iAmWhite ? g.black : g.white;
@@ -145,6 +152,8 @@ export async function importChessCom(
 interface LiGame {
   id: string;
   speed: string;
+  /** "standard", "chess960", "crazyhouse", "fromPosition", … */
+  variant?: string;
   winner?: "white" | "black";
   /** "mate", "resign", "outoftime", "stalemate", "draw", … */
   status?: string;
@@ -187,6 +196,9 @@ export async function importLichess(
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const g: LiGame = JSON.parse(line);
+    // Wie bei chess.com: Varianten haben eine eigene Wertung und eine eigene
+    // Startstellung · beides passt nicht in Verlauf und Analyse.
+    if (g.variant && g.variant !== "standard") continue;
     const whiteName = g.players.white.user?.name ?? "?";
     const iAmWhite = whiteName.toLowerCase() === user.toLowerCase();
     const me = iAmWhite ? g.players.white : g.players.black;

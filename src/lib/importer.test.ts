@@ -58,6 +58,21 @@ describe("importChessCom", () => {
     });
   });
 
+  it("skips chess.com variants, which carry a rating of their own", async () => {
+    const variant = { ...ccGame, url: "https://www.chess.com/game/daily/960", rules: "chess960" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/archives")
+          ? jsonResponse({ archives: ["m"] })
+          : jsonResponse({ games: [{ ...ccGame, rules: "chess" }, variant] })
+      )
+    );
+
+    const games = await importChessCom("Torim98");
+    expect(games.map((game) => game.source_id)).toEqual(["123456"]);
+  });
+
   it("derives a loss when the opponent won and maps correspondence to daily", async () => {
     const g = {
       ...ccGame,
@@ -110,6 +125,21 @@ describe("importChessCom", () => {
 
 describe("importLichess", () => {
   const line = (o: Record<string, unknown>) => JSON.stringify(o);
+
+  it("skips lichess variants", async () => {
+    const players = {
+      white: { user: { name: "Torim98" }, rating: 1600 },
+      black: { user: { name: "villain" }, rating: 1550 },
+    };
+    const ndjson = [
+      line({ id: "std", speed: "blitz", variant: "standard", createdAt: 1, moves: "e4", players }),
+      line({ id: "zh", speed: "blitz", variant: "crazyhouse", createdAt: 2, moves: "e4", players }),
+    ].join("\n");
+    vi.stubGlobal("fetch", vi.fn(async () => textResponse(ndjson)));
+
+    const games = await importLichess("Torim98");
+    expect(games.map((game) => game.source_id)).toEqual(["std"]);
+  });
 
   it("normalizes NDJSON and derives results relative to the player's color", async () => {
     const ndjson = [

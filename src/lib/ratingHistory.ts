@@ -9,7 +9,7 @@
 import type { GameSummary } from "./db";
 import type { Locale } from "./i18n";
 import { tcLabel } from "./gameUi";
-import { historyPoints, type HistoryPoint, type RatingHistorySeries } from "./stats";
+import { countsForRating, historyPoints, type HistoryPoint, type RatingHistorySeries } from "./stats";
 
 /** Wie weit der Ratingverlauf der Insights zurückreicht. */
 export type RatingRange = "3m" | "6m" | "12m" | "all";
@@ -55,7 +55,7 @@ export function buildRatingHistory(
     .filter(
       (game) =>
         !game.analysis_excluded
-        && game.my_elo > 0
+        && countsForRating(game)
         && (game.source === "chess.com" || game.source === "lichess")
     )
     .sort((a, b) => a.played_ts - b.played_ts);

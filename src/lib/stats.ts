@@ -59,6 +59,23 @@ const HISTORY_MONTHS = 6;
  */
 export const HISTORY_IDLE_DAYS = 35;
 
+/**
+ * Zählt die Wertung dieser Partie für ihre Plattform-/Modus-Reihe?
+ *
+ * chess.com legt Varianten (Chess960, Crazyhouse, …) unter demselben Modus ab
+ * wie normales Schach, führt für sie aber eine eigene Wertung. Ein Daily-960
+ * bei 730 neben einem Daily bei 1.000 zieht die Linie dann Tag für Tag
+ * zwischen beiden hin und her. Der Import holt Varianten nicht mehr; ältere
+ * liegen aber noch in der Datenbank und sind an einem erkennbar: chess.com
+ * liefert zu jeder normalen Partie ein PGN, dessen Züge sich lesen lassen ·
+ * nur bei einer Variante mit eigener Startstellung bleibt die Zugliste leer.
+ */
+export function countsForRating(game: GameSummary): boolean {
+  if (game.my_elo <= 0) return false;
+  if (game.source !== "chess.com") return true;
+  return game.has_moves ?? Boolean(game.moves?.trim());
+}
+
 export interface DashboardOptions {
   locale: Locale;
   ccUser: string;
@@ -83,7 +100,7 @@ export function buildDashboard(
   for (const platform of ["chess.com", "lichess"] as const) {
     for (const tc of ["rapid", "blitz", "bullet", "daily"]) {
       const bucket = asc.filter(
-        (g) => g.source === platform && g.time_class === tc && g.my_elo > 0
+        (g) => g.source === platform && g.time_class === tc && countsForRating(g)
       );
       if (bucket.length === 0) continue;
       const value = bucket[bucket.length - 1].my_elo;
@@ -181,7 +198,7 @@ export function historyPoints(
         (game) =>
           game.source === entry.platform
           && game.time_class === entry.timeClass
-          && game.my_elo > 0
+          && countsForRating(game)
       ),
     ])
   );
