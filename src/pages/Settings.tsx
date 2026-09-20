@@ -121,6 +121,7 @@ import { PlusBadge, PlusBadgeButton } from "../components/PlusLock";
 import { usePlus, usePlusGate } from "../lib/plus/usePlus";
 import { openPlusDialog } from "../lib/plus/dialog";
 import AppearanceSection from "./settings/AppearanceSection";
+import EnginesSection from "./settings/EnginesSection";
 import {
   currentAppearance,
   setAppearance as applyAppearance,
@@ -1885,6 +1886,24 @@ export default function SettingsPage({
             </div>
             <p className="mt-3 text-[12px] leading-relaxed text-ink3">{t("set.engineNote")}</p>
           </>
+        ) : (
+          desktopOnly
+        ),
+    },
+    {
+      id: "engines",
+      group: "advanced",
+      icon: Cpu,
+      title: t("tn.section"),
+      summary: t("tn.sectionSummary"),
+      content:
+        desktop && draft ? (
+          <EnginesSection
+            engines={draft.engines ?? []}
+            analysisPath={draft.engine_path}
+            onChange={(engines) => patch({ engines })}
+            onUseForAnalysis={(path) => patch({ engine_path: path })}
+          />
         ) : (
           desktopOnly
         ),

@@ -10,6 +10,17 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use tauri::Manager;
 
+/// Eine eingetragene Engine · Name und Pfad, mehr braucht ein UCI-Programm
+/// nicht. Die Einstellungen (Threads, Hash) gelten für alle gleich.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct EngineEntry {
+    pub name: String,
+    pub path: String,
+}
+
+/// So viele Engines lassen sich eintragen · dieselbe Grenze wie im Turnier.
+const MAX_ENGINES: usize = 8;
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Settings {
@@ -19,6 +30,10 @@ pub struct Settings {
     pub db_path: Option<String>,
     /// Eigene UCI-Engine (None = gebündelte Stockfish / KIEBITZ_ENGINE).
     pub engine_path: Option<String>,
+    /// Weitere UCI-Engines · für den Vergleich und das Turnier in den
+    /// Einstellungen. Die Engine der Analyse bleibt `engine_path`; von hier
+    /// aus lässt sie sich übernehmen.
+    pub engines: Vec<EngineEntry>,
     /// 0 = automatisch (Kerne − 2).
     pub engine_threads: u32,
     pub engine_hash_mb: u32,
@@ -245,6 +260,7 @@ impl Default for Settings {
             locale: "en".into(),
             db_path: None,
             engine_path: None,
+            engines: Vec::new(),
             engine_threads: threads,
             engine_hash_mb: hash,
             engine_multipv: 3,
@@ -438,6 +454,22 @@ fn normalize(mut s: Settings) -> Settings {
         .engine_path
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty());
+    // Eine Engine ohne Pfad ist keine; ein Name ohne Inhalt bekommt den
+    // Dateinamen, damit in der Liste nichts Namenloses steht.
+    s.engines.retain(|e| !e.path.trim().is_empty());
+    s.engines.truncate(MAX_ENGINES);
+    for entry in &mut s.engines {
+        entry.path = entry.path.trim().to_string();
+        entry.name = entry.name.trim().to_string();
+        if entry.name.is_empty() {
+            entry.name = std::path::Path::new(&entry.path)
+                .file_stem()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Engine")
+                .to_string();
+        }
+        entry.name.truncate(60);
+    }
     s.db_path = s
         .db_path
         .map(|p| p.trim().to_string())
@@ -879,6 +911,42 @@ fn collect_db_info(app: &tauri::AppHandle) -> Result<DbInfo, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tidies_the_engine_list() {
+        let raw = Settings {
+            engines: vec![
+                EngineEntry {
+                    name: "  ".into(),
+                    path: "  C:/engines/dragon.exe  ".into(),
+                },
+                EngineEntry {
+                    name: "Leer".into(),
+                    path: "   ".into(),
+                },
+            ],
+            ..Settings::default()
+        };
+        let tidy = normalize(raw);
+        assert_eq!(tidy.engines.len(), 1);
+        assert_eq!(tidy.engines[0].path, "C:/engines/dragon.exe");
+        // Ohne Namen steht der Dateiname da, nicht nichts.
+        assert_eq!(tidy.engines[0].name, "dragon");
+    }
+
+    #[test]
+    fn keeps_at_most_eight_engines() {
+        let raw = Settings {
+            engines: (0..12)
+                .map(|i| EngineEntry {
+                    name: format!("E{i}"),
+                    path: format!("/bin/e{i}"),
+                })
+                .collect(),
+            ..Settings::default()
+        };
+        assert_eq!(normalize(raw).engines.len(), 8);
+    }
+
     use super::*;
 
     #[test]

@@ -7,11 +7,19 @@ import type { Locale } from "./i18n";
 // Ebenso: theme.ts liest die Einstellungen, nicht umgekehrt.
 import type { AutoMode, BoardSetId, PieceSetId, ThemeId } from "./theme";
 
+/** Eine eingetragene UCI-Engine · siehe settings::EngineEntry. */
+export interface EngineEntry {
+  name: string;
+  path: string;
+}
+
 /** Spiegelt settings::Settings aus dem Rust-Backend. */
 export interface Settings {
   locale: Locale;
   db_path: string | null;
   engine_path: string | null;
+  /** Weitere Engines · Vergleich und Turnier in den Einstellungen. */
+  engines: EngineEntry[];
   engine_threads: number; // 0 = automatisch
   engine_hash_mb: number;
   engine_multipv: number;

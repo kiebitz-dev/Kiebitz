@@ -81,6 +81,7 @@ export type SectionId =
   | "privacy"
   | "support"
   | "engine"
+  | "engines"
   | "database"
   | "chessdb"
   | "explorer"

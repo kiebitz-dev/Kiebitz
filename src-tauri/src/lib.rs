@@ -31,6 +31,7 @@ mod si4;
 mod study;
 mod sync;
 mod systembars;
+mod tournament;
 mod updater;
 mod verdict;
 mod widgets;
@@ -591,6 +592,7 @@ pub fn run() {
             app.manage(live::LiveEngine::default());
             app.manage(endgame::EndgameEngine::default());
             app.manage(play::PlayEngine::default());
+            app.manage(tournament::TournamentState::default());
             app.manage(puzzles::PuzzleImportState::default());
             app.manage(refdb::RefDbState::default());
             app.manage(sync::SyncServer::default());
@@ -754,6 +756,10 @@ pub fn run() {
             endgame::endgame_record,
             endgame::endgame_stats,
             play::play_move,
+            tournament::tournament_start,
+            tournament::tournament_status,
+            tournament::tournament_cancel,
+            tournament::tournament_pgn,
             study::study_data,
             study::study_calendar,
             study::save_study_template,

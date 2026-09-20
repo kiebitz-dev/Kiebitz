@@ -32,6 +32,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     locale: "de",
     db_path: null,
     engine_path: null,
+    engines: [],
     engine_threads: 0,
     engine_hash_mb: 256,
     engine_multipv: 3,

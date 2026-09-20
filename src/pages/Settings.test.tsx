@@ -103,6 +103,7 @@ const androidSettings = {
   locale: "en",
   db_path: null,
   engine_path: null,
+  engines: [],
   engine_threads: 0,
   engine_hash_mb: 64,
   engine_multipv: 1,
@@ -438,6 +439,7 @@ describe("Settings loading", () => {
       "set.about",
       // Erweitert
       "set.engine",
+      "tn.section",
       "set.database",
       "set.chessdb",
       "set.explorer",

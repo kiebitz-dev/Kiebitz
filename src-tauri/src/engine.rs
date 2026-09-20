@@ -135,6 +135,14 @@ impl UciEngine {
         self.wait_for("readyok")
     }
 
+    /// Meldet der Engine, dass eine neue Partie beginnt · ohne das trägt sie
+    /// ihre Hash-Tabelle aus der vorigen mit hinüber.
+    pub fn new_game(&mut self) -> Result<(), String> {
+        self.send("ucinewgame")?;
+        self.send("isready")?;
+        self.wait_for("readyok")
+    }
+
     /// Sinnvolle Thread-Zahl für Hintergrund-Analyse: Kerne minus zwei.
     pub fn worker_threads() -> usize {
         std::thread::available_parallelism()
