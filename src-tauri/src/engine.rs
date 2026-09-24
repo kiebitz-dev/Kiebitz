@@ -429,15 +429,23 @@ mod tests {
         let path = std::env::var("KIEBITZ_ENGINE").expect("KIEBITZ_ENGINE setzen");
         let mut e = UciEngine::spawn(&path).expect("Engine-Start");
         let mate = e
-            .analyze("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3", 12)
+            .analyze(
+                "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+                12,
+            )
             .expect("Matt");
         assert_eq!(mate.mate_in, Some(0));
         assert_eq!(mate.bestmove, "(none)");
-        let stalemate = e.analyze("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", 12).expect("Patt");
+        let stalemate = e
+            .analyze("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", 12)
+            .expect("Patt");
         assert_eq!(stalemate.eval_cp, Some(0));
         // Die Engine lebt noch und rechnet die nächste Stellung.
         let next = e
-            .analyze("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 8)
+            .analyze(
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                8,
+            )
             .expect("Grundstellung");
         assert!(!next.bestmove.is_empty());
     }
