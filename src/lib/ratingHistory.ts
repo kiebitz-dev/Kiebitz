@@ -9,7 +9,7 @@
 import type { GameSummary } from "./db";
 import type { Locale } from "./i18n";
 import { tcLabel } from "./gameUi";
-import { countsForRating, historyPoints, type HistoryPoint, type RatingHistorySeries } from "./stats";
+import { countsForRating, historyPoints, seriesId, variantOf, type HistoryPoint, type RatingHistorySeries } from "./stats";
 
 /** Wie weit der Ratingverlauf der Insights zurückreicht. */
 export type RatingRange = "3m" | "6m" | "12m" | "all";
@@ -63,7 +63,7 @@ export function buildRatingHistory(
 
   const buckets = new Map<string, GameSummary[]>();
   for (const game of asc) {
-    const id = `${game.source}-${game.time_class}`;
+    const id = seriesId(game.source, game.time_class, variantOf(game));
     const list = buckets.get(id) ?? [];
     list.push(game);
     buckets.set(id, list);
@@ -78,12 +78,15 @@ export function buildRatingHistory(
   const series: RatingHistorySeries[] = ordered.map((games, index) => {
     const platform = games[0].source as "chess.com" | "lichess";
     const timeClass = games[0].time_class;
+    const variant = variantOf(games[0]);
+    const mode = tcLabel(timeClass, opts.locale);
     return {
       key: `rating${index}`,
-      id: `${platform}-${timeClass}`,
+      id: seriesId(platform, timeClass, variant),
       platform,
       timeClass,
-      label: `${platform} · ${tcLabel(timeClass, opts.locale)}`,
+      variant,
+      label: `${platform} · ${variant === "chess960" ? `${mode} 960` : mode}`,
     };
   });
 

@@ -1,5 +1,6 @@
 import { Chess } from "chess.js";
 import { fenSquares } from "./boardSound";
+import { needsChess960, VariantChess } from "./chess960";
 
 /** Ein nachgespielter Zug in der Sprache des Bretts · Felder wie "e2". */
 export interface PlayedMove {
@@ -26,6 +27,9 @@ export interface Replay {
  * unbrauchbares FEN fällt auf die Grundstellung zurück, statt zu werfen.
  */
 export function replaySans(sans: string[] | undefined, count?: number, base?: string): Replay {
+  // Eine Chess960-Stellung rochiert anders, und chess.js kennt nur die Rochade
+  // des Standardschachs · dort übernimmt die eigene Schicht (lib/chess960.ts).
+  if (base && needsChess960(base)) return replayVariant(sans, count, base);
   let chess: Chess;
   try {
     chess = base ? new Chess(base) : new Chess();
@@ -48,6 +52,30 @@ export function replaySans(sans: string[] | undefined, count?: number, base?: st
     // Demo-Daten: bei ungültigem Zug einfach die letzte gültige Stellung zeigen.
   }
   return { fen: chess.fen(), moves };
+}
+
+/** Dasselbe für Chess960 · sonst identisch, nur mit eigener Rochade. */
+function replayVariant(sans: string[] | undefined, count: number | undefined, base: string): Replay {
+  let game: VariantChess;
+  try {
+    game = new VariantChess(base, { chess960: true });
+  } catch {
+    return replaySans(sans, count);
+  }
+  const moves: PlayedMove[] = [];
+  const n = count ?? sans?.length ?? 0;
+  for (let i = 0; i < n && i < (sans?.length ?? 0); i++) {
+    const move = game.move(sans![i]);
+    if (!move) break;
+    moves.push({
+      from: move.from,
+      // Die Rochade zeigt das Brett als Königszug auf sein Zielfeld · dort
+      // liegt die Hervorhebung richtig, auch wenn der Turm mitwandert.
+      to: move.to,
+      ...(move.promotion ? { promo: move.promotion as PlayedMove["promo"] } : {}),
+    });
+  }
+  return { fen: game.fen(), moves };
 }
 
 /**

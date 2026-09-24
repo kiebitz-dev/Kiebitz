@@ -115,8 +115,16 @@ pub fn engine_fen(fen: &str) -> Result<&str, String> {
     if trimmed.contains(|c: char| c.is_control()) {
         return Err("Ungültige FEN: Steuerzeichen".into());
     }
-    Position::from_fen(trimmed).map_err(|e| format!("Ungültige FEN: {e}"))?;
-    Ok(trimmed)
+    match Position::from_fen(trimmed) {
+        Ok(_) => Ok(trimmed),
+        // Eine Chess960-Stellung hat Rochaderechte, die owlchess nicht kennt
+        // („HFhf"). Geprüft wird sie deshalb ohne dieses Feld · alles andere,
+        // worauf es hier ankommt, steht in der Belegung.
+        Err(e) => match crate::chess960::Position960::from_fen(trimmed) {
+            Ok(_) => Ok(trimmed),
+            Err(_) => Err(format!("Ungültige FEN: {e}")),
+        },
+    }
 }
 
 /// Spielphase einer Stellung: Endspiel, sobald höchstens 6 Nicht-Bauern-
@@ -167,6 +175,64 @@ pub fn walk_sans(moves: &str) -> Vec<WalkedMove> {
         });
     }
     out
+}
+
+/// Dieselbe Wanderung ab einer eigenen Ausgangsstellung · für Partien, die
+/// nicht in der Grundstellung beginnen, und für Chess960.
+///
+/// Leere `start_fen` heißt Grundstellung und nimmt den geraden Weg oben. Sonst
+/// läuft die Partie über `chess960::Position960`, das die Rochade selbst macht
+/// und owlchess den Rest überlässt (siehe chess960.rs). Die Schlüssel tragen
+/// dabei die Rochaderechte in X-FEN-Schreibweise, damit zwei Stellungen, die
+/// sich nur darin unterscheiden, nicht denselben bekommen.
+pub fn walk_from(start_fen: &str, moves: &str) -> Vec<WalkedMove> {
+    let start_fen = start_fen.trim();
+    if start_fen.is_empty() {
+        return walk_sans(moves);
+    }
+    let Ok(mut pos) = crate::chess960::Position960::from_fen(start_fen) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (i, san) in moves.split_whitespace().enumerate() {
+        let ply = (i + 1) as u32;
+        let by_white = pos.board.side() == Color::White;
+        let fen_before = variant_fen(&pos);
+        let Some(next) = pos.play_san(san) else { break };
+        pos = next;
+        out.push(WalkedMove {
+            ply,
+            san: san.to_string(),
+            fen_before,
+            fen_after: variant_fen(&pos),
+            key_after: variant_key(&pos),
+            phase: phase_of(&pos.board, ply),
+            by_white,
+        });
+    }
+    out
+}
+
+/// Volle FEN einer Variantenstellung · wie `full_fen`, nur mit den
+/// Rochaderechten, die owlchess nicht führt.
+fn variant_fen(pos: &crate::chess960::Position960) -> String {
+    let mut fields: Vec<String> = pos.fen().split(' ').map(String::from).collect();
+    // Dieselbe Normalisierung wie sonst: Das En-passant-Feld steht nur da, wo
+    // dort auch geschlagen werden kann (siehe `normalized_fen`).
+    if fields.len() == 6 && fields[3] != "-" && !has_legal_en_passant(&pos.board) {
+        fields[3] = "-".into();
+    }
+    fields.join(" ")
+}
+
+/// Stellungsschlüssel einer Variantenstellung · dieselben vier Felder wie
+/// `fen_key`.
+fn variant_key(pos: &crate::chess960::Position960) -> String {
+    variant_fen(pos)
+        .split(' ')
+        .take(4)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Grund, aus dem eine Zugfolge auf dem Brett endet · `None`, wenn die
@@ -542,4 +608,22 @@ pub(crate) mod tests {
         "8/8/8/8/k1pP4/8/8/4K3 b - d3\n",
         "1n2k3/1P6/8/8/8/8/8/4K3 w - -\n",
     );
+    #[test]
+    fn walks_a_chess960_game_from_its_own_start() {
+        // König b1, Türme a1 und e1 · kurz rochiert geht der König nach g1
+        // und der Turm e1 nach f1.
+        let walked = walk_from("1k6/8/8/8/8/8/8/RK2R3 w KQ - 0 1", "O-O Kc8");
+        assert_eq!(walked.len(), 2);
+        assert_eq!(walked[0].fen_after, "1k6/8/8/8/8/8/8/R4RK1 b - - 1 1");
+        assert_eq!(walked[0].san, "O-O");
+        assert!(walked[0].by_white);
+        // Der Schlüssel trägt die vier Felder bis einschließlich e.p.
+        assert_eq!(walked[1].key_after, "2k5/8/8/8/8/8/8/R4RK1 w - -");
+    }
+
+    #[test]
+    fn keeps_the_standard_path_without_a_start_position() {
+        assert_eq!(walk_from("", "e4 e5").len(), 2);
+        assert_eq!(walk_from("", "e4 e5")[1].san, "e5");
+    }
 }

@@ -91,7 +91,7 @@ import { de, deInt, deShort } from "../lib/format";
 import { openExternal } from "../lib/ext";
 import { evalLabel, winProb } from "../lib/evaluation";
 import { replaySans } from "../lib/position";
-import { needsChess960 } from "../lib/chess960";
+import { needsChess960, VariantChess } from "../lib/chess960";
 import { plyOffset, shareHistory } from "../lib/share/notation";
 import { selectionStyles } from "../lib/boardMoves";
 import {
@@ -894,7 +894,12 @@ export default function Analysis({
     setUebersichtOffen(true);
   }, [selectedId, sans.length]);
 
-  const openedFen = opened?.fen;
+  /**
+   * Die Ausgangsstellung des Bretts · beim freien Brett die geteilte oder
+   * eingegebene Stellung, bei einer Chess960-Partie ihre Aufstellung. Ohne sie
+   * ließen sich die Züge einer 960-Partie gar nicht nachspielen.
+   */
+  const openedFen = opened?.fen ?? (live && game?.start_fen ? game.start_fen : undefined);
   /**
    * Die Züge bis zur gezeigten Stellung · in einer Variante deren Ast, sonst
    * die Partie bis zum aktuellen Halbzug. Sie tragen beides: das Brett und die
@@ -957,8 +962,11 @@ export default function Analysis({
   const playBoardMove = (from: string, to: string, promotion = "q"): boolean => {
     if (!scratch && !live) return false;
     try {
-      const chess = new Chess(fen);
+      // Über die eigene Regelschicht statt chess.js · sie spielt dieselben Züge
+      // und dazu die Chess960-Rochade (König auf den eigenen Turm).
+      const chess = new VariantChess(fen, { chess960: needsChess960(fen) });
       const move = chess.move({ from, to, promotion });
+      if (!move) return false;
       if (scratch) {
         const next = [...scratchSans.slice(0, ply), move.san];
         setScratchSans(next);
@@ -999,7 +1007,7 @@ export default function Analysis({
 
   const onBoardSquareClick = (square: string) => {
     if (!scratch && !live) return;
-    const chess = new Chess(fen);
+    const chess = new VariantChess(fen, { chess960: needsChess960(fen) });
     const piece = chess.get(square as Parameters<typeof chess.get>[0]);
     if (scratchSelected && scratchSelected !== square) {
       const moved = playBoardMove(scratchSelected, square);
@@ -2374,9 +2382,10 @@ export default function Analysis({
    */
   const playBookMove = (san: string) => {
     try {
-      const chess = new Chess(fen);
+      const chess = new VariantChess(fen, { chess960: needsChess960(fen) });
       const move = chess.move(san);
-      playBoardMove(move.from, move.to, move.promotion ?? "q");
+      if (!move) return;
+      playBoardMove(move.from, move.castle ? (move.rookFrom ?? move.to) : move.to, move.promotion ?? "q");
     } catch {
       /* Zug passt nicht zur Stellung */
     }

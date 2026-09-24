@@ -8,7 +8,12 @@ pub struct Db(pub Mutex<Connection>);
 
 /// Current SQLite schema version. It is stored only after the complete
 /// migration has committed successfully.
-const SCHEMA_VERSION: i64 = 22;
+const SCHEMA_VERSION: i64 = 23;
+
+/// Vorgabe der Variantenspalte · ein Datensatz ohne Angabe ist Standardschach.
+fn standard_variant() -> String {
+    "standard".into()
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GameRecord {
@@ -48,6 +53,14 @@ pub struct GameRecord {
     #[serde(default)]
     pub opponent_accuracy_endgame: Option<f64>,
     pub moves: String,
+    /// Schachvariante · "standard" oder "chess960". Andere Varianten liest
+    /// Kiebitz nicht ein (siehe lib/importer.ts).
+    #[serde(default = "standard_variant")]
+    pub variant: String,
+    /// Ausgangsstellung, wenn sie nicht die Grundstellung ist · in Chess960
+    /// gehört sie zur Partie wie die Züge selbst.
+    #[serde(default)]
+    pub start_fen: String,
     /// Restzeit nach jedem Halbzug in Hundertstelsekunden, leerzeichengetrennt ·
     /// aus den %clk-Kommentaren der PGN bzw. der lichess-Uhrenliste. Leer, wenn
     /// die Partie keine Zeitdaten mitgebracht hat.
@@ -355,6 +368,10 @@ pub struct GameSummary {
     pub has_note: bool,
     /// Beendigungsgrund; siehe `GameRecord::termination`.
     pub termination: String,
+    /// Variante; siehe `GameRecord::variant`.
+    pub variant: String,
+    /// Ausgangsstellung; siehe `GameRecord::start_fen`.
+    pub start_fen: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -612,6 +629,12 @@ fn migrate_to_current(conn: &Connection) -> Result<(), String> {
         // Migration v22: Die Informator-Zeichen der Schlussstellung · sie hat
         // keine Zeile in `move_evals` (siehe informator.rs).
         ("end_signs", "TEXT NOT NULL DEFAULT ''"),
+        // Migration v23: Varianten. `variant` ist "standard", solange nichts
+        // anderes dasteht; `start_fen` trägt die Ausgangsstellung, wo die
+        // Zugliste allein sie nicht bestimmt — in Chess960 sind das 959 von
+        // 960 Aufstellungen. Beides additiv, ältere Partien bleiben Standard.
+        ("variant", "TEXT NOT NULL DEFAULT 'standard'"),
+        ("start_fen", "TEXT NOT NULL DEFAULT ''"),
     ] {
         add_column_if_missing(conn, "games", column, definition)?;
     }
@@ -1093,8 +1116,8 @@ pub fn upsert_games(conn: &mut Connection, games: &[GameRecord]) -> Result<Upser
                     opponent_accuracy, opponent_accuracy_opening,
                     opponent_accuracy_middlegame, opponent_accuracy_endgame, moves,
                     note, note_ts, tags, tags_ts, analysis_excluded, updated_ts,
-                    clocks, time_control, termination)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33)
+                    clocks, time_control, termination, variant, start_fen)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35)
                  ON CONFLICT(source, source_id) DO UPDATE SET
                     url = excluded.url,
                     played_at = excluded.played_at,
@@ -1124,7 +1147,14 @@ pub fn upsert_games(conn: &mut Connection, games: &[GameRecord]) -> Result<Upser
                     -- Wie bei den Uhren: ein Re-Import ohne Beendigungsgrund
                     -- darf einen bereits bekannten nicht wieder loeschen.
                     termination = CASE WHEN excluded.termination != ''
-                        THEN excluded.termination ELSE games.termination END",
+                        THEN excluded.termination ELSE games.termination END,
+                    -- Variante und Ausgangsstellung kommen aus derselben
+                    -- Quelle wie die Züge · ein Re-Import darf sie
+                    -- aktualisieren, aber nicht auf leer setzen.
+                    variant = CASE WHEN excluded.variant != ''
+                        THEN excluded.variant ELSE games.variant END,
+                    start_fen = CASE WHEN excluded.start_fen != ''
+                        THEN excluded.start_fen ELSE games.start_fen END",
             )
             .map_err(|e| e.to_string())?;
 
@@ -1174,7 +1204,13 @@ pub fn upsert_games(conn: &mut Connection, games: &[GameRecord]) -> Result<Upser
                     changed_at,
                     g.clocks,
                     g.time_control,
-                    g.termination
+                    g.termination,
+                    if g.variant.trim().is_empty() {
+                        "standard".to_string()
+                    } else {
+                        g.variant.clone()
+                    },
+                    g.start_fen
                 ])
                 .map_err(|e| e.to_string())?;
             if !existed {
@@ -1198,7 +1234,8 @@ pub fn list_games(conn: &Connection) -> Result<Vec<GameRecord>, String> {
                     accuracy_opening, accuracy_middlegame, accuracy_endgame,
                     opponent_accuracy, opponent_accuracy_opening,
                     opponent_accuracy_middlegame, opponent_accuracy_endgame, moves,
-                    note, tags, analyzed, analysis_excluded, clocks, time_control, termination
+                    note, tags, analyzed, analysis_excluded, clocks, time_control, termination,
+                    variant, start_fen
              FROM games ORDER BY played_ts DESC, played_at DESC, id DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -1237,6 +1274,8 @@ pub fn list_games(conn: &Connection) -> Result<Vec<GameRecord>, String> {
                 clocks: r.get(29)?,
                 time_control: r.get(30)?,
                 termination: r.get(31)?,
+                variant: r.get(32)?,
+                start_fen: r.get(33)?,
                 // Die Vollliste trägt kein Fazit: Sie holt alle Partien mit
                 // allen Zügen, und ein Absatz je Partie wäre Nutzlast, die
                 // hier niemand liest. Wer es braucht, holt die Partie einzeln
@@ -1333,7 +1372,7 @@ const GAME_SUMMARY_COLUMNS: &str =
      opponent_accuracy_endgame, tags, analyzed, analysis_excluded,
      CASE WHEN TRIM(moves) != '' THEN 1 ELSE 0 END,
      CASE WHEN TRIM(note) != '' THEN 1 ELSE 0 END,
-     termination";
+     termination, variant, start_fen";
 
 fn game_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameSummary> {
     Ok(GameSummary {
@@ -1366,6 +1405,8 @@ fn game_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameSummar
         has_moves: row.get::<_, i64>(26)? != 0,
         has_note: row.get::<_, i64>(27)? != 0,
         termination: row.get(28)?,
+        variant: row.get(29)?,
+        start_fen: row.get(30)?,
     })
 }
 
@@ -1390,7 +1431,7 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
                 opponent_accuracy, opponent_accuracy_opening,
                 opponent_accuracy_middlegame, opponent_accuracy_endgame, moves,
                 note, tags, analyzed, analysis_excluded, clocks, time_control, termination,
-                verdict, end_signs
+                verdict, end_signs, variant, start_fen
          FROM games WHERE id = ?1",
         params![id],
         |r| {
@@ -1410,6 +1451,8 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
                 clocks: r.get(29)?, time_control: r.get(30)?, termination: r.get(31)?,
                 verdict: r.get(32)?,
                 end_signs: r.get(33)?,
+                variant: r.get(34)?,
+                start_fen: r.get(35)?,
             })
         },
     )
@@ -1498,6 +1541,8 @@ mod tests {
         GameRecord {
             verdict: String::new(),
             end_signs: String::new(),
+            variant: "standard".into(),
+            start_fen: String::new(),
             id: None,
             source: "lichess".into(),
             source_id: source_id.into(),
@@ -1789,6 +1834,8 @@ mod tests {
             .unwrap();
         assert_eq!(version, SCHEMA_VERSION);
         assert!(column_exists(&conn, "games", "termination").unwrap());
+        assert!(column_exists(&conn, "games", "variant").unwrap());
+        assert!(column_exists(&conn, "games", "start_fen").unwrap());
         assert!(column_exists(&conn, "rep_nodes", "sort_order").unwrap());
         assert!(column_exists(&conn, "study_templates", "area").unwrap());
         assert!(column_exists(&conn, "study_templates", "i18n_key").unwrap());

@@ -304,9 +304,15 @@ fn queue_search(proc: &mut LiveProc, request: PendingSearch) -> Result<(), std::
 }
 
 fn write_search(stdin: &mut ChildStdin, request: &PendingSearch) -> Result<(), std::io::Error> {
+    // Die Chess960-Regel reist mit jeder Stellung statt einmal beim Start: Am
+    // freien Brett wechselt man zwischen einer 960-Stellung und einer
+    // gewöhnlichen, ohne dass die Engine dazwischen neu anläuft. Ohne sie
+    // läse Stockfish die Rochaderechte einer 960-Stellung als die der
+    // Grundstellung und schlüge Züge vor, die es nicht gibt.
+    let chess960 = crate::chess960::needs_chess960(&request.fen);
     write!(
         stdin,
-        "position fen {}\ngo depth {}\n",
+        "setoption name UCI_Chess960 value {chess960}\nposition fen {}\ngo depth {}\n",
         request.fen, request.depth
     )
 }

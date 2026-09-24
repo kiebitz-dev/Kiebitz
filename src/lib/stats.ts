@@ -12,6 +12,7 @@ export interface RatingCard {
   platform: "chess.com" | "lichess";
   tc: string;
   timeClass: string;
+  variant?: "standard" | "chess960";
   value: number;
   delta: number;
   spark: number[];
@@ -38,7 +39,22 @@ export interface RatingHistorySeries {
   id: string;
   platform: "chess.com" | "lichess";
   timeClass: string;
+  /** Chess960 führt eine eigene Wertung · eine eigene Linie, nicht dieselbe. */
+  variant?: "standard" | "chess960";
   label: string;
+}
+
+/** Variante einer Partie · ohne Angabe Standardschach. */
+export function variantOf(game: GameSummary): "standard" | "chess960" {
+  return game.variant === "chess960" ? "chess960" : "standard";
+}
+
+/**
+ * Kennung einer Wertungsreihe · Plattform, Modus und bei Chess960 der Zusatz.
+ * Dieselbe Kennung benutzen Karten, Verlauf und Farben.
+ */
+export function seriesId(source: string, timeClass: string, variant: "standard" | "chess960"): string {
+  return variant === "chess960" ? `${source}-${timeClass}-960` : `${source}-${timeClass}`;
 }
 
 export interface LiveDashboard {
@@ -64,11 +80,11 @@ export const HISTORY_IDLE_DAYS = 35;
  *
  * chess.com legt Varianten (Chess960, Crazyhouse, …) unter demselben Modus ab
  * wie normales Schach, führt für sie aber eine eigene Wertung. Ein Daily-960
- * bei 730 neben einem Daily bei 1.000 zieht die Linie dann Tag für Tag
- * zwischen beiden hin und her. Der Import holt Varianten nicht mehr; ältere
- * liegen aber noch in der Datenbank und sind an einem erkennbar: chess.com
- * liefert zu jeder normalen Partie ein PGN, dessen Züge sich lesen lassen ·
- * nur bei einer Variante mit eigener Startstellung bleibt die Zugliste leer.
+ * bei 730 neben einem Daily bei 1.000 zog die Linie Tag für Tag zwischen
+ * beiden hin und her. Heute trägt eine 960-Partie ihre Variante und bekommt
+ * ihre eigene Reihe (`seriesId`). Aus älteren Importen liegen aber noch
+ * 960-Partien ohne Züge und ohne Variante in der Datenbank · sie sind daran
+ * erkennbar, dass chess.com zu jeder normalen Partie lesbare Züge liefert.
  */
 export function countsForRating(game: GameSummary): boolean {
   if (game.my_elo <= 0) return false;
@@ -99,32 +115,36 @@ export function buildDashboard(
   const cards: RatingCard[] = [];
   for (const platform of ["chess.com", "lichess"] as const) {
     for (const tc of ["rapid", "blitz", "bullet", "daily"]) {
-      const bucket = asc.filter(
-        (g) => g.source === platform && g.time_class === tc && countsForRating(g)
-      );
-      if (bucket.length === 0) continue;
-      const value = bucket[bucket.length - 1].my_elo;
-      const older = bucket.filter((g) => g.played_ts <= cutoff30d);
-      const ref = older.length > 0 ? older[older.length - 1].my_elo : bucket[0].my_elo;
-      let spark = bucket.slice(-12).map((g) => g.my_elo);
-      if (spark.length === 1) spark = [spark[0], spark[0]];
-      cards.push({
-        id: `${platform}-${tc}`,
-        platform,
-        tc: tcLabel(tc, opts.locale),
-        timeClass: tc,
-        value,
-        delta: value - ref,
-        spark,
-        url: profileUrl[platform],
-      });
+      for (const variant of ["standard", "chess960"] as const) {
+        const bucket = asc.filter(
+          (g) =>
+            g.source === platform && g.time_class === tc && variantOf(g) === variant && countsForRating(g)
+        );
+        if (bucket.length === 0) continue;
+        const value = bucket[bucket.length - 1].my_elo;
+        const older = bucket.filter((g) => g.played_ts <= cutoff30d);
+        const ref = older.length > 0 ? older[older.length - 1].my_elo : bucket[0].my_elo;
+        let spark = bucket.slice(-12).map((g) => g.my_elo);
+        if (spark.length === 1) spark = [spark[0], spark[0]];
+        cards.push({
+          id: seriesId(platform, tc, variant),
+          platform,
+          tc: variant === "chess960" ? `${tcLabel(tc, opts.locale)} 960` : tcLabel(tc, opts.locale),
+          timeClass: tc,
+          variant,
+          value,
+          delta: value - ref,
+          spark,
+          url: profileUrl[platform],
+        });
+      }
     }
   }
   // Die zuletzt aktivsten Kategorien zuerst: Partienzahl der letzten 30 Tage,
   // bei Gleichstand (z. B. lange Pause) entscheidet die jüngste Partie.
   const activity = new Map<string, { recent: number; last: number }>();
   for (const g of records) {
-    const key = `${g.source}-${g.time_class}`;
+    const key = seriesId(g.source, g.time_class, variantOf(g));
     const a = activity.get(key) ?? { recent: 0, last: 0 };
     if (g.played_ts > cutoff30d) a.recent++;
     if (g.played_ts > a.last) a.last = g.played_ts;
@@ -142,6 +162,7 @@ export function buildDashboard(
     id: card.id,
     platform: card.platform,
     timeClass: card.timeClass,
+    variant: card.variant,
     label: `${card.platform} · ${card.tc}`,
   }));
 
@@ -198,6 +219,7 @@ export function historyPoints(
         (game) =>
           game.source === entry.platform
           && game.time_class === entry.timeClass
+          && variantOf(game) === (entry.variant ?? "standard")
           && countsForRating(game)
       ),
     ])

@@ -1,4 +1,5 @@
 import { Chess } from "chess.js";
+import { sansFromVariantPgn } from "./chess960";
 import type { GameRecord } from "./db";
 import {
   clocksFromPgn,
@@ -103,16 +104,21 @@ export async function importChessCom(
     const monthGames: CcGame[] = (await monthRes.json()).games ?? [];
 
     for (const g of monthGames) {
-      // Varianten führen auf chess.com eine eigene Wertung, stehen aber unter
-      // demselben Modus · im Ratingverlauf sprang die Daily-Linie dadurch
-      // zwischen Daily und Daily-960 hin und her. Ihre Züge liest chess.js
-      // ohnehin nicht, analysieren ließen sie sich also auch nicht.
-      if (g.rules && g.rules !== "chess") continue;
+      // Chess960 kommt mit herein und trägt seine eigene Startstellung; die
+      // übrigen Varianten (Bughouse, Crazyhouse, King of the Hill …) spielt
+      // Kiebitz nicht, und eine Partie, die es nicht nachspielen kann, gehört
+      // auch nicht in die Datenbank.
+      const chess960 = g.rules === "chess960";
+      if (g.rules && g.rules !== "chess" && !chess960) continue;
       const iAmWhite = g.white.username.toLowerCase() === user.toLowerCase();
       const me = iAmWhite ? g.white : g.black;
       const opp = iAmWhite ? g.black : g.white;
       const pgn = g.pgn ?? "";
-      const sans = sansFromPgn(pgn);
+      // Die Startstellung steht im PGN · ohne sie wären die Züge einer
+      // 960-Partie nicht nachspielbar.
+      const startFen = chess960 ? pgnHeader(pgn, "FEN") : "";
+      const sans = chess960 ? sansFromVariantPgn(pgn, startFen) : sansFromPgn(pgn);
+      if (chess960 && (!startFen || sans.length === 0)) continue;
       const timeControl = pgnHeader(pgn, "TimeControl");
       const clocks = clocksFromPgn(pgn, parseTimeControl(timeControl));
       const date = pgnHeader(pgn, "Date").split(".").join("-") ||
@@ -126,6 +132,8 @@ export async function importChessCom(
         played_at: date,
         played_ts: g.end_time,
         time_class: TIME_CLASS[g.time_class] ?? g.time_class,
+        variant: chess960 ? "chess960" : "standard",
+        start_fen: startFen,
         color: iAmWhite ? "white" : "black",
         my_name: me.username,
         opponent: opp.username,
@@ -154,6 +162,8 @@ interface LiGame {
   speed: string;
   /** "standard", "chess960", "crazyhouse", "fromPosition", … */
   variant?: string;
+  /** Aufstellung einer Variantenpartie · fehlt im Standardschach. */
+  initialFen?: string;
   winner?: "white" | "black";
   /** "mate", "resign", "outoftime", "stalemate", "draw", … */
   status?: string;
@@ -196,9 +206,13 @@ export async function importLichess(
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const g: LiGame = JSON.parse(line);
-    // Wie bei chess.com: Varianten haben eine eigene Wertung und eine eigene
-    // Startstellung · beides passt nicht in Verlauf und Analyse.
-    if (g.variant && g.variant !== "standard") continue;
+    // Wie bei chess.com: Chess960 kommt mit, der Rest bleibt draußen.
+    const chess960 = g.variant === "chess960";
+    if (g.variant && g.variant !== "standard" && !chess960) continue;
+    // Lichess nennt die Aufstellung nur bei Varianten · ohne sie ließe sich
+    // die Partie nicht nachspielen.
+    const startFen = chess960 ? (g.initialFen ?? "") : "";
+    if (chess960 && !startFen) continue;
     const whiteName = g.players.white.user?.name ?? "?";
     const iAmWhite = whiteName.toLowerCase() === user.toLowerCase();
     const me = iAmWhite ? g.players.white : g.players.black;
@@ -214,6 +228,8 @@ export async function importLichess(
       played_at: new Date(g.createdAt).toISOString().slice(0, 10),
       played_ts: Math.floor(g.createdAt / 1000),
       time_class: TIME_CLASS[g.speed] ?? g.speed,
+      variant: chess960 ? "chess960" : "standard",
+      start_fen: startFen,
       color: myColor,
       my_name: me.user?.name ?? user,
       opponent: opp.user?.name ?? "Anonym",

@@ -5,6 +5,7 @@ mod book;
 mod build_info;
 mod cbh;
 mod chess;
+mod chess960;
 mod chessdb;
 mod db;
 mod db3;

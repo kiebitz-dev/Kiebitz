@@ -26,6 +26,25 @@ describe("PGN import/export", () => {
     expect(game.note).toBe("Good finish");
   });
 
+  it("round-trips a Chess960 game with its start position", () => {
+    const fen = "1k6/pppppppp/8/8/8/8/PPPPPPPP/RK2R3 w KQ - 0 1";
+    const game = {
+      ...importPgn(SAMPLE, "Tom")[0],
+      color: "white" as const,
+      opponent: "Alice",
+      variant: "chess960",
+      start_fen: fen,
+      moves: "O-O a6 Kh1",
+      clocks: "",
+    };
+    const text = exportPgn([game], "Tom");
+    expect(text).toContain('[Variant "Chess960"]');
+    expect(text).toContain(`[FEN "${fen}"]`);
+    expect(text).toContain("1. O-O a6 2. Kh1");
+    const [back] = importPgn(text, "Tom");
+    expect(back).toMatchObject({ variant: "chess960", start_fen: fen, moves: "O-O a6 Kh1" });
+  });
+
   it("round-trips multiple games", () => {
     const game = {
       ...importPgn(SAMPLE, "Tom")[0],

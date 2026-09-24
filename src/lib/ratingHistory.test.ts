@@ -78,6 +78,26 @@ describe("buildRatingHistory", () => {
     expect(rapid.games).toBe(3);
   });
 
+  it("gives Chess960 a series of its own instead of mixing it into the mode", () => {
+    Date.now = () => new Date(2026, 7, 31, 9).getTime();
+    const daily = [
+      g({ time_class: "daily", played_ts: ts(2026, 7, 10), my_elo: 1000 }),
+      g({ time_class: "daily", variant: "chess960", played_ts: ts(2026, 7, 11), my_elo: 730 }),
+      g({ time_class: "daily", played_ts: ts(2026, 7, 12), my_elo: 1004 }),
+    ];
+    const data = buildRatingHistory(daily, { locale: "en", range: "3m" });
+    expect(data.series.map((series) => series.id).sort()).toEqual([
+      "chess.com-daily",
+      "chess.com-daily-960",
+    ]);
+    const standard = data.summaries.find((row) => row.series.id === "chess.com-daily")!;
+    expect(standard.low).toBe(1000);
+    expect(standard.games).toBe(2);
+    const fischer = data.summaries.find((row) => row.series.id === "chess.com-daily-960")!;
+    expect(fischer.current).toBe(730);
+    expect(fischer.series.label).toMatch(/960/);
+  });
+
   it("switches to weekly points beyond a year and still ends today", () => {
     Date.now = () => new Date(2026, 7, 31, 9).getTime();
     const data = buildRatingHistory(

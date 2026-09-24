@@ -749,6 +749,26 @@ describe("Analysis page", () => {
     expect(subject.history).toBe("1.e4 e5");
   });
 
+  it("replays a Chess960 game from its own start position", async () => {
+    mocks.listGames.mockResolvedValue([
+      {
+        ...excludedGame,
+        variant: "chess960",
+        start_fen: "1k6/pppppppp/8/8/8/8/PPPPPPPP/RK2R3 w KQ - 0 1",
+        moves: "O-O a6",
+      },
+    ]);
+    mocks.gameAnalysis.mockResolvedValue([]);
+    render(<LocaleProvider><Analysis targetGameId={7} /></LocaleProvider>);
+
+    // Kurz rochiert: König b1 nach g1, Turm e1 nach f1 · der Turm a1 bleibt.
+    await waitFor(() =>
+      expect(screen.getByTestId("analysis-board").dataset.fen).toBe(
+        "1k6/1ppppppp/p7/8/8/8/PPPPPPPP/R4RK1 w - - 0 2"
+      )
+    );
+  });
+
   it("opens a game played against the engine on the free board, at its end", async () => {
     const line = {
       fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

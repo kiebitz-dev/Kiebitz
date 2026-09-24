@@ -28,6 +28,10 @@ export interface GameSummary {
   opponent_accuracy_opening?: number | null;
   opponent_accuracy_middlegame?: number | null;
   opponent_accuracy_endgame?: number | null;
+  /** Schachvariante · "standard" oder "chess960". */
+  variant?: string;
+  /** Ausgangsstellung, wenn sie nicht die Grundstellung ist (Chess960). */
+  start_fen?: string;
   has_moves?: boolean;
   has_note?: boolean;
   moves?: string; // Volltext ist nur im Detaildatensatz vorhanden.

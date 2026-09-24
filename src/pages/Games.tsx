@@ -249,7 +249,10 @@ export default function Games({
 
   // Schlussstellung der gewählten Partie · einmal für das Vorschaubrett gerechnet,
   // samt dem Zug, mit dem die Partie endete.
-  const preview = useMemo(() => replaySans(selected ? selected.sans : []), [selected]);
+  const preview = useMemo(
+    () => replaySans(selected ? selected.sans : [], undefined, selected?.startFen),
+    [selected]
+  );
   const previewFen = selected ? preview.fen : "";
   const previewLastMove = preview.moves[preview.moves.length - 1] ?? null;
   // Die Informator-Zeichen der Schlussstellung · abgelegt vom Analyselauf und

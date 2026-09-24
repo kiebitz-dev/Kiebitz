@@ -58,19 +58,36 @@ describe("importChessCom", () => {
     });
   });
 
-  it("skips chess.com variants, which carry a rating of their own", async () => {
-    const variant = { ...ccGame, url: "https://www.chess.com/game/daily/960", rules: "chess960" };
+  it("keeps Chess960 with its start position and skips the other variants", async () => {
+    // Aufstellung mit König b1 und Türmen a1/e1 · Weiß rochiert kurz.
+    const fen = "rk2r3/pppppppp/8/8/8/8/PPPPPPPP/RK2R3 w KQkq - 0 1";
+    const pgn960 = [
+      '[Variant "Chess960"]',
+      '[SetUp "1"]',
+      `[FEN "${fen}"]`,
+      '[TimeControl "1/259200"]',
+      "",
+      "1. O-O {[%clk 71:59:59]} 1... a6 2. Kh1 1-0",
+      "",
+    ].join("\n");
+    const chess960 = { ...ccGame, url: "https://www.chess.com/game/daily/960", rules: "chess960", pgn: pgn960 };
+    const bughouse = { ...ccGame, url: "https://www.chess.com/game/live/77", rules: "bughouse" };
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) =>
         url.endsWith("/archives")
           ? jsonResponse({ archives: ["m"] })
-          : jsonResponse({ games: [{ ...ccGame, rules: "chess" }, variant] })
+          : jsonResponse({ games: [{ ...ccGame, rules: "chess" }, chess960, bughouse] })
       )
     );
 
     const games = await importChessCom("Torim98");
-    expect(games.map((game) => game.source_id)).toEqual(["123456"]);
+    expect(games.map((game) => game.source_id)).toEqual(["123456", "960"]);
+    expect(games[0].variant).toBe("standard");
+    const fischer = games[1];
+    expect(fischer.variant).toBe("chess960");
+    expect(fischer.start_fen).toBe(fen);
+    expect(fischer.moves).toBe("O-O a6 Kh1");
   });
 
   it("derives a loss when the opponent won and maps correspondence to daily", async () => {
@@ -126,19 +143,22 @@ describe("importChessCom", () => {
 describe("importLichess", () => {
   const line = (o: Record<string, unknown>) => JSON.stringify(o);
 
-  it("skips lichess variants", async () => {
+  it("keeps lichess Chess960 with its start position and skips the other variants", async () => {
     const players = {
       white: { user: { name: "Torim98" }, rating: 1600 },
       black: { user: { name: "villain" }, rating: 1550 },
     };
+    const fen = "rk2r3/pppppppp/8/8/8/8/PPPPPPPP/RK2R3 w KQkq - 0 1";
     const ndjson = [
       line({ id: "std", speed: "blitz", variant: "standard", createdAt: 1, moves: "e4", players }),
       line({ id: "zh", speed: "blitz", variant: "crazyhouse", createdAt: 2, moves: "e4", players }),
+      line({ id: "fr", speed: "blitz", variant: "chess960", initialFen: fen, createdAt: 3, moves: "O-O a6", players }),
     ].join("\n");
     vi.stubGlobal("fetch", vi.fn(async () => textResponse(ndjson)));
 
     const games = await importLichess("Torim98");
-    expect(games.map((game) => game.source_id)).toEqual(["std"]);
+    expect(games.map((game) => game.source_id)).toEqual(["std", "fr"]);
+    expect(games[1]).toMatchObject({ variant: "chess960", start_fen: fen, moves: "O-O a6" });
   });
 
   it("normalizes NDJSON and derives results relative to the player's color", async () => {

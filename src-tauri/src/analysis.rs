@@ -262,15 +262,15 @@ fn index_game_positions(
 #[tauri::command]
 pub fn index_positions(db: State<db::Db>) -> Result<usize, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let missing: Vec<(i64, String)> = {
+    let missing: Vec<(i64, String, String)> = {
         let mut stmt = conn
             .prepare(
-                "SELECT g.id, g.moves FROM games g
+                "SELECT g.id, g.moves, g.start_fen FROM games g
                  WHERE g.moves != '' AND NOT EXISTS (SELECT 1 FROM positions p WHERE p.game_id = g.id)",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?
@@ -278,8 +278,8 @@ pub fn index_positions(db: State<db::Db>) -> Result<usize, String> {
 
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let mut indexed = 0usize;
-    for (id, moves) in &missing {
-        let walked = chess::walk_sans(moves);
+    for (id, moves, start_fen) in &missing {
+        let walked = chess::walk_from(start_fen, moves);
         if walked.is_empty() {
             continue;
         }
@@ -378,6 +378,8 @@ pub fn cancel_analysis(state: State<AnalysisState>) {
 struct Target {
     id: i64,
     moves: String,
+    /// Ausgangsstellung, wenn die Partie nicht in der Grundstellung beginnt.
+    start_fen: String,
     opponent: String,
     color: String,
     my_elo: i64,
@@ -403,19 +405,20 @@ fn run_worker(
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     let _ = conn.pragma_update(None, "busy_timeout", "10000");
 
-    const TARGET_COLUMNS: &str = "id, moves, opponent, color, my_elo, analysis_excluded,
+    const TARGET_COLUMNS: &str = "id, moves, start_fen, opponent, color, my_elo, analysis_excluded,
          result, accuracy, opponent_accuracy";
     let read_target = |r: &rusqlite::Row| -> rusqlite::Result<Target> {
         Ok(Target {
             id: r.get(0)?,
             moves: r.get(1)?,
-            opponent: r.get(2)?,
-            color: r.get(3)?,
-            my_elo: r.get(4)?,
-            excluded: r.get::<_, i64>(5)? != 0,
-            result: r.get(6)?,
-            accuracy: r.get(7)?,
-            opponent_accuracy: r.get(8)?,
+            start_fen: r.get(2)?,
+            opponent: r.get(3)?,
+            color: r.get(4)?,
+            my_elo: r.get(5)?,
+            excluded: r.get::<_, i64>(6)? != 0,
+            result: r.get(7)?,
+            accuracy: r.get(8)?,
+            opponent_accuracy: r.get(9)?,
         })
     };
     let targets: Vec<Target> = {
@@ -484,11 +487,14 @@ fn run_worker(
     let state = app.state::<AnalysisState>();
     let total = targets.len();
     let mut analyzed = 0usize;
+    // Die Engines stehen auf Standardschach, bis eine 960-Partie kommt.
+    let mut engines_in_chess960 = false;
 
     for (idx, target) in targets.into_iter().enumerate() {
         let Target {
             id: game_id,
             moves,
+            start_fen,
             opponent,
             color,
             my_elo,
@@ -500,7 +506,16 @@ fn run_worker(
         if state.cancel.load(Ordering::SeqCst) {
             break;
         }
-        let walked = chess::walk_sans(&moves);
+        let walked = chess::walk_from(&start_fen, &moves);
+        // Eine Chess960-Partie rechnet Stockfish nur mit der passenden Regel ·
+        // sonst liest es „e1h1" als Zug des Königs nach h1.
+        let chess960 = crate::chess960::needs_chess960(&start_fen);
+        if chess960 != engines_in_chess960 {
+            for engine in &mut engines {
+                let _ = engine.set_option("UCI_Chess960", if chess960 { "true" } else { "false" });
+            }
+            engines_in_chess960 = chess960;
+        }
         if walked.is_empty() {
             // Nichts zu analysieren (abgebrochene/leere Partie) · aus der Queue nehmen.
             conn.execute(
@@ -891,14 +906,14 @@ pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>
     // Die Varianten liegen in UCI, die Oberfläche zeigt Züge. Übersetzt wird
     // hier, weil dafür die Stellung vor dem Halbzug nötig ist — und die steht
     // nirgends in `move_evals`, sondern entsteht aus der Zugliste der Partie.
-    let moves: String = conn
+    let (moves, start_fen): (String, String) = conn
         .query_row(
-            "SELECT moves FROM games WHERE id = ?1",
+            "SELECT moves, start_fen FROM games WHERE id = ?1",
             params![game_id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap_or_default();
-    let fens: Vec<String> = chess::walk_sans(&moves)
+    let fens: Vec<String> = chess::walk_from(&start_fen, &moves)
         .into_iter()
         .map(|w| w.fen_before)
         .collect();
@@ -959,6 +974,7 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
         String,
         String,
         String,
+        String,
         Option<f64>,
         Option<f64>,
         Option<f64>,
@@ -968,7 +984,7 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
     let games: Vec<Pending> = {
         let mut stmt = conn
             .prepare(
-                "SELECT id, moves, color, result, accuracy, opponent_accuracy,
+                "SELECT id, moves, start_fen, color, result, accuracy, opponent_accuracy,
                         accuracy_opening, accuracy_middlegame, accuracy_endgame
                  FROM games
                  WHERE analyzed = 1 AND moves != '' AND verdict_version < ?1",
@@ -986,6 +1002,7 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
                     r.get(6)?,
                     r.get(7)?,
                     r.get(8)?,
+                    r.get(9)?,
                 ))
             })
             .map_err(|e| e.to_string())?;
@@ -1000,6 +1017,7 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
     for (
         game_id,
         moves,
+        start_fen,
         color,
         result,
         accuracy,
@@ -1009,7 +1027,7 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
         accuracy_endgame,
     ) in games
     {
-        let walked = chess::walk_sans(&moves);
+        let walked = chess::walk_from(&start_fen, &moves);
         // Die abgelegten Zeilen, nach Halbzug geordnet.
         /// Halbzug, Empfehlung davor, Urteil und Bewertung danach.
         type StoredRow = (u32, String, String, Option<i32>, Option<i32>);
@@ -1180,11 +1198,11 @@ pub fn backfill_explanations(conn: &Connection) -> Result<usize, String> {
 /// Bestand (siehe `backfill_signs`). Eine Transaktion öffnet es nicht: Es läuft
 /// in der seines Aufrufers.
 pub fn refresh_signs(conn: &Connection, game_id: i64) -> Result<(), String> {
-    let (moves, clocks, time_control): (String, String, String) = conn
+    let (moves, clocks, time_control, start_fen): (String, String, String, String) = conn
         .query_row(
-            "SELECT moves, clocks, time_control FROM games WHERE id = ?1",
+            "SELECT moves, clocks, time_control, start_fen FROM games WHERE id = ?1",
             params![game_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .map_err(|e| e.to_string())?;
     /// Halbzug, Bewertung, Matt, Empfehlung, Urteil, Motiv, Motivfelder.
@@ -1220,7 +1238,7 @@ pub fn refresh_signs(conn: &Connection, game_id: i64) -> Result<(), String> {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?
     };
-    let walked = chess::walk_sans(&moves);
+    let walked = chess::walk_from(&start_fen, &moves);
     // Die Zeichen rechnen mit lückenlosen Zeilen ab Halbzug 1 · eine Analyse,
     // die vorzeitig endete, bekommt nur ihren zusammenhängenden Anfang.
     let contiguous = stored

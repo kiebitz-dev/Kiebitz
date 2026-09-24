@@ -155,23 +155,25 @@ fn backfill_own_puzzles(conn: &Connection) -> Result<(), String> {
     if db::meta_get(conn, "own_puzzles_backfilled_v3").is_some() {
         return Ok(());
     }
-    let games: Vec<(i64, String, String, i64)> = {
+    let games: Vec<(i64, String, String, String, i64)> = {
         let mut stmt = conn
             .prepare(
-                "SELECT id, moves, color, my_elo FROM games
+                "SELECT id, moves, start_fen, color, my_elo FROM games
                  WHERE analyzed = 1 AND analysis_excluded = 0 AND moves != ''
                    AND EXISTS (SELECT 1 FROM move_evals WHERE game_id = games.id)",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
         rows
     };
-    for (game_id, moves, color, rating) in games {
-        let walked = crate::chess::walk_sans(&moves);
+    for (game_id, moves, start_fen, color, rating) in games {
+        let walked = crate::chess::walk_from(&start_fen, &moves);
         let my_white = color == "white";
         // Alle Züge der Partie, nicht nur die Fehler: die Bewertung *vor* einem
         // Zug steht in der Zeile davor, und ohne sie ließe sich weder der

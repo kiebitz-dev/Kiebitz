@@ -511,6 +511,38 @@ function castleUciAlternatives(move: VariantMove): string[] {
   return [`${move.from}${move.to}`, `${move.from}${move.rookFrom}`];
 }
 
+/**
+ * Dasselbe für eine Partie aus eigener Startstellung · Chess960.
+ *
+ * chess.js liest so ein PGN nicht: Die Rochade steht darin als „O-O", der
+ * Turm aber woanders. Der Zugtext wird deshalb selbst zerlegt (Zugnummern,
+ * Kommentare und Ergebnis fallen weg) und über die eigene Regelschicht
+ * gespielt (lib/chess960.ts).
+ */
+export function sansFromVariantPgn(pgn: string, startFen: string): string[] {
+  const body = pgn
+    .split(/\r?\n\r?\n/)
+    .slice(1)
+    .join("\n\n")
+    .replace(/\{[^}]*\}/g, " ")
+    .replace(/\$\d+/g, " ")
+    .replace(/\([^()]*\)/g, " ");
+  let game: VariantChess;
+  try {
+    game = new VariantChess(startFen, { chess960: true });
+  } catch {
+    return [];
+  }
+  const sans: string[] = [];
+  for (const token of body.split(/\s+/)) {
+    if (!token || /^\d+\.+$/.test(token) || /^(1-0|0-1|1\/2-1\/2|\*)$/.test(token)) continue;
+    const move = game.move(token);
+    if (!move) break;
+    sans.push(move.san);
+  }
+  return sans;
+}
+
 // ── Chess960-Startstellungen ─────────────────────────────────────────────────
 
 /**

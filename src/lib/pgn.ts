@@ -1,4 +1,5 @@
 import { Chess } from "chess.js";
+import { sansFromVariantPgn } from "./chess960";
 import type { GameRecord } from "./db";
 import {
   clockStamp,
@@ -117,9 +118,12 @@ export function importPgn(
   }
 
   return parsed.map(({ block, headers: h }) => {
+    // Chess960 liest chess.js nicht (die Rochade steht woanders) · dort
+    // spielt die eigene Regelschicht die Züge ab der Aufstellung nach.
+    const chess960 = /960|fischer/i.test(h.Variant ?? "") && Boolean(h.FEN);
     const chess = new Chess();
-    chess.loadPgn(block, { strict: false });
-    const moves = chess.history();
+    if (!chess960) chess.loadPgn(block, { strict: false });
+    const moves = chess960 ? sansFromVariantPgn(block, h.FEN) : chess.history();
     const isBlack = normalizedPlayer(h.Black) === player;
     const color = isBlack ? "black" : "white";
     const opponent = color === "white" ? h.Black : h.White;
@@ -165,7 +169,7 @@ export function importPgn(
       // ob die Partie mit Matt oder Patt endete.
       termination:
         terminationFromPgnHeader(h.Termination || "") ||
-        endForPosition(chess.fen())?.reason ||
+        (chess960 ? "" : endForPosition(chess.fen())?.reason) ||
         "",
       opening: h.Opening || "",
       eco: h.ECO || "",
@@ -179,6 +183,8 @@ export function importPgn(
       opponent_accuracy_middlegame: theirs.middlegame,
       opponent_accuracy_endgame: theirs.endgame,
       moves: moves.join(" "),
+      variant: chess960 ? "chess960" : "standard",
+      start_fen: chess960 ? h.FEN : "",
       clocks: serializeClocks(
         clocksFromPgn(block, parseTimeControl(h.TimeControl ?? "")).slice(0, moves.length)
       ),
@@ -196,6 +202,45 @@ function resultHeader(game: GameRecord): string {
   if (game.result === "draw") return "1/2-1/2";
   const whiteWon = (game.color === "white") === (game.result === "win");
   return whiteWon ? "1-0" : "0-1";
+}
+
+/**
+ * Eine Chess960-Partie als PGN · Kopfzeilen, dann die Züge mit Nummern ab der
+ * Aufstellung und das Ergebnis. Die Züge kommen so, wie sie gespeichert sind:
+ * Sie wurden beim Import schon gegen die Regeln geprüft (lib/chess960.ts).
+ */
+function variantPgn(values: Record<string, string>, game: GameRecord): string {
+  const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const head = Object.entries(values)
+    .map(([key, value]) => `[${key} "${escape(value)}"]`)
+    .join("\n");
+  const blackFirst = game.start_fen?.split(" ")[1] === "b";
+  const firstNumber = Number(game.start_fen?.split(" ")[5] ?? "1") || 1;
+  const tokens: string[] = [];
+  game.moves
+    .split(/\s+/)
+    .filter(Boolean)
+    .forEach((san, index) => {
+      const ply = index + (blackFirst ? 1 : 0);
+      const number = firstNumber + Math.floor(ply / 2);
+      if (ply % 2 === 0) tokens.push(`${number}.`);
+      else if (index === 0) tokens.push(`${number}...`);
+      tokens.push(san);
+    });
+  tokens.push(values.Result);
+  // Zeilen bis 100 Zeichen wie beim übrigen Export.
+  const lines: string[] = [];
+  let line = "";
+  for (const token of tokens) {
+    if (line && line.length + 1 + token.length > 100) {
+      lines.push(line);
+      line = token;
+    } else {
+      line = line ? `${line} ${token}` : token;
+    }
+  }
+  if (line) lines.push(line);
+  return `${head}\n\n${lines.join("\n")}`;
 }
 
 /** Exports database games as standards-compliant, multi-game PGN. */
@@ -245,6 +290,12 @@ export function exportPgn(games: GameRecord[], playerName: string): string {
     if (game.opponent_accuracy_opening != null) values.KiebitzOpponentAccuracyOpening = game.opponent_accuracy_opening.toFixed(1);
     if (game.opponent_accuracy_middlegame != null) values.KiebitzOpponentAccuracyMiddlegame = game.opponent_accuracy_middlegame.toFixed(1);
     if (game.opponent_accuracy_endgame != null) values.KiebitzOpponentAccuracyEndgame = game.opponent_accuracy_endgame.toFixed(1);
+    // Chess960 schreibt der Export selbst: chess.js kennt die Rochade dieser
+    // Variante nicht und bräche mitten im Export ab · und mit ihm die ganze
+    // Datei, nicht nur diese eine Partie.
+    if (game.variant === "chess960" && game.start_fen) {
+      return variantPgn({ ...values, Variant: "Chess960", SetUp: "1", FEN: game.start_fen }, game);
+    }
     for (const [key, value] of Object.entries(values)) chess.setHeader(key, value);
     // Uhren gehen als %clk-Kommentare mit, so wie sie hereingekommen sind ·
     // ein Export/Import-Rundlauf verliert die Zeitdaten damit nicht.

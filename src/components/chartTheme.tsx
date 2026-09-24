@@ -41,6 +41,13 @@ export const RATING_COLORS: Record<string, string> = {
   "lichess-blitz": chart.accent,
   "lichess-bullet": chart.loss,
   "lichess-daily": "#b09bea",
+  // Chess960 · dieselbe Familie wie der Modus, eine Stufe gedämpft, damit die
+  // beiden Linien nebeneinander als verwandt und doch getrennt lesbar sind.
+  "chess.com-daily-960": "#8f7fd0",
+  "chess.com-rapid-960": "#6fa36b",
+  "chess.com-blitz-960": "#c9a44a",
+  "lichess-blitz-960": "#5fa8a0",
+  "lichess-rapid-960": "#6d8fc9",
   cc: chart.cc,
   li: chart.li,
 };

@@ -16,6 +16,8 @@ export interface UiGame extends Omit<Game, "tc"> {
   dbId?: number;
   url?: string;
   analysisExcluded?: boolean;
+  /** Aufstellung einer Chess960-Partie · ohne sie ist die Vorschau falsch. */
+  startFen?: string;
 }
 
 /**
@@ -115,8 +117,11 @@ export function toUi(r: GameSummary, locale: Locale = "en"): UiGame {
     date,
     dateKey: gameDateKey(r),
     source: r.source,
-    tc: tcLabel(r.time_class, locale),
+    // Chess960 steht im Modus · so trennt ihn auch der Filter der Liste von
+    // der gleichnamigen Standardreihe, wie es seine eigene Wertung verlangt.
+    tc: r.variant === "chess960" ? `${tcLabel(r.time_class, locale)} 960` : tcLabel(r.time_class, locale),
     timeClass: r.time_class,
+    startFen: r.start_fen || undefined,
     color: r.color,
     opponent: r.opponent,
     oppElo: r.opp_elo,
