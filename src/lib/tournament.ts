@@ -87,7 +87,11 @@ export function tournamentPgn(): Promise<string> {
 }
 
 export function onTournamentProgress(cb: (status: TournamentStatus) => void): Promise<UnlistenFn> {
-  return listen<TournamentStatus>("tournament://progress", (event) => cb(event.payload));
+  // Ohne Tauri (Web-Vorschau, Tests) gibt es keinen Ereignisstrom · dann
+  // wird eben nichts gemeldet, statt dass eine Ablehnung ins Leere läuft.
+  return listen<TournamentStatus>("tournament://progress", (event) => cb(event.payload)).catch(
+    () => () => {}
+  );
 }
 
 /** Punkte, wie sie in einer Tabelle stehen: 3 Halbe sind „1,5". */
