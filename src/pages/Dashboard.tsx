@@ -17,6 +17,7 @@ import { gameAnalysis, type MoveEvalRow } from "../lib/analysis";
 import { begruendeZug, erklaereFazit, erklaereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 import { getSettings } from "../lib/settings";
+import type { CorrespondenceLine } from "../components/CorrespondenceCard";
 import { repStats, type RepStats } from "../lib/repertoire";
 import { puzzleStats as fetchPuzzleStats, type PuzzleStats } from "../lib/puzzles";
 import { buildDashboard, type HistoryPoint, type RatingHistorySeries } from "../lib/stats";
@@ -43,6 +44,11 @@ const RatingHistoryChart = lazy(() => import("../components/RatingHistoryChart")
  */
 import { LeereSeite } from "../components/blatt/LeereSeite";
 const DashboardBlatt = lazy(() => import("./blatt/DashboardBlatt"));
+/**
+ * Fernschach kommt nach · die Karte braucht chess.js für die Züge der
+ * laufenden Partien, und das hat im Startbündel nichts verloren.
+ */
+const CorrespondenceCard = lazy(() => import("../components/CorrespondenceCard"));
 
 /**
  * Was die übrigen Quellen anzubieten haben · schon aufbereitet.
@@ -144,10 +150,13 @@ export default function Dashboard({
   go,
   openAnalysis,
   openGames,
+  openLine,
 }: {
   go: (p: PageId) => void;
   openAnalysis: (gameId: number) => void;
   openGames: (filter?: GamesFilter) => void;
+  /** Eine laufende Fernpartie am freien Brett der Analyse öffnen. */
+  openLine?: (line: CorrespondenceLine) => void;
 }) {
   const backend = useBackendInfo();
   const { locale, t } = useI18n();
@@ -668,6 +677,14 @@ export default function Dashboard({
           </Card>
         </div>
       </div>
+
+      {/* Laufende Fernpartien · nur mit echten Konten und nur, wenn es welche
+          gibt (die Karte blendet sich sonst selbst aus). */}
+      {live && openLine && (
+        <Suspense fallback={null}>
+          <CorrespondenceCard ccUser={users.cc} liUser={users.li} openLine={openLine} className="mt-4" />
+        </Suspense>
+      )}
 
       <Card title={t("dash.recentGames")} className="mt-4" pad={false}
         action={<button onClick={() => openGames()} className="text-[12.5px] text-ink3 hover:text-accent">{t("dash.showAll")}</button>}

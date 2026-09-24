@@ -2209,6 +2209,17 @@ export const de = {
   "tn.reasonInvalid": "unmöglicher Zug",
   "tn.reasonEngine": "Engine antwortete nicht",
   "tn.reasonAdjudicated": "am Zuglimit abgebrochen",
+  "corr.title": "Fernschach",
+  "corr.summary": "{n} laufende Partien · {m} am Zug",
+  "corr.refresh": "Aktualisieren",
+  "corr.failed": "Die laufenden Partien ließen sich nicht laden.",
+  "corr.yourMove": "Du bist am Zug",
+  "corr.theirMove": "Gegner am Zug",
+  "corr.left.d": "noch {n} T",
+  "corr.left.h": "noch {n} Std",
+  "corr.left.m": "noch {n} Min",
+  "corr.analyze": "Analysieren",
+  "corr.open": "Auf {site} öffnen",
 } as const;
 
 export type Key = keyof typeof de;

@@ -800,7 +800,12 @@ export default function App() {
           eine andere dazwischen gestanden hätte · siehe `resetPage`. */}
       <Fragment key={`${page}:${pageRun}`}>
       {page === "dashboard" && (
-        <Dashboard go={navigate} openAnalysis={openAnalysis} openGames={openGames} />
+        <Dashboard
+          go={navigate}
+          openAnalysis={openAnalysis}
+          openGames={openGames}
+          openLine={(line) => push("analysis", { line })}
+        />
       )}
       {page === "games" && (
         <Games openAnalysis={openAnalysis} initialFilter={route.filter ?? null} />
