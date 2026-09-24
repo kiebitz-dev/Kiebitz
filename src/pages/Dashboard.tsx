@@ -17,11 +17,10 @@ import { gameAnalysis, type MoveEvalRow } from "../lib/analysis";
 import { begruendeZug, erklaereFazit, erklaereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 import { getSettings } from "../lib/settings";
-import type { CorrespondenceLine } from "../components/CorrespondenceCard";
 import { repStats, type RepStats } from "../lib/repertoire";
 import { puzzleStats as fetchPuzzleStats, type PuzzleStats } from "../lib/puzzles";
 import { buildDashboard, type HistoryPoint, type RatingHistorySeries } from "../lib/stats";
-import type { GamesFilter, UiGame } from "../lib/gameUi";
+import { modeKey, type GamesFilter, type UiGame } from "../lib/gameUi";
 import { Card, ExtLink, GameCard, ResultBadge, SourceBadge, Spark, Button } from "../components/ui";
 import { useMobileShell } from "../components/MobileShell";
 import { chart, RATING_CHART_HEIGHT, RATING_COLORS } from "../components/chartTheme";
@@ -150,13 +149,10 @@ export default function Dashboard({
   go,
   openAnalysis,
   openGames,
-  openLine,
 }: {
   go: (p: PageId) => void;
   openAnalysis: (gameId: number) => void;
   openGames: (filter?: GamesFilter) => void;
-  /** Eine laufende Fernpartie am freien Brett der Analyse öffnen. */
-  openLine?: (line: CorrespondenceLine) => void;
 }) {
   const backend = useBackendInfo();
   const { locale, t } = useI18n();
@@ -443,10 +439,21 @@ export default function Dashboard({
 
   // Der Modus ist eine zweite Darstellung derselben Daten · alles, was oben
   // geladen und gerechnet wurde, gilt hier unverändert weiter.
+  // Laufende Fernpartien · nur mit echten Konten und nur, wenn es welche
+  // gibt (die Karte blendet sich sonst selbst aus). Sie liest den Modus
+  // selbst und setzt sich im Blatt als Diagrammreihe.
+  const fernschach = (className: string) =>
+    live && !storeCapture ? (
+      <Suspense fallback={null}>
+        <CorrespondenceCard ccUser={users.cc} liUser={users.li} mobile={mobile} className={className} />
+      </Suspense>
+    ) : null;
+
   if (diagramMode) {
     return (
       <Suspense fallback={<LeereSeite />}>
         <DashboardBlatt
+          fernschach={fernschach("")}
           mobile={mobile}
           bestand={live ? records!.length : null}
           quelle={quelle}
@@ -531,7 +538,7 @@ export default function Dashboard({
           // der Demo-Daten): Sie bleibt eine Fläche und tut nichts, statt in
           // eine leere Liste zu führen.
           const target: GamesFilter | null = r.timeClass
-            ? { source: r.platform, tc: r.timeClass }
+            ? { source: r.platform, tc: modeKey(r.timeClass, (r as { variant?: string }).variant) }
             : null;
           const label = t("dash.showGamesFor", { p: r.platform, tc: r.tc });
           const body = (
@@ -680,11 +687,7 @@ export default function Dashboard({
 
       {/* Laufende Fernpartien · nur mit echten Konten und nur, wenn es welche
           gibt (die Karte blendet sich sonst selbst aus). */}
-      {live && openLine && (
-        <Suspense fallback={null}>
-          <CorrespondenceCard ccUser={users.cc} liUser={users.li} openLine={openLine} className="mt-4" />
-        </Suspense>
-      )}
+      {fernschach("mt-4")}
 
       <Card title={t("dash.recentGames")} className="mt-4" pad={false}
         action={<button onClick={() => openGames()} className="text-[12.5px] text-ink3 hover:text-accent">{t("dash.showAll")}</button>}

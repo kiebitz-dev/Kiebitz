@@ -540,12 +540,14 @@ describe("Analysis page", () => {
       // Die Partie wurde als Weiß gespielt · so beginnt auch das Brett.
       expect(screen.getByTestId("analysis-board").dataset.orientation).toBe("white");
 
-      fireEvent.click(screen.getByRole("button", { name: "Brett drehen" }));
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Brett drehen" }));
       expect(screen.getByTestId("analysis-board").dataset.orientation).toBe("black");
       // Die Namen tauschen mit: oben steht jetzt, wer unten stand.
       expect(screen.getByText("Dr. Tom Maurer (1500)")).toBeTruthy();
 
-      fireEvent.click(screen.getByRole("button", { name: "Brett drehen" }));
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Brett drehen" }));
       expect(screen.getByTestId("analysis-board").dataset.orientation).toBe("white");
     });
 
@@ -580,7 +582,8 @@ describe("Analysis page", () => {
       await gameOnBoard("7");
       expect(screen.getAllByTestId("analysis-board")).toHaveLength(1);
 
-      fireEvent.click(screen.getByRole("button", { name: "Fokus-Brett öffnen" }));
+      fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Fokus" }));
 
       const focus = screen.getByTestId("focus-board");
       expect(focus.getAttribute("aria-label")).toBe("Analyse");
@@ -591,7 +594,9 @@ describe("Analysis page", () => {
       expect(boards[1].dataset.fen).toBe(boards[0].dataset.fen);
       expect(within(focus).getByText("Dr. Tom Maurer (1500)")).toBeTruthy();
       // Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
-      expect(within(focus).queryByRole("button", { name: "Fokus-Brett öffnen" })).toBeNull();
+      fireEvent.click(within(focus).getByRole("button", { name: "Weitere Brettaktionen" }));
+      expect(within(focus).queryByRole("menuitem", { name: "Fokus" })).toBeNull();
+      expect(within(focus).getByRole("menuitem", { name: "Brett drehen" })).toBeTruthy();
 
       fireEvent.keyDown(window, { key: "Escape" });
       expect(screen.queryByTestId("focus-board")).toBeNull();
@@ -719,7 +724,8 @@ describe("Analysis page", () => {
     await gameOnBoard("7");
     // Zwei Halbzüge zurück: geteilt wird, was auf dem Brett steht.
     fireEvent.click(screen.getByRole("button", { name: "e5" }));
-    fireEvent.click(screen.getByTitle("Stellung teilen"));
+    fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Stellung teilen" }));
 
     const subject = JSON.parse(screen.getByTestId("share-subject").textContent!);
     expect(subject.kind).toBe("analysis");
@@ -744,7 +750,8 @@ describe("Analysis page", () => {
     expect(await screen.findByRole("button", { name: "e5" })).toBeTruthy();
     expect(screen.queryByText("1.")).toBeNull();
 
-    fireEvent.click(screen.getByTitle("Stellung teilen"));
+    fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Stellung teilen" }));
     const subject = JSON.parse(screen.getByTestId("share-subject").textContent!);
     expect(subject.history).toBe("1.e4 e5");
   });
@@ -784,7 +791,8 @@ describe("Analysis page", () => {
       )
     );
     // Von hier aus geht es mit derselben Stellung zurück ans Spielbrett.
-    fireEvent.click(screen.getByTitle("Ab hier gegen die Engine"));
+    fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ab hier gegen die Engine" }));
     expect(onPlay).toHaveBeenCalledWith("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2", false);
   });
 

@@ -82,7 +82,7 @@ import { capturedFromFen } from "../lib/captured";
 import LiveEngine from "../components/LiveEngine";
 import TagEditor from "../components/TagEditor";
 import { Button, Card, ExtLink, Menu, MenuItem, ResultBadge } from "../components/ui";
-import FocusBoard, { FocusButton, FocusMenuItem } from "../components/FocusBoard";
+import FocusBoard, { FocusMenuItem } from "../components/FocusBoard";
 import { PlusBadge, PlusLock } from "../components/PlusLock";
 import { openPlusDialog } from "../lib/plus/dialog";
 import { usePlusGate } from "../lib/plus/usePlus";
@@ -159,6 +159,9 @@ const Zeichenschluessel = lazy(() =>
 
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
     davon abhängigen useMemo-Ketten bei jedem Durchlauf neu rechnen. */
+/** Grundstellung · von dort ist „Ab hier gegen die Engine" dasselbe wie eine neue Partie. */
+const STANDARD_START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
 const NO_MOVES: string[] = [];
 
 /** Dasselbe für die Sätze der Analyse · siehe `blattAnalysen`. */
@@ -457,6 +460,7 @@ export default function Analysis({
   shared = null,
   line = null,
   onPlay,
+  onNewGame,
 }: {
   targetGameId: number | null;
   /** Stellung aus einem geteilten Link · sie eröffnet das freie Brett. */
@@ -465,13 +469,14 @@ export default function Analysis({
   line?: { fen: string; sans: string[]; chess960: boolean } | null;
   /** Aus der gezeigten Stellung gegen die Engine weiterspielen. */
   onPlay?: (fen: string, chess960: boolean) => void;
+  /** Eine neue Partie gegen die Engine einrichten · Farbe, Stärke, Aufstellung. */
+  onNewGame?: () => void;
 }) {
   const backend = useBackendInfo();
   const { locale, t } = useI18n();
   const storeCapture = isStoreCapture();
   const desktop = backend.mode === "desktop";
-  // Die Bedienleiste unter dem Brett fasst auf Handybreite ihre Nebenaktionen
-  // zusammen · siehe `boardControls`.
+  // Telefonbreite · einige Teile der Seite stellen sich darauf um.
   const mobile = useMobileShell();
   const diagramMode = useDiagramMode();
   // Analysebudget: die Zeit, die vor einer Partie verbracht wird. Bisher zählte
@@ -2457,66 +2462,48 @@ export default function Analysis({
    * heran, und das ist kein Layout mehr, sondern eine Fassung, die weniger
    * kann.
    *
-   * Die Aufteilung mobil/Desktop steckt deshalb hier und nicht in den beiden
-   * Leisten. Auf dem Telefon ist für alles nebeneinander kein Platz, und dort
-   * greift die Regel, nach der die App ihre Menüs baut (siehe `Menu` in
+   * Auf beiden Größen liegen sie in einem Blatt am Ende der Tastengruppe.
+   * Das ist die Regel, nach der die App ihre Menüs baut (siehe `Menu` in
    * components/ui.tsx): Was beim Durchsehen einer Partie ständig gebraucht
    * wird · Blättern · bleibt als eigene Taste stehen; was einmal pro Partie
-   * vorkommt, rückt in ein Blatt am Ende der Tastengruppe. Es klappt nach
-   * oben auf, weil unter der Leiste die Navigationsleiste steht. Auf dem
-   * Desktop bleibt alles nebeneinander: Dort ist die Breite da, und ein Klick
-   * weniger ist besser als ein aufgeräumteres Blatt.
+   * vorkommt, rückt ins Blatt. Auf dem Desktop standen sie bis 1.6 noch
+   * nebeneinander, und mit Stellungseditor und Engine-Partie waren das sechs
+   * Zeichenknöpfe gleicher Lautstärke neben den vier zum Blättern. Das Blatt
+   * klappt nach oben auf, weil unter der Leiste mobil die Navigationsleiste
+   * steht und im Fokus die Kante des Bogens.
    *
    * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
    */
-  const boardExtras = (inFocus: boolean) =>
-    mobile ? (
-      <Menu label={t("an.boardActions")} align="end" up compact icon={<MoreHorizontal size={15} />}>
-        <MenuItem onClick={flip}>
-          <FlipVertical2 size={15} /> {t("an.flip")}
+  const standardStart = fen === STANDARD_START_FEN;
+  const boardExtras = (inFocus: boolean) => (
+    <Menu label={t("an.boardActions")} align="end" up compact icon={<MoreHorizontal size={15} />}>
+      <MenuItem onClick={flip}>
+        <FlipVertical2 size={15} /> {t("an.flip")}
+      </MenuItem>
+      <MenuItem onClick={openShare}>
+        <Share2 size={15} /> {t("sh.title")}
+      </MenuItem>
+      {!inFocus && <FocusMenuItem onClick={() => setFocused(true)} />}
+      <MenuItem onClick={() => setEditing(true)}>
+        <LayoutGrid size={15} /> {t("pe.open")}
+      </MenuItem>
+      {onNewGame && (
+        <MenuItem onClick={onNewGame}>
+          <Swords size={15} /> {t("play.newVsEngine")}
         </MenuItem>
-        <MenuItem onClick={openShare}>
-          <Share2 size={15} /> {t("sh.title")}
+      )}
+      {onPlay && !standardStart && (
+        <MenuItem onClick={() => onPlay(fen, needsChess960(fen))}>
+          <Swords size={15} /> {t("play.fromHere")}
         </MenuItem>
-        {!inFocus && <FocusMenuItem onClick={() => setFocused(true)} />}
-        <MenuItem onClick={() => setEditing(true)}>
-          <LayoutGrid size={15} /> {t("pe.open")}
+      )}
+      {scratch && (
+        <MenuItem onClick={newBoard}>
+          <RotateCcw size={15} /> {t("an.newBoard")}
         </MenuItem>
-        {onPlay && (
-          <MenuItem onClick={() => onPlay(fen, needsChess960(fen))}>
-            <Swords size={15} /> {t("play.fromHere")}
-          </MenuItem>
-        )}
-        {scratch && (
-          <MenuItem onClick={newBoard}>
-            <RotateCcw size={15} /> {t("an.newBoard")}
-          </MenuItem>
-        )}
-      </Menu>
-    ) : (
-      <>
-        <Button onClick={flip} title={t("an.flip")} label={t("an.flip")} compact>
-          <FlipVertical2 size={15} />
-        </Button>
-        <Button onClick={openShare} title={t("sh.title")} label={t("sh.title")} compact>
-          <Share2 size={15} />
-        </Button>
-        {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
-        <Button onClick={() => setEditing(true)} title={t("pe.open")} label={t("pe.open")} compact>
-          <LayoutGrid size={15} />
-        </Button>
-        {onPlay && (
-          <Button onClick={() => onPlay(fen, needsChess960(fen))} title={t("play.fromHere")} label={t("play.fromHere")} compact>
-            <Swords size={15} />
-          </Button>
-        )}
-        {scratch && (
-          <Button onClick={newBoard} title={t("an.newBoard")}>
-            <RotateCcw size={15} /> {t("an.newBoard")}
-          </Button>
-        )}
-      </>
-    );
+      )}
+    </Menu>
+  );
 
   /**
    * Eine Leiste statt einer Reihe verstreuter Knöpfe.
@@ -2557,19 +2544,11 @@ export default function Analysis({
           <Button onClick={() => goToPly(sans.length)} title={t("an.toEnd")} label={t("an.toEnd")} compact>
             <ChevronLast size={15} />
           </Button>
-          {!mobile && (
-            <>
-              <span className="mx-1 h-6 w-px shrink-0 bg-line2" aria-hidden="true" />
-              {boardExtras(inFocus)}
-            </>
-          )}
         </div>
-        {mobile && (
-          <>
-            <span className="h-6 w-px shrink-0 bg-line2" aria-hidden="true" />
-            {boardExtras(inFocus)}
-          </>
-        )}
+        {/* Außerhalb der schiebbaren Gruppe · deren overflow schnitte das
+            aufgeklappte Blatt sonst ab. */}
+        <span className="h-6 w-px shrink-0 bg-line2" aria-hidden="true" />
+        {boardExtras(inFocus)}
         <div
           className="shrink-0 px-1.5 text-[15px] font-semibold tabular-nums"
           style={{ color: shownEval >= 0 ? "var(--color-ink)" : "var(--color-ink2)" }}
@@ -3139,6 +3118,7 @@ export default function Analysis({
               initialFen={fen}
               onClose={() => setEditing(false)}
               onAnalyze={({ fen: next }) => openPosition(next)}
+              onPlay={onPlay ? ({ fen: next, chess960 }) => onPlay(next, chess960) : undefined}
             />
           </Suspense>
         )}

@@ -7,18 +7,26 @@
  * und wissen, welche stärker ist. Beides steht deshalb hier und nicht im
  * Training: Es ist Werkzeugpflege, kein Üben.
  *
+ * Die mitgelieferte Engine steht als feste erste Zeile darüber. Sie hat keinen
+ * Eintrag in `engines` und keinen Pfad (`engine_path` leer heißt: sie rechnet),
+ * aber sie muss wählbar bleiben · sonst führte, sobald eine zweite Engine
+ * eingetragen und übernommen war, kein Klick mehr zurück, und ein Turnier
+ * gegen die eigene Stockfish ging gar nicht. Ans Backend geht sie mit leerem
+ * Pfad; `tournament_start` setzt dafür die mitgelieferte ein.
+ *
  * Das Turnier selbst läuft im Backend weiter, auch wenn man die Einstellungen
  * verlässt (siehe src-tauri/src/tournament.rs). Die Seite fragt beim Öffnen
  * den Stand ab und hängt sich an den Ereignisstrom; sie führt nichts mit, was
  * sie nicht vom Backend hat.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { Check, Cpu, FolderOpen, Loader2, Play, Plus, Square, Trash2, Trophy } from "lucide-react";
 import { Button } from "../../components/ui";
 import { Field, NumberField, inputCls } from "./SettingsLayout";
 import { useI18n, type Key } from "../../lib/i18n";
 import { testEngine, type EngineEntry } from "../../lib/settings";
+import { bundledEngineInfo } from "../../lib/backend";
 import { writePgnFile } from "../../lib/db";
 import {
   EMPTY_STATUS,
@@ -32,6 +40,9 @@ import {
 } from "../../lib/tournament";
 
 const MAX_ENGINES = 8;
+
+/** Schlüssel der mitgelieferten Engine in der Teilnehmerauswahl · kein Pfad kann so heißen. */
+const BUNDLED = "\u0000bundled";
 
 /** Gründe, die das Backend meldet · alles andere bleibt ohne Zusatz. */
 const REASON_KEY: Record<string, Key> = {
@@ -55,7 +66,8 @@ export default function EnginesSection({
   /** Die Engine, mit der Kiebitz rechnet · leer heißt: die mitgelieferte. */
   analysisPath: string | null;
   onChange: (engines: EngineEntry[]) => void;
-  onUseForAnalysis: (path: string) => void;
+  /** `null` stellt auf die mitgelieferte Engine zurück. */
+  onUseForAnalysis: (path: string | null) => void;
 }) {
   const { t, locale } = useI18n();
   const [status, setStatus] = useState<TournamentStatus>(EMPTY_STATUS);
@@ -67,6 +79,7 @@ export default function EnginesSection({
   const [notice, setNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
   const [tested, setTested] = useState<Record<number, { ok: boolean; name: string }>>({});
+  const [bundledName, setBundledName] = useState("Stockfish");
   const alive = useRef(true);
   /** Sobald eine Meldung da war, ist die Abfrage von vorhin überholt. */
   const live = useRef(false);
@@ -77,6 +90,11 @@ export default function EnginesSection({
     // Die Abfrage beim Öffnen und der Ereignisstrom laufen nebeneinander. Käme
     // die Antwort der Abfrage nach der ersten Meldung an, zeigte die Seite
     // wieder den Stand von vor dem Zug · deshalb gewinnt die Meldung.
+    bundledEngineInfo()
+      .then((info) => {
+        if (alive.current && info.available) setBundledName(info.name);
+      })
+      .catch(() => {});
     tournamentStatus()
       .then((s) => {
         if (alive.current && !live.current) setStatus(s);
@@ -92,11 +110,21 @@ export default function EnginesSection({
     };
   }, []);
 
-  // Teilnehmer sind die eingetragenen Engines; ohne Auswahl spielen alle.
-  const chosen = useMemo(
-    () => engines.filter((engine) => picked.length === 0 || picked.includes(engine.path)),
-    [engines, picked]
-  );
+  // Teilnehmer sind die mitgelieferte und die eingetragenen Engines; ohne
+  // Auswahl spielen alle. Ein Eintrag ohne Pfad (gerade von Hand angelegt)
+  // spielt nicht mit · das Backend läse ihn als die mitgelieferte.
+  const takesPart = (key: string) => picked.length === 0 || picked.includes(key);
+  const chosen: EngineEntry[] = [
+    ...(takesPart(BUNDLED) ? [{ name: bundledName, path: "" }] : []),
+    ...engines.filter((engine) => engine.path.trim() !== "" && takesPart(engine.path)),
+  ];
+  const allKeys = () => [BUNDLED, ...engines.map((e) => e.path)];
+  const toggle = (key: string, on: boolean) =>
+    setPicked((current) => {
+      const base = current.length === 0 ? allKeys() : current;
+      return on ? [...new Set([...base, key])] : base.filter((k) => k !== key);
+    });
+  const bundledActive = !analysisPath;
 
   const patch = (index: number, change: Partial<EngineEntry>) =>
     onChange(engines.map((engine, i) => (i === index ? { ...engine, ...change } : engine)));
@@ -160,13 +188,40 @@ export default function EnginesSection({
       <p className="text-[12.5px] leading-relaxed text-ink3">{t("tn.lead")}</p>
 
       <div className="mt-3 flex flex-col gap-2">
+        <div className="rounded-lg border border-line bg-panel2 p-3" data-testid="bundled-engine">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink2">
+              <input
+                type="checkbox"
+                checked={takesPart(BUNDLED)}
+                onChange={(event) => toggle(BUNDLED, event.target.checked)}
+                aria-label={t("tn.takePart")}
+                disabled={running}
+                className="size-4 accent-[var(--color-accent)]"
+              />
+              <Cpu size={15} className={bundledActive ? "text-accent" : "text-ink3"} />
+            </label>
+            <span className="min-w-0 flex-1 text-[13px] text-ink">
+              {bundledName} <span className="text-ink3">· {t("tn.bundled")}</span>
+            </span>
+            <Button
+              compact
+              onClick={() => onUseForAnalysis(null)}
+              disabled={bundledActive}
+              title={t("tn.useForAnalysis")}
+            >
+              {bundledActive ? <Check size={14} /> : t("tn.use")}
+            </Button>
+          </div>
+          {bundledActive && <p className="mt-2 text-[12px] text-ink3">{t("tn.isAnalysisEngine")}</p>}
+        </div>
         {engines.length === 0 && (
           <p className="rounded-lg border border-dashed border-line2 px-3 py-2.5 text-[12.5px] text-ink3">
             {t("tn.empty")}
           </p>
         )}
         {engines.map((engine, index) => {
-          const active = analysisPath != null && analysisPath === engine.path;
+          const active = !!analysisPath && analysisPath === engine.path;
           const result = tested[index];
           return (
             <div key={`${engine.path}-${index}`} className="rounded-lg border border-line bg-panel2 p-3">
@@ -174,15 +229,8 @@ export default function EnginesSection({
                 <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink2">
                   <input
                     type="checkbox"
-                    checked={picked.length === 0 || picked.includes(engine.path)}
-                    onChange={(event) =>
-                      setPicked((current) => {
-                        const base = current.length === 0 ? engines.map((e) => e.path) : current;
-                        return event.target.checked
-                          ? [...new Set([...base, engine.path])]
-                          : base.filter((path) => path !== engine.path);
-                      })
-                    }
+                    checked={takesPart(engine.path)}
+                    onChange={(event) => toggle(engine.path, event.target.checked)}
                     aria-label={t("tn.takePart")}
                     disabled={running}
                     className="size-4 accent-[var(--color-accent)]"

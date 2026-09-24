@@ -13,10 +13,14 @@
  *
  * Geladen wird aus dem Frontend wie beim Import (lib/importer.ts). Gespeichert
  * wird nichts: Eine laufende Partie ist in einer Stunde eine andere.
+ *
+ * Eine laufende Partie geht bewusst nicht an die Analyse · die Engine auf eine
+ * Stellung loszulassen, in der man noch selbst ziehen muss, wäre Schummeln.
+ * Gezeigt wird deshalb nur die Stellung jetzt, und der Weg führt zur Partie
+ * auf der Plattform.
  */
-import { Chess } from "chess.js";
-import { sansFromVariantPgn } from "./chess960";
 import { lichessToken } from "./lichess";
+import type { Key } from "./i18n";
 
 export interface OngoingGame {
   source: "chess.com" | "lichess";
@@ -29,19 +33,17 @@ export interface OngoingGame {
   myTurn: boolean;
   /** Stellung jetzt. */
   fen: string;
+  /** Zugnummer der Stellung jetzt · aus der FEN. */
+  moveNumber: number;
   /** Unix-Sekunden, bis wann die Seite am Zug ziehen muss · null, wenn unbekannt. */
   deadline: number | null;
   variant: "standard" | "chess960";
-  /** Ausgangsstellung und Züge bis jetzt · für die Analyse am freien Brett. */
-  startFen: string;
-  sans: string[];
 }
 
-const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-function pgnHeader(pgn: string, key: string): string {
-  const match = pgn.match(new RegExp(`\\[${key} "([^"]*)"\\]`));
-  return match ? match[1] : "";
+/** Das sechste Feld der FEN · ohne es die erste Zugnummer. */
+export function moveNumberOf(fen: string): number {
+  const value = Number(fen.trim().split(/\s+/)[5]);
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1;
 }
 
 /** Letzter Pfadteil einer Profil-URL · chess.com nennt Spieler so. */
@@ -51,7 +53,6 @@ function userFromUrl(url: string): string {
 
 interface CcOngoing {
   url: string;
-  pgn?: string;
   fen: string;
   turn: "white" | "black";
   move_by?: number;
@@ -74,20 +75,6 @@ async function chessComOngoing(user: string, signal?: AbortSignal): Promise<Ongo
     const white = userFromUrl(game.white);
     const black = userFromUrl(game.black);
     const myColor = white.toLowerCase() === me ? "white" : "black";
-    const pgn = game.pgn ?? "";
-    const startFen = pgnHeader(pgn, "FEN") || START;
-    let sans: string[] = [];
-    if (chess960) {
-      sans = sansFromVariantPgn(pgn, startFen);
-    } else {
-      try {
-        const chess = new Chess();
-        chess.loadPgn(pgn);
-        sans = chess.history();
-      } catch {
-        sans = [];
-      }
-    }
     out.push({
       source: "chess.com",
       id: game.url.split("/").pop() ?? game.url,
@@ -97,10 +84,9 @@ async function chessComOngoing(user: string, signal?: AbortSignal): Promise<Ongo
       myColor,
       myTurn: game.turn === myColor,
       fen: game.fen,
+      moveNumber: moveNumberOf(game.fen),
       deadline: game.move_by && game.move_by > 0 ? game.move_by : null,
       variant: chess960 ? "chess960" : "standard",
-      startFen,
-      sans,
     });
   }
   return out;
@@ -143,11 +129,9 @@ async function lichessOngoing(signal?: AbortSignal): Promise<OngoingGame[]> {
       myColor: game.color,
       myTurn: game.isMyTurn,
       fen: game.fen,
+      moveNumber: moveNumberOf(game.fen),
       deadline: game.secondsLeft != null && game.secondsLeft > 0 ? now + game.secondsLeft : null,
       variant: game.variant?.key === "chess960" ? ("chess960" as const) : ("standard" as const),
-      // Lichess nennt nur die Stellung jetzt · die Analyse beginnt dort.
-      startFen: game.fen,
-      sans: [],
     }));
 }
 
@@ -175,6 +159,20 @@ export async function loadOngoing(
       || (a.deadline ?? Number.MAX_SAFE_INTEGER) - (b.deadline ?? Number.MAX_SAFE_INTEGER)
   );
   return { games, errors };
+}
+
+/**
+ * Die Frist als Text · dringend, sobald man selbst ziehen muss und kein ganzer
+ * Tag mehr bleibt. Beide Fassungen der Karte setzen sie gleich.
+ */
+export function deadlineOf(
+  game: OngoingGame,
+  t: (key: Key, vars?: Record<string, string | number>) => string
+): { text: string; urgent: boolean } | null {
+  const left = timeLeft(game.deadline);
+  return left
+    ? { text: t(`corr.left.${left.unit}`, { n: left.value }), urgent: game.myTurn && left.unit !== "d" }
+    : null;
 }
 
 /** Restzeit als kurze Angabe · „2 T", „5 Std", „40 Min" · null ohne Frist. */

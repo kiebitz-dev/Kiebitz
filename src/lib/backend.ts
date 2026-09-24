@@ -60,3 +60,8 @@ export function useBackendInfo(): BackendState {
 export function engineInfo(): Promise<EngineInfo> {
   return invoke<EngineInfo>("engine_info");
 }
+
+/** Die mitgelieferte Engine · auch wenn für die Analyse eine andere eingestellt ist. */
+export function bundledEngineInfo(): Promise<EngineInfo> {
+  return invoke<EngineInfo>("bundled_engine_info");
+}

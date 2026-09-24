@@ -25,7 +25,6 @@ import {
   Puzzle as PuzzleIcon,
   RefreshCw,
   Settings as SettingsIcon,
-  Swords,
   X,
 } from "lucide-react";
 import { useBackendInfo } from "./lib/backend";
@@ -140,7 +139,6 @@ const nav: { id: PageId; labelKey: Key; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
   { id: "games", labelKey: "nav.games", icon: Database },
   { id: "analysis", labelKey: "nav.analysis", icon: Activity },
-  { id: "play", labelKey: "nav.play", icon: Swords },
   { id: "repertoire", labelKey: "nav.repertoire", icon: BookOpen },
   { id: "puzzles", labelKey: "nav.puzzles", icon: PuzzleIcon },
   { id: "endgame", labelKey: "nav.endgame", icon: Crown },
@@ -156,6 +154,10 @@ const bottomNav = BOTTOM_NAV.map((id) => nav.find((n) => n.id === id)!);
 
 // Ziele, die später unter "Training" einziehen. Sie markieren schon jetzt den
 // passenden Tab, damit die Leiste nie ganz ohne Auswahl dasteht.
+//
+// "Spielen" ist kein eigener Reiter, sondern eine Ebene der Analyse · man
+// kommt aus ihrem Brettmenü hin und kehrt mit der Partie dorthin zurück. Es
+// markiert deshalb auf beiden Größen die Analyse.
 const NAV_PARENT: Partial<Record<PageId, PageId>> = {
   play: "analysis",
   repertoire: "study",
@@ -622,6 +624,9 @@ export default function App() {
   const steps = useMemo(() => tourSteps(isMobile), [isMobile]);
 
   const activeTab = NAV_PARENT[page] ?? page;
+  // Die Seitenleiste führt mehr Ziele als die Leiste unten · Repertoire,
+  // Endspiele und Puzzles stehen dort selbst und markieren sich selbst.
+  const sidebarTab = nav.some((n) => n.id === page) ? page : activeTab;
 
   // Auf der App-Bar steht der Seitenname; der Start zeigt stattdessen die
   // Wortmarke, weil "Dashboard" schon in der Leiste darunter steht.
@@ -629,6 +634,7 @@ export default function App() {
     ...nav,
     { id: "settings" as PageId, labelKey: "nav.settings" as Key },
     { id: "support" as PageId, labelKey: "nav.support" as Key },
+    { id: "play" as PageId, labelKey: "play.title" as Key },
   ].find((n) => n.id === page);
   const barTitle = page === "dashboard" ? null : pageLabel ? t(pageLabel.labelKey) : null;
 
@@ -670,7 +676,7 @@ export default function App() {
   const sidebarContent = diagramMode ? (
     <RegisterSidebar
       items={nav}
-      page={page}
+      page={sidebarTab}
       zahlen={zahlen}
       onSelect={navigate}
       foot={registerFoot}
@@ -697,12 +703,12 @@ export default function App() {
             onClick={() => navigate(id)}
             data-tour={`nav-${id}`}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] transition-colors ${
-              page === id
+              sidebarTab === id
                 ? "bg-panel3 font-medium text-ink"
                 : "text-ink2 hover:bg-panel2 hover:text-ink"
             }`}
           >
-            <Icon size={17} className={page === id ? "text-accent" : "text-ink3"} />
+            <Icon size={17} className={sidebarTab === id ? "text-accent" : "text-ink3"} />
             {t(labelKey)}
           </button>
         ))}
@@ -804,7 +810,6 @@ export default function App() {
           go={navigate}
           openAnalysis={openAnalysis}
           openGames={openGames}
-          openLine={(line) => push("analysis", { line })}
         />
       )}
       {page === "games" && (
@@ -816,10 +821,19 @@ export default function App() {
           shared={route.shared ?? null}
           line={route.line ?? null}
           onPlay={(fen, chess960) => push("play", { play: { fen, chess960 } })}
+          onNewGame={() => push("play")}
         />
       )}
+      {/* Die Partie kehrt in die Analyse zurück, statt eine zweite darauf zu
+          legen · Zurück führt von dort wieder dahin, woher man kam. */}
       {page === "play" && (
-        <Play initial={route.play ?? null} openAnalysis={(line) => push("analysis", { line })} />
+        <Play
+          initial={route.play ?? null}
+          openAnalysis={(line) => goTo("analysis", { line })}
+          onBack={() => {
+            if (!back()) goTo("analysis");
+          }}
+        />
       )}
       {page === "repertoire" && <Repertoire />}
       {page === "endgame" && <Endgame initialCategory={route.endgameCategory} />}

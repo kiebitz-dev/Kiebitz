@@ -52,7 +52,10 @@ describe("loadOngoing", () => {
     expect(games.map((game) => game.id)).toEqual(["1", "2"]);
     const [first, second] = games;
     expect(first).toMatchObject({ opponent: "villain", myColor: "black", myTurn: true, deadline: 2_000_000_000 });
-    expect(first.sans).toEqual(["e4", "e5", "Nf3"]);
+    // Die Stellung jetzt und ihre Zugnummer · Züge bis dahin braucht die
+    // Karte nicht, weil sie nicht an die Analyse übergibt.
+    expect(first.moveNumber).toBe(2);
+    expect(second.moveNumber).toBe(1);
     expect(second).toMatchObject({ opponent: "other", myTurn: false });
   });
 

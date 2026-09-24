@@ -411,15 +411,21 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
 }
 
 #[tauri::command]
-pub fn tournament_start(app: tauri::AppHandle, config: TournamentConfig) -> Result<(), String> {
+pub fn tournament_start(app: tauri::AppHandle, mut config: TournamentConfig) -> Result<(), String> {
+    // Ein leerer Pfad ist die mitgelieferte Engine · sie steht in der Liste
+    // der Einstellungen als feste erste Zeile und hat keinen eigenen Eintrag.
+    for engine in &mut config.engines {
+        if engine.path.trim().is_empty() {
+            let bundled = crate::resolve_bundled_engine(&app)
+                .ok_or_else(|| "Die mitgelieferte Engine wurde nicht gefunden.".to_string())?;
+            engine.path = bundled.to_string_lossy().to_string();
+        }
+    }
     if config.engines.len() < 2 {
         return Err("Für ein Turnier braucht es mindestens zwei Engines.".into());
     }
     if config.engines.len() > MAX_ENGINES {
         return Err(format!("Höchstens {MAX_ENGINES} Engines je Turnier."));
-    }
-    if config.engines.iter().any(|e| e.path.trim().is_empty()) {
-        return Err("Jede Engine braucht einen Pfad.".into());
     }
     if !(1..=MAX_ROUNDS).contains(&config.rounds) {
         return Err(format!("Durchgänge: 1 bis {MAX_ROUNDS}."));

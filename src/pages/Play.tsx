@@ -16,6 +16,7 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import {
+  ChevronLeft,
   Dices,
   Flag,
   FlipVertical2,
@@ -39,7 +40,7 @@ import { BOARD_MAX } from "../lib/boardLayout";
 import { lastMoveStyles, selectedStyle } from "../lib/boardMoves";
 import type { BoardEnd, Termination } from "../lib/boardEnd";
 import { VariantChess, randomChess960, type VariantMove } from "../lib/chess960";
-import { loadSetup, playMove, PLAY_LEVELS, saveSetup, type PlaySetup } from "../lib/play";
+import { blunderChance, loadSetup, playMove, PLAY_LEVELS, saveSetup, type PlaySetup } from "../lib/play";
 import { upsertGames, type GameRecord } from "../lib/db";
 import { useDiagramMode } from "../lib/diagramMode";
 import { useTrainingSession } from "../lib/session";
@@ -106,10 +107,17 @@ function previewMove(game: VariantChess): VariantMove | null {
 export default function Play({
   initial = null,
   openAnalysis,
+  onBack,
 }: {
   /** Stellung, aus der gespielt werden soll · aus Analyse oder Editor. */
   initial?: { fen: string; chess960: boolean } | null;
   openAnalysis: (line: PlayLine) => void;
+  /**
+   * Zurück in die Analyse · die Seite ist eine Ebene von ihr, kein eigener
+   * Reiter. Mobil trägt die App-Bar den Pfeil, auf dem Desktop steht der Weg
+   * über dem Titel.
+   */
+  onBack?: () => void;
 }) {
   const { t, locale } = useI18n();
   const backend = useBackendInfo();
@@ -176,7 +184,9 @@ export default function Play({
       if (end) finish(end);
       else setStatus("playing");
     };
-    if (!desktop) {
+    // In der Web-Vorschau immer, unter 1320 ab und zu: ein beliebiger Zug
+    // statt des Engine-Zuges (siehe `blunderChance`).
+    if (!desktop || Math.random() < blunderChance(setupRef.current.elo)) {
       window.setTimeout(() => apply(null), 450);
       return;
     }
@@ -446,7 +456,7 @@ export default function Play({
     </div>
   );
 
-  const levelIndex = Math.max(0, PLAY_LEVELS.indexOf(setup.elo as (typeof PLAY_LEVELS)[number]));
+  const levelIndex = Math.max(0, PLAY_LEVELS.indexOf(setup.elo));
 
   const setupForm = (
     <div className="flex flex-col gap-4">
@@ -579,6 +589,7 @@ export default function Play({
             brett: board("play-focus"),
           }}
           fehler={error}
+          onZurueck={onBack}
         />
         {editor}
       </Suspense>
@@ -588,6 +599,15 @@ export default function Play({
   return (
     <div className="mx-auto max-w-[1240px] px-4 py-6 sm:px-6">
       <header className="mb-5">
+        {onBack && !mobile && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-1 flex items-center gap-1 text-[12.5px] text-ink3 transition-colors hover:text-ink"
+          >
+            <ChevronLeft size={14} className="rtl:rotate-180" /> {t("nav.analysis")}
+          </button>
+        )}
         <h1 className="page-title flex items-center gap-2 text-[21px] font-semibold tracking-tight">
           <Swords size={20} className="text-accent" /> {t("play.title")}
         </h1>

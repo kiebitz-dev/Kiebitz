@@ -88,7 +88,11 @@ const limits = {
   // Glanzmarke samt ihren Ausnahmen für abbestellte Bewegung und
   // Store-Aufnahmen und die Utility-Klassen von Übersicht und „Nochmal".
   // Gemessen 82,3 KiB, dazu rund zwei Prozent.
-  css: 84 * 1024,
+  //
+  // 84 KiB rissen um 44 Byte mit dem Stellungseditor im Buchsatz, den
+  // Postkarten der Fernpartien samt Poststempel und der Diagrammreihe ihrer
+  // Blattfassung: zusammen 944 Byte. Gemessen 84,0 KiB, dazu rund zwei Prozent.
+  css: 86 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht

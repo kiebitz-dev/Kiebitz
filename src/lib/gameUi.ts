@@ -53,7 +53,22 @@ const TC_KEY: Record<string, Key> = {
   otb: "common.tc.otb",
 };
 
+/** Endung des Modusschlüssels einer Chess960-Partie · siehe `modeKey`. */
+const MODE_960 = "-960";
+
+/**
+ * Der Schlüssel, nach dem die Partienliste den Modus filtert. Chess960 führt
+ * eine eigene Wertungsreihe und bekommt deshalb einen eigenen Schlüssel
+ * („daily-960") · mit dem bloßen „daily" zeigte ein Klick auf „Daily 960"
+ * alle Fernpartien, und die 960er ließen sich gar nicht allein finden. Das
+ * Backend liest denselben Schlüssel (`list_games_page` in db.rs).
+ */
+export function modeKey(timeClass: string, variant?: string): string {
+  return variant === "chess960" ? `${timeClass}${MODE_960}` : timeClass;
+}
+
 export function tcLabel(timeClass: string, locale: Locale): string {
+  if (timeClass.endsWith(MODE_960)) return `${tcLabel(timeClass.slice(0, -MODE_960.length), locale)} 960`;
   const key = TC_KEY[timeClass];
   return key ? translator(locale)(key) : timeClass;
 }
@@ -119,8 +134,8 @@ export function toUi(r: GameSummary, locale: Locale = "en"): UiGame {
     source: r.source,
     // Chess960 steht im Modus · so trennt ihn auch der Filter der Liste von
     // der gleichnamigen Standardreihe, wie es seine eigene Wertung verlangt.
-    tc: r.variant === "chess960" ? `${tcLabel(r.time_class, locale)} 960` : tcLabel(r.time_class, locale),
-    timeClass: r.time_class,
+    tc: tcLabel(modeKey(r.time_class, r.variant), locale),
+    timeClass: modeKey(r.time_class, r.variant),
     startFen: r.start_fen || undefined,
     color: r.color,
     opponent: r.opponent,

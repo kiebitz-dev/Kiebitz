@@ -1460,16 +1460,22 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
 }
 
 pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<GamePage, String> {
+    // ?3 ist der Modusschlüssel der Oberfläche (`modeKey` in lib/gameUi.ts):
+    // „daily" für Standardschach, „daily-960" für Chess960 · die beiden sind
+    // getrennte Wertungsreihen. Eine Suche, die „960" enthält, findet
+    // außerdem die Chess960-Partien.
     const WHERE: &str = "WHERE (?1 = '' OR source = ?1)
            AND (?2 = '' OR result = ?2)
-           AND (?3 = '' OR time_class = ?3)
+           AND (?3 = '' OR (variant = 'chess960' AND time_class || '-960' = ?3)
+                OR (variant != 'chess960' AND time_class = ?3))
            AND (?4 = '' OR (played_ts > 0 AND played_ts >= ?5 AND played_ts < ?6)
                 OR (played_ts <= 0 AND played_at = ?4))
            AND (?7 = '' OR opponent = ?7)
            AND (?8 = '' OR opening = ?8 OR (?8 = char(8212) AND opening = ''))
            AND (?9 = '' OR instr(lower(opponent), lower(?9)) > 0
                 OR instr(lower(opening), lower(?9)) > 0
-                OR instr(lower(tags), lower(?9)) > 0)
+                OR instr(lower(tags), lower(?9)) > 0
+                OR (variant = 'chess960' AND instr(?9, '960') > 0))
            AND (?10 = 0 OR (played_ts > 0 AND played_ts >= ?10)
                 OR (played_ts <= 0 AND played_at >= date(?10, 'unixepoch')))
            AND (?11 = '' OR color = ?11)
@@ -1908,6 +1914,45 @@ mod tests {
                 .join("\n");
             assert!(plan.contains(index), "{index} is no longer used:\n{plan}");
         }
+    }
+
+    /// Chess960 hat eine eigene Wertungsreihe und in der Liste einen eigenen
+    /// Modus („daily-960"). Mit dem bloßen „daily" zeigte der Filter beide
+    /// Reihen, und die Suche nach „960" fand gar nichts.
+    #[test]
+    fn chess960_games_have_their_own_mode_and_answer_a_search_for_960() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+        let mut standard = sample("standard");
+        standard.time_class = "daily".into();
+        let mut fischer = sample("fischer");
+        fischer.time_class = "daily".into();
+        fischer.variant = "chess960".into();
+        fischer.start_fen = "nbqrbkrn/pppppppp/8/8/8/8/PPPPPPPP/NBQRBKRN w KQkq - 0 1".into();
+        upsert_games(&mut conn, &[standard, fischer]).unwrap();
+
+        let page = |request: GamePageRequest| list_games_page(&conn, &request).unwrap();
+        let daily = page(GamePageRequest {
+            limit: 25,
+            time_class: "daily".into(),
+            ..Default::default()
+        });
+        assert_eq!(daily.total, 1);
+        assert_eq!(daily.items[0].variant, "standard");
+        let daily960 = page(GamePageRequest {
+            limit: 25,
+            time_class: "daily-960".into(),
+            ..Default::default()
+        });
+        assert_eq!(daily960.total, 1);
+        assert_eq!(daily960.items[0].variant, "chess960");
+        let search = page(GamePageRequest {
+            limit: 25,
+            query: "960".into(),
+            ..Default::default()
+        });
+        assert_eq!(search.total, 1);
+        assert_eq!(search.items[0].variant, "chess960");
     }
 
     #[test]

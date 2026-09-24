@@ -10,6 +10,10 @@
  * Die Einstellungen kommen fertig von der Seite: Sie sind Bedienung und nicht
  * Satz, und zweimal gebaut liefen sie auseinander. `.blatt-formular` nimmt den
  * gewöhnlichen Knöpfen darin Rundung und Fläche (siehe blatt.css).
+ *
+ * Die Seite ist eine Ebene der Analyse und kein eigenes Kapitel · der
+ * Kolumnentitel nennt deshalb zuerst die Analyse, und über sie geht es
+ * zurück. Mobil trägt die App-Bar den Rückweg.
  */
 import type { ReactNode } from "react";
 import FocusBoard from "../../components/FocusBoard";
@@ -48,6 +52,8 @@ export interface PlayBlattProps {
     brett: ReactNode;
   };
   fehler?: string | null;
+  /** Zurück in die Analyse · ohne Angabe steht nur der Titel. */
+  onZurueck?: () => void;
 }
 
 /** Die Mitschrift · Zugnummer vor Weiß, bei Schwarz am Anfang mit Auslassung. */
@@ -77,6 +83,7 @@ export default function PlayBlatt({
   einstellungen,
   fokus,
   fehler,
+  onZurueck,
 }: PlayBlattProps) {
   const { t } = useI18n();
 
@@ -122,7 +129,22 @@ export default function PlayBlatt({
 
   const kopf = (
     <>
-      <Kolumnentitel links={t("play.title")} rechts={t("play.subtitleShort")} />
+      <Kolumnentitel
+        links={
+          onZurueck && !mobile ? (
+            <>
+              <button type="button" onClick={onZurueck} className="blatt-kolumne text-accent hover:text-accent-hover">
+                {t("nav.analysis")}
+              </button>
+              <span aria-hidden> / </span>
+              {t("play.title")}
+            </>
+          ) : (
+            t("play.title")
+          )
+        }
+        rechts={t("play.subtitleShort")}
+      />
       <div className="mt-4 flex items-end">
         <div className="min-w-0 flex-1">
           <Formularkopf

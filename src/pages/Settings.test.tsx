@@ -23,7 +23,10 @@ const mocks = vi.hoisted(() => ({
   setLichessToken: vi.fn(),
 }));
 
-vi.mock("../lib/backend", () => ({ useBackendInfo: () => mocks.backend }));
+vi.mock("../lib/backend", () => ({
+  useBackendInfo: () => mocks.backend,
+  bundledEngineInfo: () => Promise.resolve({ available: true, name: "Stockfish 19", path: "" }),
+}));
 vi.mock("../lib/i18n", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/i18n")>()),
   useI18n: () => ({

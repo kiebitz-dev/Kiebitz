@@ -37,8 +37,15 @@ vi.mock("../../lib/settings", async (importOriginal) => ({
   getSettings: () => Promise.resolve({ locale: "de" }),
   testEngine: (...args: unknown[]) => mocks.test(...args),
 }));
+vi.mock("../../lib/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/backend")>()),
+  bundledEngineInfo: () => Promise.resolve({ available: true, name: "Stockfish 19", path: "C:/kiebitz/stockfish.exe" }),
+}));
 vi.mock("../../lib/db", () => ({ writePgnFile: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+
+/** Die mitgelieferte · sie geht mit leerem Pfad ans Backend. */
+const BUNDLED = { name: "Stockfish 19", path: "" };
 
 const ENGINES = [
   { name: "Stockfish", path: "C:/sf.exe" },
@@ -73,10 +80,11 @@ afterEach(cleanup);
 describe("EnginesSection", () => {
   it("starts a tournament with the engines it shows", async () => {
     show();
+    await screen.findByText("Stockfish 19");
     fireEvent.click(await screen.findByRole("button", { name: /Turnier starten/ }));
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
     expect(mocks.start.mock.calls[0][0]).toMatchObject({
-      engines: ENGINES,
+      engines: [BUNDLED, ...ENGINES],
       rounds: 2,
       movetimeMs: 500,
     });
@@ -84,13 +92,16 @@ describe("EnginesSection", () => {
 
   it("leaves out an engine that was unticked", async () => {
     show();
+    await screen.findByText("Stockfish 19");
     const boxes = await screen.findAllByRole("checkbox");
-    fireEvent.click(boxes[2]);
+    // Die mitgelieferte, dann die drei eingetragenen.
+    fireEvent.click(boxes[1]);
+    fireEvent.click(boxes[3]);
     fireEvent.click(screen.getByRole("button", { name: /Turnier starten/ }));
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
-    expect(mocks.start.mock.calls[0][0].engines).toEqual([ENGINES[0], ENGINES[1]]);
+    expect(mocks.start.mock.calls[0][0].engines).toEqual([BUNDLED, ENGINES[1]]);
     // Eine Engine allein ist kein Turnier.
-    fireEvent.click(boxes[1]);
+    fireEvent.click(boxes[2]);
     expect((screen.getByRole("button", { name: /Turnier starten/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -139,5 +150,22 @@ describe("EnginesSection", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "Testen" }))[0]);
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls[0][0][0]).toEqual({ name: "Stockfish 19", path: "C:/sf.exe" });
+  });
+
+  /**
+   * War eine zweite Engine übernommen, führte kein Klick mehr zur
+   * mitgelieferten zurück, und gegen sie ließ sich kein Turnier starten.
+   */
+  it("keeps the bundled engine as a row of its own and switches back to it", async () => {
+    const onUseForAnalysis = vi.fn();
+    show({ engines: [ENGINES[1]], analysisPath: "C:/dragon.exe", onUseForAnalysis });
+    const row = await screen.findByTestId("bundled-engine");
+    expect(row.textContent).toContain("Stockfish 19");
+    fireEvent.click(screen.getAllByRole("button", { name: "Für Analyse" })[0]);
+    expect(onUseForAnalysis).toHaveBeenCalledWith(null);
+
+    fireEvent.click(screen.getByRole("button", { name: /Turnier starten/ }));
+    await waitFor(() => expect(mocks.start).toHaveBeenCalled());
+    expect(mocks.start.mock.calls[0][0].engines).toEqual([BUNDLED, ENGINES[1]]);
   });
 });

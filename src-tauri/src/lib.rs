@@ -86,6 +86,14 @@ pub(crate) fn resolve_engine(app: &tauri::AppHandle) -> Option<PathBuf> {
             return Some(p);
         }
     }
+    resolve_bundled_engine(app)
+}
+
+/// Die Engine, die ohne eigenen Pfad rechnet: `KIEBITZ_ENGINE`, sonst die
+/// mitgelieferte Stockfish. Das Turnier braucht sie auch dann, wenn für die
+/// Analyse gerade eine andere eingestellt ist · sonst könnte die
+/// mitgelieferte nie gegen eine eingetragene antreten.
+pub(crate) fn resolve_bundled_engine(app: &tauri::AppHandle) -> Option<PathBuf> {
     if let Ok(custom) = std::env::var("KIEBITZ_ENGINE") {
         let p = PathBuf::from(custom);
         if p.exists() {
@@ -137,7 +145,17 @@ pub(crate) fn resolve_engine(app: &tauri::AppHandle) -> Option<PathBuf> {
 
 #[tauri::command]
 fn engine_info(app: tauri::AppHandle) -> EngineInfo {
-    match resolve_engine(&app) {
+    describe_engine(resolve_engine(&app))
+}
+
+/// Die mitgelieferte Engine · für ihre feste Zeile in „Engines und Turnier".
+#[tauri::command]
+fn bundled_engine_info(app: tauri::AppHandle) -> EngineInfo {
+    describe_engine(resolve_bundled_engine(&app))
+}
+
+fn describe_engine(path: Option<PathBuf>) -> EngineInfo {
+    match path {
         // Do not start Stockfish just to render the Analysis page. The former
         // UCI handshake was repeated by the first live analysis and blocked
         // the UI noticeably, especially on Android.
@@ -676,6 +694,7 @@ pub fn run() {
             ads::show_ad_privacy_options,
             review::request_play_review,
             engine_info,
+            bundled_engine_info,
             analyze_live,
             stop_live,
             list_games_for_export,

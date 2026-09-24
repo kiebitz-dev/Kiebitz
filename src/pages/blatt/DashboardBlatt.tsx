@@ -193,6 +193,12 @@ export interface DashboardBlattProps {
    * im Kopf der gewöhnlichen Fassung. Leer in den Store-Aufnahmen.
    */
   profile?: { plattform: string; href: string }[];
+  /**
+   * Die laufenden Fernpartien · fertig gesetzt von components/
+   * CorrespondenceCard.tsx, die im Modus eine Diagrammreihe zeichnet. Sie
+   * stehen vor den letzten Partien: Dort wartet etwas, hier ist es gewesen.
+   */
+  fernschach?: ReactNode;
 }
 
 /** Zugfolge in der Notation der Oberflächensprache, mit den Urteilen daneben. */
@@ -414,6 +420,7 @@ export default function DashboardBlatt({
   onPartie,
   onFilter,
   profile = [],
+  fernschach,
 }: DashboardBlattProps) {
   const { t, locale } = useI18n();
   const heute = new Date();
@@ -746,6 +753,7 @@ export default function DashboardBlatt({
         )}
         {herkunft && <div className="mt-4">{herkunft}</div>}
         <div className="mt-3">{tagesliste}</div>
+        {fernschach && <div className="mt-5">{fernschach}</div>}
         <div className="mt-4">
           <Rubrik weg={t("dash.showAll")} onWeg={onAllePartien}>
             {t("dash.recentGames")}
@@ -805,6 +813,8 @@ export default function DashboardBlatt({
           {wertungenBlock}
         </div>
       </div>
+
+      {fernschach && <div className="pt-[22px]">{fernschach}</div>}
 
       <div className="pt-[18px]">
         <Rubrik weg={t("dash.showAll")} onWeg={onAllePartien}>

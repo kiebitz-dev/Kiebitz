@@ -13,6 +13,13 @@
  * schwarze König fehlt. Rochaderechte bietet der Editor nur an, wo König und
  * Turm auch stehen; in Chess960 auf jeder Seite des Königs (siehe
  * lib/chess960.ts).
+ *
+ * Im Diagramm-Modus ist der Editor ein Bogen Papier wie der Fokus: Kolumnentitel
+ * mit kräftiger Linie statt Titelleiste, Rubriken an Haarlinien statt
+ * Großbuchstaben über Kästen, unten die Schalterreihe des Blattes. Die
+ * Bedienteile sind dieselben und werden nur neu gesetzt (`.blatt-formular`,
+ * siehe docs/design.md) · das Brett behält die Felder des Themas, weil auf
+ * ihm gezogen wird.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -30,6 +37,9 @@ import {
 } from "lucide-react";
 import Board from "./Board";
 import { Button } from "./ui";
+import { useMobileShell } from "./MobileShell";
+import { Schalterreihe } from "./blatt/Satz";
+import { useDiagramMode } from "../lib/diagramMode";
 import { useBackDismiss } from "../lib/backDismiss";
 import { useI18n, type Key } from "../lib/i18n";
 import { PIECE_VIEWBOX } from "../lib/pieces/glyphs";
@@ -190,6 +200,8 @@ export default function PositionEditor({
 }) {
   const { t } = useI18n();
   const glyphs = usePieceGlyphs();
+  const blatt = useDiagramMode();
+  const mobile = useMobileShell();
   const [state, setState] = useState<EditorState>(
     () => parseEditorFen(initialFen) ?? parseEditorFen(START_FEN)!
   );
@@ -314,6 +326,12 @@ export default function PositionEditor({
     );
   };
 
+  /** Überschrift eines Abschnitts · im Blatt eine Rubrik an der Haarlinie. */
+  const headingCls = blatt
+    ? "blatt-kolumne mb-2.5 block border-b border-ink pb-[5px] text-ink3"
+    : "mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide text-ink3";
+  const heading = (text: string) => <div className={headingCls}>{text}</div>;
+
   const toolButton = (value: Tool, icon: ReactNode, label: string) => (
     <button
       type="button"
@@ -329,9 +347,123 @@ export default function PositionEditor({
     </button>
   );
 
+  const head = blatt ? (
+    // Der Kolumnentitel des Bogens · wie im Fokus (components/FocusBoard.tsx).
+    <div className="shrink-0 px-5 pt-3">
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3">
+          <h2 id="position-editor-title" className="blatt-kolumne shrink-0 text-ink3">
+            {t("pe.title")}
+          </h2>
+          <p className="buch min-w-0 text-[13px] italic text-ink2">{t("pe.lead")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("common.close")}
+          className="-me-2 shrink-0 p-2 text-ink3 transition-colors hover:text-ink"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="mt-1 h-px bg-ink" />
+    </div>
+  ) : (
+    <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+        <LayoutGrid size={17} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h2 id="position-editor-title" className="text-[16px] font-semibold">
+          {t("pe.title")}
+        </h2>
+        <p className="mt-0.5 text-[12px] text-ink3">{t("pe.lead")}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t("common.close")}
+        className="-mr-1 rounded p-1 text-ink3 transition-colors hover:text-ink"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+
+  const status = (
+    <p
+      role="status"
+      className={`${blatt ? "buch text-[13px] italic" : "text-[12.5px]"} ${
+        problem ? "text-loss" : blatt ? "text-ink2" : "text-ink3"
+      }`}
+    >
+      {problem ? t(errorKey(problem)) : t(state.turn === "w" ? "sh.whiteToMove" : "sh.blackToMove")}
+    </p>
+  );
+
+  // Mobil steht der Stand in einer eigenen Zeile über den Knöpfen · neben
+  // ihnen brach „Weiß am Zug" in drei Zeilen um. Abbrechen fehlt dort: Das
+  // Kreuz oben und die Zurück-Geste schließen, und die zwei Wege nach vorn
+  // bekommen die ganze Breite.
+  const foot = blatt ? (
+    <div className="shrink-0 px-5 pb-4 pt-3">
+      <div className="mb-2">{status}</div>
+      <Schalterreihe
+        eintraege={[
+          ...(mobile ? [] : [{ label: t("common.cancel"), onClick: onClose }]),
+          ...(onPlay ? [{ label: t("pe.play"), onClick: problem ? undefined : () => onPlay(result()) }] : []),
+          ...(onAnalyze
+            ? [{ label: t("pe.analyze"), betont: true, onClick: problem ? undefined : () => onAnalyze(result()) }]
+            : []),
+        ]}
+      />
+    </div>
+  ) : mobile ? (
+    <div className="flex shrink-0 flex-col gap-2.5 border-t border-line px-4 py-3">
+      {status}
+      <div className="flex gap-2">
+        {onPlay && (
+          <Button className="flex-1 justify-center" disabled={problem != null} onClick={() => onPlay(result())}>
+            <Swords size={14} /> {t("pe.play")}
+          </Button>
+        )}
+        {onAnalyze && (
+          <Button className="flex-1 justify-center" primary disabled={problem != null} onClick={() => onAnalyze(result())}>
+            <Microscope size={14} /> {t("pe.analyze")}
+          </Button>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-5 py-4">
+      <div className="min-w-0 flex-1">{status}</div>
+      <Button onClick={onClose}>{t("common.cancel")}</Button>
+      {onPlay && (
+        <Button disabled={problem != null} onClick={() => onPlay(result())}>
+          <Swords size={14} /> {t("pe.play")}
+        </Button>
+      )}
+      {onAnalyze && (
+        <Button primary disabled={problem != null} onClick={() => onAnalyze(result())}>
+          <Microscope size={14} /> {t("pe.analyze")}
+        </Button>
+      )}
+    </div>
+  );
+
   const dialog = (
     <div
-      className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 p-3 backdrop-blur-[2px] sm:p-4"
+      className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 px-3 backdrop-blur-[2px] sm:px-4"
+      // Status- und Navigationsleiste des Telefons liegen über dem Schleier,
+      // und der Bogen hielt zu beiden keinen Abstand. Android meldet den
+      // Tastenbereich je nach Hersteller als 0 · unten deshalb derselbe
+      // Mindestwert wie an der Navigationsleiste (`.mobile-bottom-nav`).
+      style={{
+        paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
+        paddingBottom: mobile
+          ? "calc(0.75rem + max(env(safe-area-inset-bottom), 32px))"
+          : "calc(0.75rem + env(safe-area-inset-bottom))",
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="position-editor-title"
@@ -339,28 +471,15 @@ export default function PositionEditor({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[94vh] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl border border-line2 bg-panel shadow-2xl shadow-black/50">
-        <div className="flex items-start gap-3 border-b border-line px-5 py-4">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-            <LayoutGrid size={17} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 id="position-editor-title" className="text-[16px] font-semibold">
-              {t("pe.title")}
-            </h2>
-            <p className="mt-0.5 text-[12px] text-ink3">{t("pe.lead")}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="-mr-1 rounded p-1 text-ink3 transition-colors hover:text-ink"
-          >
-            <X size={16} />
-          </button>
-        </div>
+      <div
+        data-blatt={blatt ? "" : undefined}
+        className={`flex max-h-full w-full max-w-[880px] flex-col overflow-hidden shadow-2xl shadow-black/50 ${
+          blatt ? "border border-ink bg-bg" : "rounded-2xl border border-line2 bg-panel"
+        }`}
+      >
+        {head}
 
-        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <div className={`min-h-0 flex-1 overflow-auto px-5 py-4 ${blatt ? "blatt-formular" : ""}`}>
           <div className="grid gap-5 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
             <div className="min-w-0">
               <Board
@@ -374,16 +493,14 @@ export default function PositionEditor({
                 onPieceDrop={onPieceDrop}
                 onSquareClick={onSquareClick}
               />
-              <p className="mt-2 text-[11.5px] leading-relaxed text-ink3">
+              <p className={`mt-2 leading-relaxed text-ink3 ${blatt ? "buch text-[12.5px] italic" : "text-[11.5px]"}`}>
                 {tool === "move" ? t("pe.hintMove") : tool === "erase" ? t("pe.hintErase") : t("pe.hintPlace")}
               </p>
             </div>
 
             <div className="flex min-w-0 flex-col gap-4">
               <div>
-                <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink3">
-                  {t("pe.pieces")}
-                </div>
+                {heading(t("pe.pieces"))}
                 <div className="grid grid-cols-6 gap-1.5">{PALETTE.map(paletteButton)}</div>
                 <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                   {toolButton("move", <><Hand size={15} /> {t("pe.toolMove")}</>, t("pe.toolMove"))}
@@ -392,9 +509,7 @@ export default function PositionEditor({
               </div>
 
               <div>
-                <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink3">
-                  {t("pe.toMove")}
-                </div>
+                {heading(t("pe.toMove"))}
                 <div className="grid grid-cols-2 gap-1.5">
                   {(["w", "b"] as const).map((color) => (
                     <button
@@ -415,9 +530,7 @@ export default function PositionEditor({
               </div>
 
               <div>
-                <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink3">
-                  {t("pe.castling")}
-                </div>
+                {heading(t("pe.castling"))}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                   {castleBox("K", `${t("common.white")} O-O`)}
                   {castleBox("Q", `${t("common.white")} O-O-O`)}
@@ -456,10 +569,7 @@ export default function PositionEditor({
               </div>
 
               <div>
-                <label
-                  htmlFor="position-editor-fen"
-                  className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide text-ink3"
-                >
+                <label htmlFor="position-editor-fen" className={headingCls}>
                   FEN
                 </label>
                 <textarea
@@ -498,25 +608,7 @@ export default function PositionEditor({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4">
-          <p
-            role="status"
-            className={`min-w-0 flex-1 text-[12.5px] ${problem ? "text-loss" : "text-ink3"}`}
-          >
-            {problem ? t(errorKey(problem)) : t(state.turn === "w" ? "sh.whiteToMove" : "sh.blackToMove")}
-          </p>
-          <Button onClick={onClose}>{t("common.cancel")}</Button>
-          {onPlay && (
-            <Button disabled={problem != null} onClick={() => onPlay(result())}>
-              <Swords size={14} /> {t("pe.play")}
-            </Button>
-          )}
-          {onAnalyze && (
-            <Button primary disabled={problem != null} onClick={() => onAnalyze(result())}>
-              <Microscope size={14} /> {t("pe.analyze")}
-            </Button>
-          )}
-        </div>
+        {foot}
       </div>
     </div>
   );

@@ -235,6 +235,7 @@ export default function Games({
           (color === "" || g.color === color) &&
           (eco === "" || g.eco === eco) &&
           (query === "" ||
+            (query.includes("960") && g.tc.includes("960")) ||
             g.opponent.toLowerCase().includes(query.toLowerCase()) ||
             g.opening.toLowerCase().includes(query.toLowerCase()) ||
             g.tags.some((tag) => tag.toLowerCase().includes(query.toLowerCase())))

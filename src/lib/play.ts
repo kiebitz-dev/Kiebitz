@@ -33,8 +33,32 @@ export interface PlaySetup {
   start: "standard" | "chess960";
 }
 
-/** Die Stufen des Reglers · unter 1320 schwächt das Backend über die Suchtiefe ab. */
-export const PLAY_LEVELS = [600, 900, 1200, 1400, 1600, 1800, 2000, 2200, 2500, 2800, 0] as const;
+/**
+ * Die Stufen des Reglers · in Hunderterschritten von 600 bis 3100, dann volle
+ * Kraft (0). Ab 1320 stellt Stockfish die Stärke selbst ein (`UCI_Elo`),
+ * darunter schwächt das Backend über Skill Level 0 und eine flache Suche ab ·
+ * und weil das nur wenige echte Stufen hergibt, kommt dort `blunderChance`
+ * dazu.
+ */
+export const PLAY_LEVELS: readonly number[] = [
+  ...Array.from({ length: 26 }, (_, i) => 600 + i * 100),
+  0,
+];
+
+/** Ab hier regelt Stockfish die Stärke selbst · siehe MIN_UCI_ELO in play.rs. */
+const MIN_UCI_ELO = 1320;
+
+/**
+ * Wie oft die Engine unter 1320 statt ihres Zuges einen beliebigen spielt.
+ * Linear von 0 knapp unter 1320 bis 60 % bei 600 · so unterscheidet sich jede
+ * Hunderterstufe spürbar von der nächsten, statt dass drei Suchtiefen sie
+ * unter sich aufteilen.
+ */
+export function blunderChance(elo: number): number {
+  if (elo === 0 || elo >= MIN_UCI_ELO) return 0;
+  const clamped = Math.max(600, elo);
+  return (0.6 * (MIN_UCI_ELO - clamped)) / (MIN_UCI_ELO - 600);
+}
 
 export const DEFAULT_SETUP: PlaySetup = {
   color: "white",
@@ -52,7 +76,7 @@ export function loadSetup(): PlaySetup {
     const parsed = JSON.parse(raw) as Partial<PlaySetup>;
     return {
       color: parsed.color === "black" || parsed.color === "random" ? parsed.color : "white",
-      elo: PLAY_LEVELS.includes(parsed.elo as (typeof PLAY_LEVELS)[number]) ? parsed.elo! : DEFAULT_SETUP.elo,
+      elo: PLAY_LEVELS.includes(parsed.elo as number) ? parsed.elo! : DEFAULT_SETUP.elo,
       movetimeMs:
         typeof parsed.movetimeMs === "number" ? Math.min(10_000, Math.max(100, parsed.movetimeMs)) : DEFAULT_SETUP.movetimeMs,
       start: parsed.start === "chess960" ? "chess960" : "standard",
