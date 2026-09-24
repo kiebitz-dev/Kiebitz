@@ -644,3 +644,44 @@ html[data-store-capture="true"] .board-badge-glanz {
     animation: none;
   }
 }
+
+/* ── Turniersaal ─────────────────────────────────────────────────────────────
+   Das Engine-Turnier als eigene Ebene (pages/settings/TournamentHall.tsx).
+   Der Schleier blendet ein, die Tafel steigt ein Stück auf, die Bretter
+   folgen gestaffelt · einmal beim Öffnen, danach bewegt sich nur noch, was
+   gespielt wird. Der Goldschimmer hinter dem Kopf ist ein Verlauf aus der
+   Themenfarbe, damit er mit jedem Thema geht. */
+.tournament-hall {
+  animation: sheet-fade 0.2s ease-out;
+}
+.tournament-hall-panel {
+  animation: sheet-rise 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.tournament-hall-glow {
+  background: radial-gradient(
+    ellipse 60% 100% at 20% 0%,
+    color-mix(in srgb, var(--color-gold) 16%, transparent),
+    transparent 70%
+  );
+}
+.tournament-tile {
+  animation: tour-appear 0.3s ease-out both;
+}
+.tournament-progress {
+  background: linear-gradient(90deg, var(--color-accent), var(--color-gold));
+  transition: width 0.5s ease;
+}
+.tournament-progress-bar {
+  transition: width 0.5s ease;
+}
+.tournament-tile:nth-child(2) { animation-delay: 0.05s; }
+.tournament-tile:nth-child(3) { animation-delay: 0.1s; }
+.tournament-tile:nth-child(4) { animation-delay: 0.15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-hall,
+  .tournament-hall-panel,
+  .tournament-tile {
+    animation: none;
+  }
+}

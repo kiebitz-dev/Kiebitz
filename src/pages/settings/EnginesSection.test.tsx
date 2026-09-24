@@ -6,7 +6,7 @@
  * `tournament_status` oder dem Ereignisstrom kommt.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import EnginesSection from "./EnginesSection";
 import { LocaleProvider } from "../../lib/i18n";
 import { EMPTY_STATUS, type TournamentStatus } from "../../lib/tournament";
@@ -105,7 +105,7 @@ describe("EnginesSection", () => {
     expect((screen.getByRole("button", { name: /Turnier starten/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("shows the table and the games the backend reports", async () => {
+  it("shows the table and the games the backend reports in the tournament hall", async () => {
     show();
     const status: TournamentStatus = {
       ...EMPTY_STATUS,
@@ -130,10 +130,43 @@ describe("EnginesSection", () => {
     // Erst die Abfrage beim Öffnen abwarten · danach meldet sich das Backend.
     await screen.findByRole("button", { name: /Turnier starten/ });
     act(() => mocks.listeners.forEach((cb) => cb(status)));
-    expect(await screen.findByText("1,5")).toBeTruthy();
-    expect(screen.getByText("0,5")).toBeTruthy();
-    expect(screen.getByText("Dragon – Stockfish")).toBeTruthy();
-    expect(screen.getByText("Matt")).toBeTruthy();
+    expect(await screen.findByText(/Vorn: Dragon mit 1,5/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Turnier ansehen/ }));
+    const hall = await screen.findByTestId("tournament-hall");
+    expect(within(hall).getByText("1,5")).toBeTruthy();
+    expect(within(hall).getByText("0,5")).toBeTruthy();
+    expect(within(hall).getByText("Dragon – Stockfish")).toBeTruthy();
+  });
+
+  it("opens the hall on start and shows every board that is being played", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /Turnier starten/ }));
+    const hall = await screen.findByTestId("tournament-hall");
+    const board = (n: number, white: string, black: string) => ({
+      board: n,
+      round: 1,
+      white,
+      black,
+      fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      plies: 1,
+      lastMove: "e2e4",
+    });
+    act(() =>
+      mocks.listeners.forEach((cb) =>
+        cb({
+          ...EMPTY_STATUS,
+          running: true,
+          total: 6,
+          boards: [board(1, "Stockfish 19", "Stockfish"), board(2, "Dragon", "Berserk")],
+        })
+      )
+    );
+    expect(within(hall).getAllByTestId("tournament-board")).toHaveLength(2);
+    expect(within(hall).getByText("Brett 2")).toBeTruthy();
+    // Schließen hält das Turnier nicht an.
+    fireEvent.click(within(hall).getByRole("button", { name: "Schließen" }));
+    expect(screen.queryByTestId("tournament-hall")).toBeNull();
+    expect(mocks.cancel).not.toHaveBeenCalled();
   });
 
   it("offers stopping while a tournament runs", async () => {
@@ -144,10 +177,13 @@ describe("EnginesSection", () => {
     expect(screen.queryByRole("button", { name: /Turnier starten/ })).toBeNull();
   });
 
-  it("takes the name the engine reports for itself", async () => {
+  it("keeps name, path and test behind the pencil and takes the name the engine reports for itself", async () => {
     const onChange = vi.fn();
     show({ onChange });
-    fireEvent.click((await screen.findAllByRole("button", { name: "Testen" }))[0]);
+    expect(screen.queryByRole("button", { name: "Testen" })).toBeNull();
+    fireEvent.click((await screen.findAllByRole("button", { name: "Engine bearbeiten" }))[0]);
+    expect((screen.getByRole("textbox", { name: "Pfad der Engine" }) as HTMLInputElement).value).toBe("C:/sf.exe");
+    fireEvent.click(screen.getByRole("button", { name: "Testen" }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls[0][0][0]).toEqual({ name: "Stockfish 19", path: "C:/sf.exe" });
   });

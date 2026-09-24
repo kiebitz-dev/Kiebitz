@@ -1,11 +1,19 @@
 /**
- * Mehrere Engines · Verwaltung und Turnier.
+ * Engines · Verwaltung, Rechenwerte und Turnier in einem Abschnitt.
  *
  * Kiebitz rechnet mit einer Engine, und das bleibt so: Analyse, Live-Brett und
- * Trainer benutzen die eine Engine aus dem Abschnitt darüber. Wer aber eine
+ * Trainer benutzen die eine, die in der Liste markiert ist. Wer aber eine
  * zweite ausprobiert, will zwei Dinge — schnell umschalten, welche rechnet,
  * und wissen, welche stärker ist. Beides steht deshalb hier und nicht im
  * Training: Es ist Werkzeugpflege, kein Üben.
+ *
+ * Bis 1.6 waren das zwei Abschnitte, „Schach-Engine" mit einem Pfadfeld und
+ * „Engines und Turnier" mit der Liste · zwei Wege zur selben Einstellung, und
+ * der Pfad aus dem ersten stand in der Liste des zweiten nicht. Jetzt gibt es
+ * nur die Liste. Jede Zeile ist kurz (Name, Herkunft, „Für Analyse"); Name,
+ * Pfad und Test liegen hinter dem Stift, weil man sie einmal einrichtet und
+ * dann nicht mehr ansieht. Die Rechenwerte darunter (`children`) gelten für
+ * die Engine, die gerade rechnet.
  *
  * Die mitgelieferte Engine steht als feste erste Zeile darüber. Sie hat keinen
  * Eintrag in `engines` und keinen Pfad (`engine_path` leer heißt: sie rechnet),
@@ -15,16 +23,17 @@
  * Pfad; `tournament_start` setzt dafür die mitgelieferte ein.
  *
  * Das Turnier selbst läuft im Backend weiter, auch wenn man die Einstellungen
- * verlässt (siehe src-tauri/src/tournament.rs). Die Seite fragt beim Öffnen
- * den Stand ab und hängt sich an den Ereignisstrom; sie führt nichts mit, was
- * sie nicht vom Backend hat.
+ * verlässt (siehe src-tauri/src/tournament.rs). Zu sehen ist es im Turniersaal
+ * (./TournamentHall.tsx), der sich beim Start öffnet. Die Seite fragt beim
+ * Öffnen den Stand ab und hängt sich an den Ereignisstrom; sie führt nichts
+ * mit, was sie nicht vom Backend hat.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { Check, Cpu, FolderOpen, Loader2, Play, Plus, Square, Trash2, Trophy } from "lucide-react";
+import { Check, Cpu, Eye, FolderOpen, Loader2, Pencil, Play, Plus, Square, Trash2, Trophy } from "lucide-react";
 import { Button } from "../../components/ui";
 import { Field, NumberField, inputCls } from "./SettingsLayout";
-import { useI18n, type Key } from "../../lib/i18n";
+import { useI18n } from "../../lib/i18n";
 import { testEngine, type EngineEntry } from "../../lib/settings";
 import { bundledEngineInfo } from "../../lib/backend";
 import { writePgnFile } from "../../lib/db";
@@ -38,29 +47,22 @@ import {
   tournamentStatus,
   type TournamentStatus,
 } from "../../lib/tournament";
+import TournamentHall from "./TournamentHall";
 
 const MAX_ENGINES = 8;
 
 /** Schlüssel der mitgelieferten Engine in der Teilnehmerauswahl · kein Pfad kann so heißen. */
 const BUNDLED = "\u0000bundled";
 
-/** Gründe, die das Backend meldet · alles andere bleibt ohne Zusatz. */
-const REASON_KEY: Record<string, Key> = {
-  mate: "end.reason.mate",
-  stalemate: "end.reason.stalemate",
-  insufficient: "end.reason.insufficient",
-  fifty: "end.reason.fifty",
-  repetition: "end.reason.repetition",
-  invalidMove: "tn.reasonInvalid",
-  engineError: "tn.reasonEngine",
-  adjudicated: "tn.reasonAdjudicated",
-};
+/** Dateiname ohne Endung · der vorläufige Name einer neu eingetragenen Engine. */
+const nameFromPath = (path: string) => path.split(/[\\/]/).pop()?.replace(/\.exe$/i, "") || "Engine";
 
 export default function EnginesSection({
   engines,
   analysisPath,
   onChange,
   onUseForAnalysis,
+  children,
 }: {
   engines: EngineEntry[];
   /** Die Engine, mit der Kiebitz rechnet · leer heißt: die mitgelieferte. */
@@ -68,6 +70,8 @@ export default function EnginesSection({
   onChange: (engines: EngineEntry[]) => void;
   /** `null` stellt auf die mitgelieferte Engine zurück. */
   onUseForAnalysis: (path: string | null) => void;
+  /** Die Rechenwerte · sie stehen zwischen Liste und Turnier. */
+  children?: ReactNode;
 }) {
   const { t, locale } = useI18n();
   const [status, setStatus] = useState<TournamentStatus>(EMPTY_STATUS);
@@ -79,6 +83,9 @@ export default function EnginesSection({
   const [notice, setNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
   const [tested, setTested] = useState<Record<number, { ok: boolean; name: string }>>({});
+  /** Die Zeile, deren Stift offen ist. */
+  const [editing, setEditing] = useState<number | null>(null);
+  const [hallOpen, setHallOpen] = useState(false);
   const [bundledName, setBundledName] = useState("Stockfish");
   const alive = useRef(true);
   /** Sobald eine Meldung da war, ist die Abfrage von vorhin überholt. */
@@ -110,6 +117,17 @@ export default function EnginesSection({
     };
   }, []);
 
+  /**
+   * Ein Pfad aus dem alten Feld „Schach-Engine", der in der Liste fehlt,
+   * kommt als Eintrag dazu · sonst rechnete eine Engine, die man nirgends
+   * sieht und nicht wieder abwählen kann.
+   */
+  useEffect(() => {
+    const path = analysisPath?.trim();
+    if (!path || engines.some((engine) => engine.path === path) || engines.length >= MAX_ENGINES) return;
+    onChange([...engines, { name: nameFromPath(path), path }]);
+  }, [analysisPath, engines, onChange]);
+
   // Teilnehmer sind die mitgelieferte und die eingetragenen Engines; ohne
   // Auswahl spielen alle. Ein Eintrag ohne Pfad (gerade von Hand angelegt)
   // spielt nicht mit · das Backend läse ihn als die mitgelieferte.
@@ -132,8 +150,29 @@ export default function EnginesSection({
   const add = async () => {
     const chosenPath = await openDialog({ multiple: false, directory: false });
     if (typeof chosenPath !== "string") return;
-    const name = chosenPath.split(/[\\/]/).pop()?.replace(/\.exe$/i, "") ?? "Engine";
-    onChange([...engines, { name, path: chosenPath }].slice(0, MAX_ENGINES));
+    onChange([...engines, { name: nameFromPath(chosenPath), path: chosenPath }].slice(0, MAX_ENGINES));
+  };
+
+  /** Ein leerer Eintrag · der Stift steht gleich offen, sonst gäbe es nichts auszufüllen. */
+  const addManual = () => {
+    onChange([...engines, { name: "", path: "" }]);
+    setEditing(engines.length);
+  };
+
+  const browse = async (index: number) => {
+    const chosenPath = await openDialog({ multiple: false, directory: false });
+    if (typeof chosenPath !== "string") return;
+    const current = engines[index];
+    patch(index, { path: chosenPath, name: current.name.trim() ? current.name : nameFromPath(chosenPath) });
+  };
+
+  const remove = (index: number) => {
+    const removed = engines[index];
+    onChange(engines.filter((_, i) => i !== index));
+    // Rechnete sie gerade, rechnet ab jetzt wieder die mitgelieferte.
+    if (removed && analysisPath === removed.path) onUseForAnalysis(null);
+    setEditing(null);
+    setTested({});
   };
 
   const check = async (index: number) => {
@@ -158,6 +197,7 @@ export default function EnginesSection({
         movetimeMs: movetime,
         rounds,
       });
+      setHallOpen(true);
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -182,113 +222,157 @@ export default function EnginesSection({
   };
 
   const running = status.running;
+  const leader = status.standings[0];
+
+  /** Eine Zeile der Liste · die mitgelieferte hat keinen Stift und keinen Papierkorb. */
+  const row = (props: {
+    key: string;
+    testId?: string;
+    partKey: string;
+    name: string;
+    detail: string;
+    active: boolean;
+    onUse: () => void;
+    index?: number;
+  }) => {
+    const { index } = props;
+    const open = index != null && editing === index;
+    const engine = index != null ? engines[index] : null;
+    const result = index != null ? tested[index] : undefined;
+    return (
+      <div
+        key={props.key}
+        data-testid={props.testId}
+        className={`rounded-lg border bg-panel2 transition-colors ${props.active ? "border-accent-dim" : "border-line"}`}
+      >
+        <div className="flex flex-wrap items-center gap-2 p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink2">
+            <input
+              type="checkbox"
+              checked={takesPart(props.partKey)}
+              onChange={(event) => toggle(props.partKey, event.target.checked)}
+              aria-label={t("tn.takePart")}
+              disabled={running}
+              className="size-4 accent-[var(--color-accent)]"
+            />
+            <Cpu size={15} className={props.active ? "text-accent" : "text-ink3"} />
+          </label>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-medium text-ink">{props.name || t("tn.unnamed")}</div>
+            <div className="truncate text-[11.5px] text-ink3" title={props.detail}>
+              {props.detail}
+            </div>
+          </div>
+          {props.active ? (
+            <span
+              className="flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11.5px] font-medium text-accent"
+              title={t("tn.isAnalysisEngine")}
+            >
+              <Check size={12} /> {t("tn.inUse")}
+            </span>
+          ) : (
+            <Button compact onClick={props.onUse} title={t("tn.useForAnalysis")} disabled={index != null && !engine?.path.trim()}>
+              {t("tn.use")}
+            </Button>
+          )}
+          {index != null && (
+            <>
+              <Button
+                compact
+                onClick={() => setEditing(open ? null : index)}
+                title={t("tn.edit")}
+                label={t("tn.edit")}
+                className={open ? "border-accent-dim text-accent" : ""}
+              >
+                <Pencil size={14} />
+              </Button>
+              <Button compact onClick={() => remove(index)} title={t("common.delete")} label={t("common.delete")} disabled={running}>
+                <Trash2 size={14} />
+              </Button>
+            </>
+          )}
+        </div>
+        {open && engine && (
+          <div className="flex flex-col gap-3 border-t border-line px-3 pb-3 pt-3">
+            <Field label={t("tn.engineName")}>
+              <input
+                value={engine.name}
+                onChange={(event) => patch(index, { name: event.target.value })}
+                aria-label={t("tn.engineName")}
+                className={inputCls}
+                autoFocus={!engine.name}
+              />
+            </Field>
+            <Field label={t("tn.enginePath")}>
+              <div className="flex gap-2">
+                <input
+                  value={engine.path}
+                  onChange={(event) => {
+                    const path = event.target.value;
+                    // Die rechnende Engine zieht mit · sonst zeigte der
+                    // Eintrag auf die neue Datei und gerechnet würde mit der alten.
+                    if (props.active) onUseForAnalysis(path || null);
+                    patch(index, { path });
+                  }}
+                  aria-label={t("tn.enginePath")}
+                  className={inputCls}
+                />
+                <Button onClick={() => browse(index)} title={t("tn.browse")} label={t("tn.browse")} compact>
+                  <FolderOpen size={14} />
+                </Button>
+                <Button onClick={() => check(index)} disabled={!engine.path.trim()}>
+                  {testing === index ? <Loader2 size={14} className="animate-spin" /> : t("set.engineTest")}
+                </Button>
+              </div>
+            </Field>
+            {result && (
+              <p className={`text-[12px] ${result.ok ? "text-accent" : "text-loss"}`}>
+                {result.ok ? t("set.engineOk", { name: result.name }) : t("set.engineFail", { name: result.name })}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
       <p className="text-[12.5px] leading-relaxed text-ink3">{t("tn.lead")}</p>
 
       <div className="mt-3 flex flex-col gap-2">
-        <div className="rounded-lg border border-line bg-panel2 p-3" data-testid="bundled-engine">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink2">
-              <input
-                type="checkbox"
-                checked={takesPart(BUNDLED)}
-                onChange={(event) => toggle(BUNDLED, event.target.checked)}
-                aria-label={t("tn.takePart")}
-                disabled={running}
-                className="size-4 accent-[var(--color-accent)]"
-              />
-              <Cpu size={15} className={bundledActive ? "text-accent" : "text-ink3"} />
-            </label>
-            <span className="min-w-0 flex-1 text-[13px] text-ink">
-              {bundledName} <span className="text-ink3">· {t("tn.bundled")}</span>
-            </span>
-            <Button
-              compact
-              onClick={() => onUseForAnalysis(null)}
-              disabled={bundledActive}
-              title={t("tn.useForAnalysis")}
-            >
-              {bundledActive ? <Check size={14} /> : t("tn.use")}
-            </Button>
-          </div>
-          {bundledActive && <p className="mt-2 text-[12px] text-ink3">{t("tn.isAnalysisEngine")}</p>}
-        </div>
-        {engines.length === 0 && (
-          <p className="rounded-lg border border-dashed border-line2 px-3 py-2.5 text-[12.5px] text-ink3">
-            {t("tn.empty")}
-          </p>
-        )}
-        {engines.map((engine, index) => {
-          const active = !!analysisPath && analysisPath === engine.path;
-          const result = tested[index];
-          return (
-            <div key={`${engine.path}-${index}`} className="rounded-lg border border-line bg-panel2 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink2">
-                  <input
-                    type="checkbox"
-                    checked={takesPart(engine.path)}
-                    onChange={(event) => toggle(engine.path, event.target.checked)}
-                    aria-label={t("tn.takePart")}
-                    disabled={running}
-                    className="size-4 accent-[var(--color-accent)]"
-                  />
-                  <Cpu size={15} className={active ? "text-accent" : "text-ink3"} />
-                </label>
-                <input
-                  value={engine.name}
-                  onChange={(event) => patch(index, { name: event.target.value })}
-                  aria-label={t("tn.engineName")}
-                  className={`${inputCls} max-w-[200px] flex-1`}
-                />
-                <input
-                  value={engine.path}
-                  onChange={(event) => patch(index, { path: event.target.value })}
-                  aria-label={t("tn.enginePath")}
-                  className={`${inputCls} min-w-[180px] flex-[2]`}
-                />
-                <Button compact onClick={() => check(index)} title={t("set.engineTest")}>
-                  {testing === index ? <Loader2 size={14} className="animate-spin" /> : t("set.engineTest")}
-                </Button>
-                <Button
-                  compact
-                  onClick={() => onUseForAnalysis(engine.path)}
-                  disabled={active}
-                  title={t("tn.useForAnalysis")}
-                >
-                  {active ? <Check size={14} /> : t("tn.use")}
-                </Button>
-                <Button
-                  compact
-                  onClick={() => onChange(engines.filter((_, i) => i !== index))}
-                  title={t("common.delete")}
-                  label={t("common.delete")}
-                  disabled={running}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-              {result && (
-                <p className={`mt-2 text-[12px] ${result.ok ? "text-accent" : "text-loss"}`}>
-                  {result.ok ? t("set.engineOk", { name: result.name }) : t("set.engineFail", { name: result.name })}
-                </p>
-              )}
-              {active && <p className="mt-2 text-[12px] text-ink3">{t("tn.isAnalysisEngine")}</p>}
-            </div>
-          );
+        {row({
+          key: "bundled",
+          testId: "bundled-engine",
+          partKey: BUNDLED,
+          name: bundledName,
+          detail: t("tn.bundled"),
+          active: bundledActive,
+          onUse: () => onUseForAnalysis(null),
         })}
+        {engines.map((engine, index) =>
+          row({
+            key: `engine-${index}`,
+            partKey: engine.path,
+            name: engine.name,
+            detail: engine.path || t("tn.noPath"),
+            active: !!analysisPath && analysisPath === engine.path,
+            onUse: () => onUseForAnalysis(engine.path),
+            index,
+          })
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button onClick={add} disabled={engines.length >= MAX_ENGINES || running}>
           <Plus size={14} /> {t("tn.add")}
         </Button>
-        <Button onClick={() => onChange([...engines, { name: "", path: "" }])} disabled={engines.length >= MAX_ENGINES || running}>
+        <Button onClick={addManual} disabled={engines.length >= MAX_ENGINES || running}>
           <FolderOpen size={14} /> {t("tn.addManual")}
         </Button>
       </div>
+
+      {children && <div className="mt-5 border-t border-line pt-4">{children}</div>}
 
       <div className="mt-5 border-t border-line pt-4">
         <div className="flex items-center gap-2 text-[13px] font-medium">
@@ -321,12 +405,15 @@ export default function EnginesSection({
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {t("tn.start")}
             </Button>
           )}
-          {status.games.length > 0 && (
-            <Button onClick={savePgn}>{t("tn.savePgn")}</Button>
+          {(running || status.games.length > 0) && (
+            <Button onClick={() => setHallOpen(true)}>
+              <Eye size={14} /> {t("tn.watch")}
+            </Button>
           )}
-          {running && (
+          {status.games.length > 0 && <Button onClick={savePgn}>{t("tn.savePgn")}</Button>}
+          {leader && status.played > 0 && (
             <span className="text-[12.5px] text-ink3">
-              {t("tn.playing", { white: status.white, black: status.black, n: Math.ceil(status.plies / 2) })}
+              {t("tn.leader", { name: leader.name, points: points(leader.halfPoints, locale) })}
             </span>
           )}
         </div>
@@ -337,61 +424,17 @@ export default function EnginesSection({
           </p>
         )}
         {notice && <p className="mt-3 text-[12.5px] text-accent">{notice}</p>}
-        {status.cancelled && !running && (
-          <p className="mt-3 text-[12.5px] text-ink3">{t("tn.cancelled")}</p>
-        )}
-
-        {status.standings.length > 0 && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[420px] text-[12.5px]">
-              <thead>
-                <tr className="text-left text-[11px] text-ink3">
-                  <th className="py-1.5 pr-2 font-normal">{t("tn.engine")}</th>
-                  <th className="py-1.5 pr-2 text-right font-normal">{t("tn.points")}</th>
-                  <th className="py-1.5 pr-2 text-right font-normal">{t("common.win")}</th>
-                  <th className="py-1.5 pr-2 text-right font-normal">{t("common.draw")}</th>
-                  <th className="py-1.5 text-right font-normal">{t("common.loss")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {status.standings.map((row) => (
-                  <tr key={row.name} className="border-t border-line">
-                    <td className="py-1 pr-2">{row.name}</td>
-                    <td className="py-1 pr-2 text-right font-medium tabular-nums">
-                      {points(row.halfPoints, locale)}
-                    </td>
-                    <td className="py-1 pr-2 text-right tabular-nums text-win">{row.wins}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums text-ink2">{row.draws}</td>
-                    <td className="py-1 text-right tabular-nums text-loss">{row.losses}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {status.games.length > 0 && (
-          <div className="mt-4">
-            <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink3">
-              {t("tn.played")}
-            </div>
-            <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto">
-              {status.games.map((game, index) => (
-                <div key={index} className="flex items-baseline gap-2 text-[12.5px] text-ink2">
-                  <span className="w-10 shrink-0 text-ink3">{game.round}.</span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {game.white} – {game.black}
-                  </span>
-                  <span className="shrink-0 font-medium text-ink">{game.result.replace("1/2-1/2", "½–½")}</span>
-                  <span className="hidden shrink-0 text-ink3 sm:inline">
-                    {REASON_KEY[game.reason] ? t(REASON_KEY[game.reason]) : ""}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {status.cancelled && !running && <p className="mt-3 text-[12.5px] text-ink3">{t("tn.cancelled")}</p>}
       </div>
+
+      {hallOpen && (
+        <TournamentHall
+          status={status}
+          onClose={() => setHallOpen(false)}
+          onStop={() => tournamentCancel()}
+          onSavePgn={savePgn}
+        />
+      )}
     </>
   );
 }

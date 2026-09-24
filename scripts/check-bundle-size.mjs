@@ -92,7 +92,14 @@ const limits = {
   // 84 KiB rissen um 44 Byte mit dem Stellungseditor im Buchsatz, den
   // Postkarten der Fernpartien samt Poststempel und der Diagrammreihe ihrer
   // Blattfassung: zusammen 944 Byte. Gemessen 84,0 KiB, dazu rund zwei Prozent.
-  css: 86 * 1024,
+  //
+  // 86 KiB rissen mit dem Turniersaal (die Ebene über der App mit allen
+  // Brettern, Tabelle und Schlusskacheln samt Auftritt) und der
+  // zusammengelegten Engine-Liste mit Stift. Filter, Verläufe, Ringe und
+  // `animate-ping` sind dafür schon gegen eigene Regeln getauscht · sie zogen
+  // ganze Variablenblöcke nach und kosteten allein 3 KiB. Gemessen 87,0 KiB,
+  // dazu rund zwei Prozent.
+  css: 89 * 1024,
   // Inter deckt die Oberfläche ab (latin + latin-ext, rund 133 KiB).
   //
   // Dazu kommen rund 181 KiB Source Serif 4 für den Diagramm-Modus: aufrecht

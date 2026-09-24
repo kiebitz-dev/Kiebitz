@@ -20,6 +20,8 @@ export interface TournamentConfig {
   maxPlies?: number;
   threads?: number;
   hashMb?: number;
+  /** Bretter zugleich · weggelassen entscheidet das Backend nach den Kernen. */
+  boards?: number;
 }
 
 export interface Standing {
@@ -40,6 +42,21 @@ export interface PlayedGame {
   reason: string;
   plies: number;
   moves: string;
+  /** Schlussstellung · leer bei Partien aus älteren Ständen. */
+  fen?: string;
+}
+
+/** Ein Brett, an dem gerade gespielt wird. */
+export interface LiveBoard {
+  /** Nummer des Bretts ab 1 · bleibt, während die Partien daran wechseln. */
+  board: number;
+  round: number;
+  white: string;
+  black: string;
+  fen: string;
+  plies: number;
+  /** Letzter Zug als UCI · leer vor dem ersten. */
+  lastMove: string;
 }
 
 export interface TournamentStatus {
@@ -50,6 +67,8 @@ export interface TournamentStatus {
   black: string;
   fen: string;
   plies: number;
+  /** Alle Bretter, an denen gerade gespielt wird. */
+  boards: LiveBoard[];
   standings: Standing[];
   games: PlayedGame[];
   error: string | null;
@@ -64,6 +83,7 @@ export const EMPTY_STATUS: TournamentStatus = {
   black: "",
   fen: "",
   plies: 0,
+  boards: [],
   standings: [],
   games: [],
   error: null,

@@ -136,6 +136,13 @@ impl LiveEngine {
         depth: u32,
     ) -> Result<u64, String> {
         let fen = crate::chess::engine_fen(fen)?;
+        // Matt oder Patt · dort gibt es nichts zu rechnen, und manche Engine
+        // stirbt an der Frage (siehe `chess::dead_end`). Eine neue Generation
+        // ohne Suche lässt die Anzeige leer, wie nach Stockfishs
+        // `bestmove (none)`.
+        if crate::chess::dead_end(fen).is_some() {
+            return Ok(self.generation.fetch_add(1, Ordering::SeqCst) + 1);
+        }
         let mut guard = self.inner.lock().map_err(|e| e.to_string())?;
         if guard.is_none() {
             *guard = Some(self.spawn(app, engine_path)?);

@@ -10,7 +10,8 @@
  * Fernschach wurde auf Postkarten gespielt, und so steht jede Partie hier:
  * eine Karte mit der Stellung jetzt, aus der eigenen Sicht, dem Gegner als
  * Empfänger und der Frist als Poststempel. Die Karten, auf die man antworten
- * muss, tragen die Akzentkante. Ein Tipp führt zur Partie auf der Plattform.
+ * muss, tragen die Akzentkante; die übrigen treten blass zurück, bis man
+ * mit der Maus darauf zeigt. Ein Tipp führt zur Partie auf der Plattform.
  *
  * Kein Weg in die Analyse: Die Engine an eine Stellung zu setzen, in der man
  * noch selbst zieht, wäre Schummeln. Im Diagramm-Modus setzt `Fernpartien`
@@ -40,10 +41,12 @@ function Postkarte({ game }: { game: OngoingGame }) {
       onClick={() => openExternal(game.url)}
       title={site}
       aria-label={`${game.opponent} · ${t(game.myTurn ? "corr.yourMove" : "corr.theirMove")} · ${site}`}
-      className={`group relative flex w-full min-w-0 flex-col rounded-xl border p-2.5 text-start transition-colors ${
+      className={`group relative flex w-full min-w-0 flex-col rounded-xl border p-2.5 text-start transition ${
         game.myTurn
           ? "border-accent bg-accent-soft/40 hover:bg-accent-soft"
-          : "border-line bg-panel2 hover:border-line2 hover:bg-panel3"
+          : // Wartet man auf den Gegner, tritt die Karte zurück · hervor
+            // stehen nur die, auf die man antworten muss.
+            "border-line bg-panel2 opacity-55 hover:border-line2 hover:bg-panel3 hover:opacity-100 focus-visible:opacity-100"
       }`}
     >
       <div className="mb-2 flex min-h-9 items-start justify-between gap-2">

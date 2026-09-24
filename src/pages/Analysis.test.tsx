@@ -790,10 +790,15 @@ describe("Analysis page", () => {
         "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
       )
     );
-    // Von hier aus geht es mit derselben Stellung zurück ans Spielbrett.
+    // Von hier aus geht es mit derselben Partie zurück ans Spielbrett · die
+    // Züge reisen mit, damit die Mitschrift weiterläuft.
     fireEvent.click(screen.getByRole("button", { name: "Weitere Brettaktionen" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Ab hier gegen die Engine" }));
-    expect(onPlay).toHaveBeenCalledWith("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2", false);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Gegen die Engine" }));
+    expect(onPlay).toHaveBeenCalledWith(
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      false,
+      ["e4", "e5", "Nf3"]
+    );
   });
 
   it("shows database player names with parenthesized ratings and previews the next move", async () => {

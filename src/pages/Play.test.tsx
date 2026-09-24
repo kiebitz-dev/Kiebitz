@@ -43,11 +43,14 @@ afterEach(cleanup);
 const fenOf = () => screen.getByTestId("play-board").dataset.fen;
 
 describe("Play", () => {
-  it("sends the moves so far and plays the engine's reply", async () => {
+  it("starts with the first move, sends the moves so far and plays the engine's reply", async () => {
     mocks.playMove.mockResolvedValue({ bestmove: "e7e5", evalCp: 10, mateIn: null });
     render(<LocaleProvider><Play openAnalysis={() => {}} /></LocaleProvider>);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Partie starten/ })[0]);
+    // Kein Knopf zum Anfangen · das Brett steht bereit, der Zug ist der Anfang.
+    expect(screen.queryByRole("button", { name: /Partie starten/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Zurücknehmen/ })).toBeNull();
+    expect(screen.getByTestId("play-status").textContent).toMatch(/Zieh eine Figur/);
     fireEvent.click(screen.getByRole("button", { name: "drop e4" }));
 
     await waitFor(() => expect(fenOf()).toBe("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"));
@@ -63,7 +66,6 @@ describe("Play", () => {
       .mockResolvedValueOnce({ bestmove: "d8h4", evalCp: null, mateIn: 1 });
     render(<LocaleProvider><Play openAnalysis={() => {}} /></LocaleProvider>);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Partie starten/ })[0]);
     fireEvent.click(screen.getByRole("button", { name: "drop f3" }));
     await waitFor(() => expect(mocks.playMove).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByTestId("play-status").textContent).toMatch(/Du bist am Zug/));
@@ -90,5 +92,45 @@ describe("Play", () => {
     // Schwarz ist am Zug, also spielt man Schwarz · die Engine wartet.
     expect(fenOf()).toBe("4k3/8/8/8/8/8/8/4K2R b K - 0 1");
     expect(mocks.playMove).not.toHaveBeenCalled();
+  });
+
+  it("continues the moves that came along from the board", async () => {
+    mocks.playMove.mockResolvedValue({ bestmove: "b8c6", evalCp: 0, mateIn: null });
+    const openAnalysis = vi.fn();
+    render(
+      <LocaleProvider>
+        <Play
+          initial={{
+            fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            chess960: false,
+            sans: ["e4", "e5", "Nf3"],
+          }}
+          openAnalysis={openAnalysis}
+        />
+      </LocaleProvider>
+    );
+    // Schwarz ist nach 1.e4 e5 2.Sf3 am Zug · man spielt Schwarz weiter.
+    expect(fenOf()).toBe("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
+    expect(screen.getByText("Vom Brett übernommen")).toBeTruthy();
+    // Die Analyse bekommt die ganze Partie zurück, nicht nur ihr Ende.
+    fireEvent.click(screen.getAllByRole("button", { name: /Analyse öffnen/ })[0]);
+    expect(openAnalysis).toHaveBeenCalledWith({
+      fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      sans: ["e4", "e5", "Nf3"],
+      chess960: false,
+    });
+  });
+
+  it("lets the engine open when you play black, and turns the ready board when the colour changes", async () => {
+    mocks.playMove.mockResolvedValue({ bestmove: "e2e4", evalCp: 20, mateIn: null });
+    render(<LocaleProvider><Play openAnalysis={() => {}} /></LocaleProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Schwarz" }));
+    await waitFor(() => expect(mocks.playMove).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fenOf()).toBe("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"));
+
+    // Noch nicht selbst gezogen · zurück zu Weiß stellt das Brett neu hin.
+    fireEvent.click(screen.getByRole("button", { name: "Weiß" }));
+    expect(fenOf()).toBe("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   });
 });

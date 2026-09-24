@@ -249,6 +249,20 @@ impl Position960 {
         self.board.side()
     }
 
+    /// Ob die Seite am Zug überhaupt ziehen kann · die Rochade eingeschlossen,
+    /// denn in Chess960 kann sie der einzige legale Zug sein (König auf g1,
+    /// Turm auf h1, alles andere festgelegt).
+    pub fn has_legal_move(&self) -> bool {
+        !owlchess::movegen::legal::gen_all(&self.board).is_empty()
+            || self.castle(true).is_some()
+            || self.castle(false).is_some()
+    }
+
+    /// Ob der König der Seite am Zug im Schach steht.
+    pub fn is_check(&self) -> bool {
+        self.board.is_check()
+    }
+
     /// Die Rochade der Seite am Zug · `None`, wenn sie nicht möglich ist.
     fn castle(&self, kingside: bool) -> Option<Position960> {
         let color = self.side();

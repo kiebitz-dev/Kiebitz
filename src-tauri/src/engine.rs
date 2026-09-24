@@ -264,7 +264,24 @@ impl UciEngine {
     /// gewöhnlicher Fehler zurück, ohne dass die Engine sie je zu sehen bekommt.
     pub fn analyze(&mut self, fen: &str, depth: u32) -> Result<AnalysisResult, String> {
         let fen = crate::chess::engine_fen(fen)?;
+        if let Some(dead) = crate::chess::dead_end(fen) {
+            return Ok(Self::dead_end_result(dead));
+        }
         self.search(&format!("position fen {fen}"), &format!("go depth {depth}"))
+    }
+
+    /// Was Stockfish in einer Stellung ohne Zug meldet (`score mate 0` bzw.
+    /// `score cp 0`, `bestmove (none)`) · ohne die Engine zu fragen, siehe
+    /// `chess::dead_end`.
+    pub fn dead_end_result(dead: crate::chess::DeadEnd) -> AnalysisResult {
+        let mate = dead == crate::chess::DeadEnd::Checkmate;
+        AnalysisResult {
+            bestmove: "(none)".into(),
+            eval_cp: if mate { None } else { Some(0) },
+            mate_in: if mate { Some(0) } else { None },
+            depth: 0,
+            pv: Vec::new(),
+        }
     }
 
     /// Eine Suche mit frei gewählter Stellung und Begrenzung · für das Spiel
@@ -401,6 +418,28 @@ mod tests {
         // Auch unterhalb des Bodens bleibt die Einstellung eine Obergrenze
         // für die einzelne Engine, nicht der Boden.
         assert_eq!(UciEngine::worker_hash_mb(16, 4), 16);
+    }
+
+    /// Matt und Patt beantwortet Kiebitz selbst · Reckless 0.9 stürzte an der
+    /// Frage ab, und mit ihm die ganze Stapelanalyse.
+    /// `KIEBITZ_ENGINE=…/reckless.exe cargo test engine::tests::answers_dead_ends -- --ignored`
+    #[test]
+    #[ignore]
+    fn answers_dead_ends_without_losing_the_engine() {
+        let path = std::env::var("KIEBITZ_ENGINE").expect("KIEBITZ_ENGINE setzen");
+        let mut e = UciEngine::spawn(&path).expect("Engine-Start");
+        let mate = e
+            .analyze("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3", 12)
+            .expect("Matt");
+        assert_eq!(mate.mate_in, Some(0));
+        assert_eq!(mate.bestmove, "(none)");
+        let stalemate = e.analyze("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", 12).expect("Patt");
+        assert_eq!(stalemate.eval_cp, Some(0));
+        // Die Engine lebt noch und rechnet die nächste Stellung.
+        let next = e
+            .analyze("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 8)
+            .expect("Grundstellung");
+        assert!(!next.bestmove.is_empty());
     }
 
     /// Testet den echten Analyse-Pfad gegen die gebündelte Engine.

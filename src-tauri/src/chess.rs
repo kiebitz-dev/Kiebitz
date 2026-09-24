@@ -127,6 +127,31 @@ pub fn engine_fen(fen: &str) -> Result<&str, String> {
     }
 }
 
+/// Eine Stellung, in der die Seite am Zug keinen Zug mehr hat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeadEnd {
+    Checkmate,
+    Stalemate,
+}
+
+/// Matt oder Patt · `None`, solange es einen legalen Zug gibt oder die FEN
+/// unlesbar ist.
+///
+/// Eine solche Stellung geht nie an die Engine. Stockfish antwortet dort mit
+/// `bestmove (none)`, andere Engines nicht: Reckless 0.9 etwa stürzt beim
+/// `go` ab (Index-Panic in der Suche), und die Stapelanalyse brach damit bei
+/// jeder Partie ab, die mit Matt endet.
+pub fn dead_end(fen: &str) -> Option<DeadEnd> {
+    let position = crate::chess960::Position960::from_fen(fen.trim()).ok()?;
+    if position.has_legal_move() {
+        None
+    } else if position.is_check() {
+        Some(DeadEnd::Checkmate)
+    } else {
+        Some(DeadEnd::Stalemate)
+    }
+}
+
 /// Spielphase einer Stellung: Endspiel, sobald höchstens 6 Nicht-Bauern-
 /// Figuren (ohne Könige) auf dem Brett stehen; Eröffnung bis Halbzug 20.
 pub fn phase_of(pos: &Position, ply: u32) -> &'static str {
@@ -512,6 +537,28 @@ pub(crate) mod tests {
         assert!(engine_fen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1").is_err());
         assert!(engine_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1\ngo infinite").is_err());
         assert!(engine_fen("keine fen").is_err());
+    }
+
+    /// Matt und Patt gehen nicht an die Engine · Reckless 0.9 stürzt daran ab.
+    /// Die letzte Stellung ist eine Chess960-Falle: Der König auf g1 kann
+    /// nur noch rochieren (Turm h1 nach f1), das ist weder Matt noch Patt.
+    #[test]
+    fn dead_end_finds_mate_and_stalemate() {
+        assert_eq!(
+            dead_end("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"),
+            Some(DeadEnd::Checkmate)
+        );
+        assert_eq!(
+            dead_end("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"),
+            Some(DeadEnd::Stalemate)
+        );
+        assert_eq!(dead_end(&Position::initial().as_fen()), None);
+        assert_eq!(dead_end("keine fen"), None);
+        assert_eq!(dead_end("k4r2/8/8/8/8/7p/7P/6KR w H - 0 1"), None);
+        assert_eq!(
+            dead_end("k4r2/8/8/8/8/7p/7P/6KR w - - 0 1"),
+            Some(DeadEnd::Stalemate)
+        );
     }
 
     /// Der Import darf nicht stillschweigend mitten in der Partie abbrechen.

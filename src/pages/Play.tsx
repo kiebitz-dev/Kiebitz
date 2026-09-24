@@ -3,8 +3,14 @@
  *
  * Nach einer Fehleranalyse ist „ab hier weiterspielen" die naheliegendste
  * Erwartung, und jede freie GUI kann es. Die Engine lief in Kiebitz längst ·
- * es fehlte die Partie drumherum: Farbe, Stärke, Ausgangsstellung, Zugrücknahme,
- * Aufgeben und der Weg zurück in die Analyse.
+ * es fehlte die Partie drumherum: Farbe, Stärke, Ausgangsstellung, Aufgeben
+ * und der Weg zurück in die Analyse.
+ *
+ * Es gibt keinen Knopf zum Anfangen. Das Brett steht mit den gewählten
+ * Einstellungen bereit, und der erste eigene Zug ist der Anfang; spielt man
+ * Schwarz, zieht die Engine sofort. Solange man selbst noch nicht gezogen hat,
+ * greifen Farbe und Aufstellung gleich an diesem Brett, danach erst in der
+ * nächsten Partie. Stärke und Bedenkzeit gelten ab dem nächsten Engine-Zug.
  *
  * Drei Ausgangsstellungen: die Grundstellung, eine Chess960-Aufstellung und
  * jede Stellung, die von außen hereinkommt (Analyse, Stellungseditor). Die
@@ -23,11 +29,9 @@ import {
   LayoutGrid,
   Loader2,
   Microscope,
-  Play as PlayIcon,
   RotateCcw,
   Save,
   Swords,
-  Undo2,
 } from "lucide-react";
 import Board from "../components/Board";
 import { useBoardEndView } from "../components/BoardEndView";
@@ -58,7 +62,21 @@ export interface PlayLine {
   chess960: boolean;
 }
 
-type Status = "setup" | "playing" | "thinking" | "over";
+type Status = "playing" | "thinking" | "over";
+
+/**
+ * Woher die Partie kommt · aus den Einstellungen der Seite oder von außen
+ * (Analyse, Stellungseditor). Nur eine Partie aus den Einstellungen fängt
+ * neu an, wenn man die Aufstellung umstellt; eine hereingereichte Stellung
+ * bleibt stehen.
+ */
+interface Origin {
+  fen: string;
+  chess960: boolean;
+  /** Züge, die schon auf dem Brett standen · sie gehören nicht der Engine. */
+  sans: string[];
+  fromSetup: boolean;
+}
 
 interface Outcome {
   /** Aus Sicht von Weiß. */
@@ -109,8 +127,11 @@ export default function Play({
   openAnalysis,
   onBack,
 }: {
-  /** Stellung, aus der gespielt werden soll · aus Analyse oder Editor. */
-  initial?: { fen: string; chess960: boolean } | null;
+  /**
+   * Was auf dem Brett stand, als man „Gegen die Engine" wählte · Stellung
+   * und die Züge von dort. Ohne sie beginnt eine neue Partie.
+   */
+  initial?: { fen: string; chess960: boolean; sans?: string[] } | null;
   openAnalysis: (line: PlayLine) => void;
   /**
    * Zurück in die Analyse · die Seite ist eine Ebene von ihr, kein eigener
@@ -129,7 +150,7 @@ export default function Play({
   useTrainingSession("analysis", desktop);
 
   const [setup, setSetupState] = useState<PlaySetup>(loadSetup);
-  const setSetup = (patch: Partial<PlaySetup>) =>
+  const storeSetup = (patch: Partial<PlaySetup>) =>
     setSetupState((current) => {
       const next = { ...current, ...patch };
       saveSetup(next);
@@ -138,7 +159,7 @@ export default function Play({
 
   const gameRef = useRef(new VariantChess(STANDARD_FEN));
   const [, redraw] = useReducer((n: number) => n + 1, 0);
-  const [status, setStatus] = useState<Status>("setup");
+  const [status, setStatus] = useState<Status>("playing");
   const [human, setHuman] = useState<"w" | "b">("w");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -150,8 +171,11 @@ export default function Play({
   const [shake, setShake] = useState(false);
   /** Bezeichnung der Ausgangsstellung · Grundstellung, „Chess960 Nr. 412", eigene. */
   const [startLabel, setStartLabel] = useState<string>("");
-  // Eine Engine-Antwort, die nach einem Neustart oder einer Rücknahme
-  // ankommt, darf das Brett nicht mehr anfassen.
+  /** Hat man in dieser Partie schon selbst gezogen? Bis dahin ist sie nur bereit. */
+  const [begun, setBegun] = useState(false);
+  const originRef = useRef<Origin>({ fen: STANDARD_FEN, chess960: false, sans: [], fromSetup: true });
+  // Eine Engine-Antwort, die nach einem Neustart ankommt, darf das Brett
+  // nicht mehr anfassen.
   const runRef = useRef(0);
   const setupRef = useRef(setup);
   setupRef.current = setup;
@@ -205,13 +229,18 @@ export default function Play({
       });
   };
 
-  const start = (startFen: string, chess960: boolean, label: string, color?: "w" | "b") => {
+  const colorOf = (choice: PlaySetup["color"]): "w" | "b" =>
+    choice === "random" ? (Math.random() < 0.5 ? "w" : "b") : choice === "black" ? "b" : "w";
+
+  const start = (origin: Origin, label: string, own: "w" | "b") => {
     runRef.current += 1;
-    const next = new VariantChess(startFen, { chess960 });
+    originRef.current = origin;
+    const next = new VariantChess(origin.fen, { chess960: origin.chess960 });
+    // Die mitgebrachten Züge · bricht einer, bleibt es bei denen davor.
+    for (const san of origin.sans) if (!next.move(san)) break;
     gameRef.current = next;
-    const own: "w" | "b" =
-      color ?? (setup.color === "random" ? (Math.random() < 0.5 ? "w" : "b") : setup.color === "black" ? "b" : "w");
     setHuman(own);
+    setBegun(false);
     setFlipped(false);
     setOutcome(null);
     setSelected(null);
@@ -225,31 +254,60 @@ export default function Play({
       return;
     }
     setStatus("playing");
-    if (next.turn() !== own) window.setTimeout(engineTurn, 350);
+    // Wird das Brett in der Zwischenzeit neu gestellt (Farbe umgestellt),
+    // gehört der Zug nicht mehr hierher.
+    const run = runRef.current;
+    if (next.turn() !== own) window.setTimeout(() => run === runRef.current && engineTurn(), 350);
   };
 
-  const startNew = () => {
-    if (setup.start === "chess960") {
+  const startNew = (choice: PlaySetup = setup) => {
+    const own = colorOf(choice.color);
+    if (choice.start === "chess960") {
       const { id, fen: startFen } = randomChess960();
-      start(startFen, true, t("play.start960", { n: id }));
+      start({ fen: startFen, chess960: true, sans: [], fromSetup: true }, t("play.start960", { n: id }), own);
     } else {
-      start(STANDARD_FEN, false, t("pe.start"));
+      start({ fen: STANDARD_FEN, chess960: false, sans: [], fromSetup: true }, t("pe.start"), own);
     }
   };
 
-  // Aus Analyse oder Editor: sofort los, mit der Seite am Zug.
+  /** Eine hereingereichte Stellung · man spielt die Seite, die am Zug ist. */
+  const startFrom = (origin: Origin) => {
+    const probe = new VariantChess(origin.fen, { chess960: origin.chess960 });
+    for (const san of origin.sans) if (!probe.move(san)) break;
+    start(origin, t(origin.sans.length > 0 ? "play.continued" : "play.startCustom"), probe.turn());
+  };
+
+  // Beim Hereinkommen steht das Brett bereit · mit dem, was aus der Analyse
+  // mitkam, sonst mit einer neuen Partie aus den Einstellungen.
   useEffect(() => {
-    if (!initial) return;
-    const side = initial.fen.split(" ")[1] === "b" ? "b" : "w";
-    start(initial.fen, initial.chess960, t("play.startCustom"), side);
+    if (initial) startFrom({ fen: initial.fen, chess960: initial.chess960, sans: initial.sans ?? [], fromSetup: false });
+    else startNew();
     // Nur beim Hereinkommen · spätere Renders ändern `initial` nicht.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
+
+  /**
+   * Die Einstellungen greifen sofort, solange man noch nicht gezogen hat: Die
+   * Farbe dreht das bereite Brett (die Engine zieht an, wenn sie jetzt Weiß
+   * hat), die Aufstellung stellt eine neue hin. Danach gelten sie erst für
+   * die nächste Partie.
+   */
+  const setSetup = (patch: Partial<PlaySetup>) => {
+    const next = { ...setup, ...patch };
+    storeSetup(patch);
+    if (begun || status === "over") return;
+    if (patch.start && patch.start !== setup.start && originRef.current.fromSetup) {
+      startNew(next);
+    } else if (patch.color && patch.color !== setup.color) {
+      start(originRef.current, startLabel, colorOf(next.color));
+    }
+  };
 
   const tryMove = (from: string, to: string): boolean => {
     if (status !== "playing" || game.turn() !== human) return false;
     const move = game.move({ from, to, promotion: "q" });
     if (!move) return false;
+    setBegun(true);
     setSelected(null);
     setError(null);
     redraw();
@@ -275,22 +333,6 @@ export default function Play({
     if (piece && piece.color === human) setSelected(selected === square ? null : square);
   };
 
-  /** Den eigenen letzten Zug zurücknehmen · samt der Antwort, falls es eine gab. */
-  const takeBack = () => {
-    if (history.length === 0) return;
-    runRef.current += 1;
-    game.undo();
-    if (game.turn() !== human && game.history().length > 0) game.undo();
-    setOutcome(null);
-    setSelected(null);
-    setError(null);
-    setSaved(false);
-    redraw();
-    setStatus("playing");
-    // Stand am Anfang die Engine am Zug, muss sie wieder ziehen.
-    if (game.turn() !== human) engineTurn();
-  };
-
   const resign = () => {
     runRef.current += 1;
     const winner = human === "w" ? "black" : "white";
@@ -306,9 +348,15 @@ export default function Play({
   /**
    * Die Partie in die eigene Datenbank · nur aus der Grundstellung. Eine Partie
    * aus einer eigenen Stellung hätte in der Partienliste keinen Anfang: Dort
-   * beginnt jede Zugfolge in der Grundstellung.
+   * beginnt jede Zugfolge in der Grundstellung. Eine weitergespielte Partie
+   * auch nicht · ihr Anfang gehörte jemand anderem als der Engine.
    */
-  const canSave = desktop && status === "over" && !game.chess960 && game.initialFen() === STANDARD_FEN;
+  const canSave =
+    desktop &&
+    status === "over" &&
+    !game.chess960 &&
+    game.initialFen() === STANDARD_FEN &&
+    originRef.current.sans.length === 0;
   const save = async () => {
     if (!canSave || !outcome) return;
     const now = new Date();
@@ -375,7 +423,7 @@ export default function Play({
   const engineName = desktop ? `Stockfish · ${levelLabel(setup.elo, t)}` : t("play.previewEngine");
 
   const statusText =
-    status === "setup"
+    !begun && status === "playing" && game.turn() === human
       ? t("play.ready")
       : status === "thinking"
         ? t("eg.thinking")
@@ -425,33 +473,22 @@ export default function Play({
 
   const controls = (inFocus: boolean) => (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      {status === "setup" ? (
-        <Button primary onClick={startNew}>
-          <PlayIcon size={15} /> {t("play.startGame")}
+      {begun && status !== "over" && (
+        <Button onClick={resign}>
+          <Flag size={14} /> {t("play.resign")}
         </Button>
-      ) : (
-        <>
-          <Button onClick={takeBack} disabled={history.length === 0 || status === "thinking"}>
-            <Undo2 size={14} /> {t("play.takeBack")}
-          </Button>
-          {status !== "over" && (
-            <Button onClick={resign}>
-              <Flag size={14} /> {t("play.resign")}
-            </Button>
-          )}
-          <Button onClick={() => setFlipped((v) => !v)} title={t("an.flip")} label={t("an.flip")} compact>
-            <FlipVertical2 size={15} />
-          </Button>
-          {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
-          <Button onClick={() => openAnalysis(line())} disabled={history.length === 0}>
-            <Microscope size={14} /> {t("play.toAnalysis")}
-          </Button>
-          {canSave && (
-            <Button onClick={save} disabled={saved}>
-              <Save size={14} /> {saved ? t("play.saved") : t("play.save")}
-            </Button>
-          )}
-        </>
+      )}
+      <Button onClick={() => setFlipped((v) => !v)} title={t("an.flip")} label={t("an.flip")} compact>
+        <FlipVertical2 size={15} />
+      </Button>
+      {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+      <Button onClick={() => openAnalysis(line())} disabled={history.length === 0}>
+        <Microscope size={14} /> {t("play.toAnalysis")}
+      </Button>
+      {canSave && (
+        <Button onClick={save} disabled={saved}>
+          <Save size={14} /> {saved ? t("play.saved") : t("play.save")}
+        </Button>
       )}
     </div>
   );
@@ -509,10 +546,11 @@ export default function Play({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button primary onClick={startNew}>
-          {status === "setup" ? <PlayIcon size={15} /> : <RotateCcw size={15} />}
-          {status === "setup" ? t("play.startGame") : t("play.newGame")}
-        </Button>
+        {(begun || status === "over") && (
+          <Button primary onClick={() => startNew()}>
+            <RotateCcw size={15} /> {t("play.newGame")}
+          </Button>
+        )}
         <Button onClick={() => setEditing(true)}>
           <LayoutGrid size={14} /> {t("play.fromPosition")}
         </Button>
@@ -529,7 +567,7 @@ export default function Play({
         style={{ background: color === "w" ? "#f4f1ea" : "#1f1f1f" }}
       />
       <span className="truncate font-medium">{name}</span>
-      {color === game.turn() && status !== "over" && status !== "setup" && (
+      {color === game.turn() && status !== "over" && (begun || color !== human) && (
         <span className="ms-auto text-[11.5px] text-ink3">{status === "thinking" ? t("eg.thinking") : t("play.toMove")}</span>
       )}
     </div>
@@ -544,7 +582,7 @@ export default function Play({
         onClose={() => setEditing(false)}
         onPlay={({ fen: next, chess960 }) => {
           setEditing(false);
-          start(next, chess960, t("play.startCustom"), next.split(" ")[1] === "b" ? "b" : "w");
+          startFrom({ fen: next, chess960, sans: [], fromSetup: false });
         }}
       />
     </Suspense>
@@ -569,17 +607,12 @@ export default function Play({
           zuege={history.map((m) => m.san)}
           ersterHalbzugSchwarz={game.initialFen().split(" ")[1] === "b"}
           ersteZugnummer={Number(game.initialFen().split(" ")[5] ?? "1")}
-          schalter={
-            status === "setup"
-              ? [{ label: t("play.startGame"), betont: true, onClick: startNew }]
-              : [
-                  { label: t("play.takeBack"), onClick: history.length > 0 && status !== "thinking" ? takeBack : undefined },
-                  ...(status !== "over" ? [{ label: t("play.resign"), onClick: resign }] : []),
-                  { label: t("play.toAnalysis"), onClick: history.length > 0 ? () => openAnalysis(line()) : undefined },
-                  ...(canSave ? [{ label: saved ? t("play.saved") : t("play.save"), onClick: saved ? undefined : save }] : []),
-                  { label: t("play.newGame"), betont: true, onClick: startNew },
-                ]
-          }
+          schalter={[
+            ...(begun && status !== "over" ? [{ label: t("play.resign"), onClick: resign }] : []),
+            { label: t("play.toAnalysis"), onClick: history.length > 0 ? () => openAnalysis(line()) : undefined },
+            ...(canSave ? [{ label: saved ? t("play.saved") : t("play.save"), onClick: saved ? undefined : save }] : []),
+            ...(begun || status === "over" ? [{ label: t("play.newGame"), betont: true, onClick: () => startNew() }] : []),
+          ]}
           einstellungen={setupForm}
           fokus={{
             offen: focused,
@@ -644,12 +677,11 @@ export default function Play({
         </div>
 
         <div className="flex max-w-[460px] flex-col gap-4">
-          {status !== "setup" && (
-            <Card title={startLabel || t("play.game")}>
-              {notation}
-            </Card>
-          )}
-          <Card title={status === "setup" ? t("play.newGameTitle") : t("play.nextGame")}>{setupForm}</Card>
+          {/* Vor dem ersten Zug zählen die Einstellungen, danach die Mitschrift. */}
+          <div className={`flex gap-4 ${begun ? "flex-col" : "flex-col-reverse"}`}>
+            <Card title={startLabel || t("play.game")}>{notation}</Card>
+            <Card title={begun ? t("play.nextGame") : t("play.newGameTitle")}>{setupForm}</Card>
+          </div>
         </div>
       </div>
       {editor}

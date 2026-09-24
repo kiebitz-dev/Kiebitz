@@ -159,7 +159,7 @@ const Zeichenschluessel = lazy(() =>
 
 /** Leere Zugliste als Konstante · ein neues Array je Render würde die
     davon abhängigen useMemo-Ketten bei jedem Durchlauf neu rechnen. */
-/** Grundstellung · von dort ist „Ab hier gegen die Engine" dasselbe wie eine neue Partie. */
+/** Grundstellung · steht nichts weiter auf dem Brett, ist „Gegen die Engine" eine neue Partie. */
 const STANDARD_START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 const NO_MOVES: string[] = [];
@@ -467,9 +467,12 @@ export default function Analysis({
   shared?: SharePayload | null;
   /** Eine Zugfolge ab einer Stellung · etwa die Partie gegen die Engine. */
   line?: { fen: string; sans: string[]; chess960: boolean } | null;
-  /** Aus der gezeigten Stellung gegen die Engine weiterspielen. */
-  onPlay?: (fen: string, chess960: boolean) => void;
-  /** Eine neue Partie gegen die Engine einrichten · Farbe, Stärke, Aufstellung. */
+  /**
+   * Gegen die Engine weiterspielen, was auf dem Brett steht · Ausgangsstellung
+   * und die Züge bis zur gezeigten Stellung, damit die Mitschrift weiterläuft.
+   */
+  onPlay?: (fen: string, chess960: boolean, sans?: string[]) => void;
+  /** Leeres Brett · eine neue Partie mit den Einstellungen der Spielseite. */
   onNewGame?: () => void;
 }) {
   const backend = useBackendInfo();
@@ -2475,6 +2478,19 @@ export default function Analysis({
    * Im Fokus fehlt der Griff zum Fokus · dort ist man schon.
    */
   const standardStart = fen === STANDARD_START_FEN;
+  /**
+   * Ein Griff statt zwei: Gespielt wird immer, was auf dem Brett steht. Steht
+   * dort nur die Grundstellung, ist das eine neue Partie, und die Spielseite
+   * nimmt Farbe und Aufstellung aus ihren eigenen Einstellungen.
+   */
+  const playVsEngine = () => {
+    if (standardStart && onNewGame) {
+      onNewGame();
+      return;
+    }
+    const startFen = openedFen ?? STANDARD_START_FEN;
+    onPlay?.(startFen, needsChess960(startFen) || needsChess960(fen), shownSans);
+  };
   const boardExtras = (inFocus: boolean) => (
     <Menu label={t("an.boardActions")} align="end" up compact icon={<MoreHorizontal size={15} />}>
       <MenuItem onClick={flip}>
@@ -2487,14 +2503,9 @@ export default function Analysis({
       <MenuItem onClick={() => setEditing(true)}>
         <LayoutGrid size={15} /> {t("pe.open")}
       </MenuItem>
-      {onNewGame && (
-        <MenuItem onClick={onNewGame}>
-          <Swords size={15} /> {t("play.newVsEngine")}
-        </MenuItem>
-      )}
-      {onPlay && !standardStart && (
-        <MenuItem onClick={() => onPlay(fen, needsChess960(fen))}>
-          <Swords size={15} /> {t("play.fromHere")}
+      {(onPlay || onNewGame) && (
+        <MenuItem onClick={playVsEngine}>
+          <Swords size={15} /> {t("play.title")}
         </MenuItem>
       )}
       {scratch && (

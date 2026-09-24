@@ -820,7 +820,7 @@ export default function App() {
           targetGameId={route.gameId ?? null}
           shared={route.shared ?? null}
           line={route.line ?? null}
-          onPlay={(fen, chess960) => push("play", { play: { fen, chess960 } })}
+          onPlay={(fen, chess960, sans) => push("play", { play: { fen, chess960, sans } })}
           onNewGame={() => push("play")}
         />
       )}

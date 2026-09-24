@@ -14,6 +14,13 @@
 //! `tournament://progress`. Die Oberfläche fragt den Stand außerdem beim
 //! Öffnen ab (`tournament_status`), damit ein laufendes Turnier auch nach
 //! einem Seitenwechsel wieder sichtbar ist.
+//!
+//! Gespielt wird an mehreren Brettern zugleich wie in einem echten Saal: Die
+//! Paarungen stehen in einer Warteschlange, jedes Brett nimmt sich die
+//! nächste, sobald seine Partie zu Ende ist. In einer Partie rechnet immer
+//! nur eine Seite, jedes Brett belegt also etwa einen Kern · die Engines
+//! bekommen dann je einen Thread, damit sich die Bretter nicht gegenseitig
+//! die Rechenzeit nehmen.
 
 use crate::engine::UciEngine;
 use owlchess::chain::{GameStatusPolicy, MoveChain, NumberPolicy};
@@ -21,14 +28,25 @@ use owlchess::moves::make;
 use owlchess::moves::Style;
 use owlchess::{Color, DrawReason, Outcome, WinReason};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
 /// Höchstens acht Teilnehmer · darüber wächst ein Rundenturnier ins
 /// Unabsehbare (acht Engines sind schon 28 Partien je Durchgang).
 const MAX_ENGINES: usize = 8;
 const MAX_ROUNDS: u32 = 20;
+
+/// Höchstens vier Bretter zugleich · mehr passt nicht nebeneinander auf den
+/// Schirm, und jedes weitere nimmt den anderen Kerne weg.
+const MAX_BOARDS: usize = 4;
+
+/// Züge melden sich höchstens so oft · bei 50 ms Bedenkzeit an vier Brettern
+/// wären es sonst achtzig Ereignisse in der Sekunde, jedes mit dem ganzen
+/// Stand. Ein Partieende meldet sich immer.
+const MOVE_EVENT_INTERVAL: Duration = Duration::from_millis(120);
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct EngineRef {
@@ -53,6 +71,9 @@ pub struct TournamentConfig {
     pub threads: u32,
     #[serde(default = "default_hash")]
     pub hash_mb: u32,
+    /// Bretter zugleich · 0 heißt: nach den Kernen des Rechners.
+    #[serde(default)]
+    pub boards: u32,
 }
 
 fn default_max_plies() -> u32 {
@@ -86,6 +107,24 @@ pub struct PlayedGame {
     pub reason: String,
     pub plies: u32,
     pub moves: String,
+    /// Die Schlussstellung · für die Kachel der Partie im Turniersaal.
+    #[serde(default)]
+    pub fen: String,
+}
+
+/// Ein Brett, an dem gerade gespielt wird.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveBoard {
+    /// Nummer des Bretts, ab 1 · bleibt stehen, während die Partien wechseln.
+    pub board: u32,
+    pub round: u32,
+    pub white: String,
+    pub black: String,
+    pub fen: String,
+    pub plies: u32,
+    /// Der letzte Zug als UCI · leer vor dem ersten.
+    pub last_move: String,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -94,11 +133,13 @@ pub struct TournamentStatus {
     pub running: bool,
     pub played: u32,
     pub total: u32,
-    /// Die laufende Partie · Namen, Stellung und Halbzug.
+    /// Das erste belegte Brett · für Anzeigen, die nur eine Partie kennen.
     pub white: String,
     pub black: String,
     pub fen: String,
     pub plies: u32,
+    /// Alle Bretter, an denen gerade gespielt wird.
+    pub boards: Vec<LiveBoard>,
     pub standings: Vec<Standing>,
     pub games: Vec<PlayedGame>,
     pub error: Option<String>,
@@ -110,6 +151,22 @@ pub struct TournamentState {
     status: Mutex<TournamentStatus>,
     cancel: AtomicBool,
     running: AtomicBool,
+    last_move_event: Mutex<Option<Instant>>,
+}
+
+/// Wie viele Bretter ein Turnier bekommt · nie mehr als Partien, nie mehr als
+/// freie Kerne und nie mehr als `MAX_BOARDS`.
+fn board_count(configured: u32, games: usize) -> usize {
+    let cores = UciEngine::worker_threads();
+    let wanted = if configured == 0 {
+        cores
+    } else {
+        configured as usize
+    };
+    wanted
+        .clamp(1, MAX_BOARDS)
+        .min(cores.max(1))
+        .min(games.max(1))
 }
 
 /// Die Paarungen eines Rundenturniers · je Durchgang jeder gegen jeden, und
@@ -166,7 +223,7 @@ fn play_game(
     black: &mut UciEngine,
     config: &TournamentConfig,
     cancel: &AtomicBool,
-    mut on_move: impl FnMut(&str, u32),
+    mut on_move: impl FnMut(&str, u32, &str),
 ) -> Result<(Outcome, MoveChain, bool), String> {
     let mut chain = MoveChain::new(owlchess::Board::initial());
     white.new_game()?;
@@ -230,7 +287,7 @@ fn play_game(
                 false,
             ));
         }
-        on_move(&chain.last().as_fen(), chain.len() as u32);
+        on_move(&chain.last().as_fen(), chain.len() as u32, &bestmove);
     }
 }
 
@@ -304,14 +361,56 @@ fn update(app: &tauri::AppHandle, change: impl FnOnce(&mut TournamentStatus)) {
             return;
         };
         change(&mut status);
+        sync_first_board(&mut status);
         status.clone()
     };
     let _ = app.emit("tournament://progress", snapshot);
 }
 
+/// Ein Zug an einem Brett · der Stand ändert sich immer, gemeldet wird nur,
+/// wenn die letzte Meldung eines Zuges lange genug her ist.
+fn update_move(app: &tauri::AppHandle, change: impl FnOnce(&mut TournamentStatus)) {
+    let state = app.state::<TournamentState>();
+    let due = {
+        let Ok(mut last) = state.last_move_event.lock() else {
+            return;
+        };
+        let now = Instant::now();
+        let due = last.is_none_or(|at| now.saturating_duration_since(at) >= MOVE_EVENT_INTERVAL);
+        if due {
+            *last = Some(now);
+        }
+        due
+    };
+    if due {
+        update(app, change);
+    } else if let Ok(mut status) = state.status.lock() {
+        change(&mut status);
+        sync_first_board(&mut status);
+    }
+}
+
+/// Die Einzelfelder spiegeln das erste belegte Brett.
+fn sync_first_board(status: &mut TournamentStatus) {
+    match status.boards.first() {
+        Some(board) => {
+            status.white = board.white.clone();
+            status.black = board.black.clone();
+            status.fen = board.fen.clone();
+            status.plies = board.plies;
+        }
+        None => {
+            status.white.clear();
+            status.black.clear();
+            status.plies = 0;
+        }
+    }
+}
+
 fn run(app: tauri::AppHandle, config: TournamentConfig) {
     let names: Vec<String> = config.engines.iter().map(|e| e.name.clone()).collect();
     let plan = schedule(config.engines.len(), config.rounds);
+    let boards = board_count(config.boards, plan.len());
     update(&app, |status| {
         *status = TournamentStatus {
             running: true,
@@ -328,25 +427,45 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
     });
 
     let state = app.state::<TournamentState>();
-    let mut games: Vec<PlayedGame> = Vec::new();
-    let mut failure: Option<String> = None;
+    let queue: Mutex<VecDeque<(u32, usize, usize)>> = Mutex::new(plan.into_iter().collect());
+    let games: Mutex<Vec<PlayedGame>> = Mutex::new(Vec::new());
+    let failure: Mutex<Option<String>> = Mutex::new(None);
+    // Ein Brett allein darf seine Engines breiter rechnen lassen · mehrere
+    // teilen sich die Kerne, dann bekommt jede Engine einen Thread.
+    let threads = if boards > 1 {
+        1
+    } else {
+        UciEngine::configured_worker_threads(config.threads).min(4)
+    };
 
-    for (round, white_idx, black_idx) in plan {
-        if state.cancel.load(Ordering::SeqCst) {
+    let play_board = |board: u32| loop {
+        if state.cancel.load(Ordering::SeqCst)
+            || failure.lock().map(|f| f.is_some()).unwrap_or(true)
+        {
             break;
         }
+        let Some((round, white_idx, black_idx)) = queue.lock().ok().and_then(|mut q| q.pop_front())
+        else {
+            break;
+        };
         let white_ref = &config.engines[white_idx];
         let black_ref = &config.engines[black_idx];
         update(&app, |status| {
-            status.white = white_ref.name.clone();
-            status.black = black_ref.name.clone();
-            status.fen = owlchess::Board::initial().as_fen();
-            status.plies = 0;
+            status.boards.retain(|b| b.board != board);
+            status.boards.push(LiveBoard {
+                board,
+                round,
+                white: white_ref.name.clone(),
+                black: black_ref.name.clone(),
+                fen: owlchess::Board::initial().as_fen(),
+                plies: 0,
+                last_move: String::new(),
+            });
+            status.boards.sort_by_key(|b| b.board);
         });
 
         let start = |engine: &EngineRef| -> Result<UciEngine, String> {
             let mut uci = UciEngine::spawn(&engine.path)?;
-            let threads = UciEngine::configured_worker_threads(config.threads).min(4);
             let _ = uci.set_option("Threads", &threads.to_string());
             let _ = uci.set_option("Hash", &config.hash_mb.clamp(16, 1024).to_string());
             Ok(uci)
@@ -354,7 +473,9 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
         let (mut white, mut black) = match (start(white_ref), start(black_ref)) {
             (Ok(w), Ok(b)) => (w, b),
             (Err(e), _) | (_, Err(e)) => {
-                failure = Some(e);
+                if let Ok(mut failure) = failure.lock() {
+                    failure.get_or_insert(e);
+                }
                 break;
             }
         };
@@ -364,11 +485,13 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
             &mut black,
             &config,
             &state.cancel,
-            |fen, plies| {
-                let fen = fen.to_string();
-                update(&app, |status| {
-                    status.fen = fen;
-                    status.plies = plies;
+            |fen, plies, uci| {
+                update_move(&app, |status| {
+                    if let Some(live) = status.boards.iter_mut().find(|b| b.board == board) {
+                        live.fen = fen.to_string();
+                        live.plies = plies;
+                        live.last_move = uci.to_string();
+                    }
                 });
             },
         );
@@ -378,35 +501,45 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
             Err(_) => break,
         };
         let (result, reason) = outcome_text(outcome, adjudicated);
-        games.push(PlayedGame {
-            round,
-            white: white_ref.name.clone(),
-            black: black_ref.name.clone(),
-            result,
-            reason,
-            plies: chain.len() as u32,
-            moves: chain
-                .styled(NumberPolicy::FromBoard, Style::San, GameStatusPolicy::Hide)
-                .to_string(),
-        });
-        let standings = standings_from(&games, &names);
-        let snapshot = games.clone();
+        let (snapshot, standings) = {
+            let Ok(mut games) = games.lock() else { break };
+            games.push(PlayedGame {
+                round,
+                white: white_ref.name.clone(),
+                black: black_ref.name.clone(),
+                result,
+                reason,
+                plies: chain.len() as u32,
+                moves: chain
+                    .styled(NumberPolicy::FromBoard, Style::San, GameStatusPolicy::Hide)
+                    .to_string(),
+                fen: chain.last().as_fen(),
+            });
+            (games.clone(), standings_from(&games, &names))
+        };
         update(&app, |status| {
             status.played += 1;
             status.games = snapshot;
             status.standings = standings;
         });
-    }
+    };
+
+    std::thread::scope(|scope| {
+        for board in 1..=boards as u32 {
+            let play_board = &play_board;
+            scope.spawn(move || play_board(board));
+        }
+    });
 
     let cancelled = state.cancel.load(Ordering::SeqCst);
     state.running.store(false, Ordering::SeqCst);
     state.cancel.store(false, Ordering::SeqCst);
+    let failure = failure.into_inner().ok().flatten();
     update(&app, |status| {
         status.running = false;
         status.cancelled = cancelled;
         status.error = failure;
-        status.white = String::new();
-        status.black = String::new();
+        status.boards.clear();
     });
 }
 
@@ -480,6 +613,16 @@ mod tests {
     }
 
     #[test]
+    fn never_sets_up_more_boards_than_games_or_the_limit() {
+        assert_eq!(board_count(0, 1), 1);
+        assert!(board_count(0, 100) <= MAX_BOARDS);
+        assert_eq!(board_count(1, 100), 1);
+        assert!(board_count(99, 100) <= MAX_BOARDS);
+        // Ohne Partien trotzdem ein Brett · die Schleife endet dann sofort.
+        assert_eq!(board_count(0, 0), 1);
+    }
+
+    #[test]
     fn counts_points_in_halves() {
         let game = |white: &str, black: &str, result: &str| PlayedGame {
             round: 1,
@@ -489,6 +632,7 @@ mod tests {
             reason: "mate".into(),
             plies: 40,
             moves: String::new(),
+            fen: String::new(),
         };
         let names = vec!["A".to_string(), "B".to_string()];
         let table = standings_from(&[game("A", "B", "1-0"), game("B", "A", "1/2-1/2")], &names);
@@ -540,11 +684,12 @@ mod tests {
             max_plies: 40,
             threads: 1,
             hash_mb: 16,
+            boards: 1,
         };
         let cancel = AtomicBool::new(false);
         let mut seen = 0u32;
         let (outcome, chain, adjudicated) =
-            play_game(&mut white, &mut black, &config, &cancel, |_, plies| {
+            play_game(&mut white, &mut black, &config, &cancel, |_, plies, _| {
                 seen = plies
             })
             .unwrap();
@@ -573,6 +718,7 @@ mod tests {
                 reason: "mate".into(),
                 plies: 3,
                 moves: "1. e4 e5 2. Qh5".into(),
+                fen: String::new(),
             }],
             ..Default::default()
         };

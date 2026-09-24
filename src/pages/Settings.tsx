@@ -65,12 +65,11 @@ import {
   refreshSettings,
   restoreDatabase,
   setSettings,
-  testEngine,
   trainingDayList,
   trainingDayMask,
   useDatabase,
   type DbInfo,
-  type EngineTest,
+  type EngineEntry,
   type RefDbProgress,
   type RefDbStatus,
   type RefSource,
@@ -207,8 +206,6 @@ export default function SettingsPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [engineResult, setEngineResult] = useState<EngineTest | null>(null);
-  const [engineTesting, setEngineTesting] = useState(false);
 
   const [info, setInfo] = useState<DbInfo | null>(null);
   const [movePath, setMovePath] = useState("");
@@ -533,20 +530,37 @@ export default function SettingsPage({
 
   const patch = (p: Partial<Settings>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
-  const save = async () => {
-    if (!draft) return;
+  /**
+   * Gespeichert wird, was man ändert · ohne Knopf.
+   *
+   * Bis 1.6 sammelte die Seite Änderungen in einem Entwurf und wartete auf
+   * „Speichern". Das ging an zwei Stellen schief: Wer eine Engine „Für
+   * Analyse" wählte, bekam den Hinweisstreifen nicht zu sehen, und wer die
+   * Seite verließ, verlor, was er eingestellt hatte. Jetzt schreibt die Seite
+   * den Entwurf kurz nach der letzten Änderung selbst · die Pause fasst das
+   * Tippen in einem Pfadfeld und das Ziehen an einem Regler zu einem
+   * Schreiben zusammen. Das zählt, weil jedes Schreiben die Engines neu
+   * startet (settings::set_settings).
+   *
+   * Der Entwurf wird nach dem Schreiben nur dann durch den gespeicherten Stand
+   * ersetzt, wenn er sich unterwegs nicht verändert hat · sonst verschluckte
+   * das Feld, was man in der Zwischenzeit getippt hat.
+   */
+  const SAVE_DELAY_MS = 600;
+  const [saving, setSaving] = useState(false);
+  const [savedHint, setSavedHint] = useState(false);
+  /** Ein Stand, den das Backend abgelehnt hat · er wird nicht wieder und wieder geschickt. */
+  const rejected = useRef<string | null>(null);
+
+  const persist = async (snapshot: Settings) => {
     setError(null);
+    setSaving(true);
     try {
-      if (tokenDirty) {
-        const token = lichessTok.trim();
-        await setLichessToken(token);
-        setLichessTok(token);
-        setLichessTokStored(token);
-        setLichessTokSaved(true);
-      }
-      const applied = await setSettings(draft);
+      const previous = saved;
+      const applied = await setSettings(snapshot);
+      rejected.current = null;
       setSaved(applied);
-      setDraft(applied);
+      setDraft((current) => (current === snapshot ? applied : current));
       setLocale(applied.locale);
       // Die Klänge hängen an einem Modul, nicht an React · nach dem Speichern
       // müssen sie dem gespeicherten Stand entsprechen, auch wenn zwischendurch
@@ -563,24 +577,88 @@ export default function SettingsPage({
       });
       // Erinnerungen laufen über das Betriebssystem · Planung nachziehen.
       await applyReminderSchedule();
-      // Der Schalter greift sofort. Der Tagesriegel fällt bei jedem Speichern:
-      // Wurde die Statistik ab- und wieder angeschaltet, gilt eine neue
-      // Kennung, für die heute noch nichts gemeldet wurde.
-      forgetHeartbeatDay();
-      if (applied.analytics_enabled && backend.info) {
-        void reportDailyHeartbeat({
-          platform: backend.info.platform ?? "",
-          distribution: backend.info.distribution ?? "",
-          version: backend.info.version,
-          plus: plus.isPlus,
-        }).catch(() => {});
+      // Der Schalter greift sofort. Der Tagesriegel fällt, wenn er umgelegt
+      // wurde: Wurde die Statistik ab- und wieder angeschaltet, gilt eine neue
+      // Kennung, für die heute noch nichts gemeldet wurde. Nur dann · jedes
+      // andere Schreiben ist keine neue Meldung wert.
+      if (previous && previous.analytics_enabled !== applied.analytics_enabled) {
+        forgetHeartbeatDay();
+        if (applied.analytics_enabled && backend.info) {
+          void reportDailyHeartbeat({
+            platform: backend.info.platform ?? "",
+            distribution: backend.info.distribution ?? "",
+            version: backend.info.version,
+            plus: plus.isPlus,
+          }).catch(() => {});
+        }
       }
-      setNotice(t("set.saved"));
-      setTimeout(() => setNotice(null), 2500);
+      setSavedHint(true);
+    } catch (e) {
+      rejected.current = JSON.stringify(snapshot);
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const persistToken = async (raw: string) => {
+    const token = raw.trim();
+    try {
+      await setLichessToken(token);
+      setLichessTokStored(token);
+      setLichessTokSaved(true);
     } catch (e) {
       setError(errorMessage(e));
     }
   };
+
+  // Kurz nach der letzten Änderung schreiben · während ein Schreiben läuft,
+  // wartet der nächste Stand, bis es zurück ist.
+  useEffect(() => {
+    if (!settingsDirty || !draft || saving) return;
+    if (rejected.current === JSON.stringify(draft)) return;
+    const timer = window.setTimeout(() => void persist(draft), SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // `persist` liest nur Setter und Refs · der Entwurf ist der Auslöser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, settingsDirty, saving]);
+
+  useEffect(() => {
+    if (!tokenDirty) return;
+    const timer = window.setTimeout(() => void persistToken(lichessTok), SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lichessTok, tokenDirty]);
+
+  // „Gespeichert" steht kurz da und geht wieder.
+  useEffect(() => {
+    if (!savedHint) return;
+    const timer = window.setTimeout(() => setSavedHint(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [savedHint]);
+
+  /**
+   * Wer die Seite innerhalb der Pause verlässt, verliert nichts · was noch
+   * aussteht, geht beim Abbau sofort hinaus.
+   */
+  const pendingRef = useRef<{ draft: Settings | null; dirty: boolean; token: string | null }>({
+    draft: null,
+    dirty: false,
+    token: null,
+  });
+  pendingRef.current = {
+    draft,
+    dirty: settingsDirty && rejected.current !== JSON.stringify(draft),
+    token: tokenDirty ? lichessTok.trim() : null,
+  };
+  useEffect(
+    () => () => {
+      const pending = pendingRef.current;
+      if (pending.dirty && pending.draft) void setSettings(pending.draft).catch(() => {});
+      if (pending.token != null) void setLichessToken(pending.token).catch(() => {});
+    },
+    []
+  );
 
   /**
    * Erscheinungsbild · wirkt sofort und wird sofort gespeichert.
@@ -630,17 +708,16 @@ export default function SettingsPage({
     playBoardSound("move");
   };
 
-  const runEngineTest = async () => {
-    setEngineTesting(true);
-    setEngineResult(null);
-    try {
-      setEngineResult(await testEngine(draft?.engine_path ?? undefined));
-    } catch (e) {
-      setEngineResult({ ok: false, name: String(e), path: "" });
-    } finally {
-      setEngineTesting(false);
-    }
-  };
+  // Fest verdrahtet · die Liste gleicht in einem Effekt ab, und ein bei
+  // jedem Bild neuer Pfeil ließe ihn bei jedem Bild neu laufen.
+  const setEngines = useCallback(
+    (engines: EngineEntry[]) => setDraft((d) => (d ? { ...d, engines } : d)),
+    []
+  );
+  const chooseAnalysisEngine = useCallback(
+    (path: string | null) => setDraft((d) => (d ? { ...d, engine_path: path } : d)),
+    []
+  );
 
   const runDbAction = async (action: "move" | "use") => {
     const path = action === "move" ? movePath.trim() : usePath.trim();
@@ -1802,41 +1879,23 @@ export default function SettingsPage({
       ),
     },
     {
+      // Eine Liste statt zweier Abschnitte · siehe settings/EnginesSection.tsx.
       id: "engine",
       group: "advanced",
       icon: Cpu,
-      title: t("set.engine"),
-      summary: t("set.engineSummary"),
+      title: t("tn.section"),
+      summary: t("tn.sectionSummary"),
       content:
         desktop && draft ? (
-          <>
-            <Field label={t("set.enginePath")}>
-              <div className="flex gap-2">
-                <input
-                  value={draft.engine_path ?? ""}
-                  onChange={(e) => patch({ engine_path: e.target.value || null })}
-                  placeholder={examplePath.engine}
-                  className={inputCls}
-                />
-                <Button onClick={runEngineTest}>
-                  {engineTesting ? <Loader2 size={14} className="animate-spin" /> : t("set.engineTest")}
-                </Button>
-              </div>
-            </Field>
-            {engineResult && (
-              <div
-                className={`mt-2 rounded-lg px-3 py-2 text-[12.5px] ${
-                  engineResult.ok
-                    ? "border border-accent-dim bg-accent-soft text-accent"
-                    : "border border-loss-dim bg-loss-soft text-loss"
-                }`}
-              >
-                {engineResult.ok
-                  ? t("set.engineOk", { name: engineResult.name })
-                  : t("set.engineFail", { name: engineResult.name })}
-              </div>
-            )}
-            <div className="mt-4 grid grid-cols-2 gap-3 min-[640px]:grid-cols-5">
+          <EnginesSection
+            engines={draft.engines ?? []}
+            analysisPath={draft.engine_path}
+            onChange={setEngines}
+            onUseForAnalysis={chooseAnalysisEngine}
+          >
+            <div className="text-[13px] font-medium">{t("tn.calc")}</div>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink3">{t("tn.calcHint")}</p>
+            <div className="mt-3 grid grid-cols-2 gap-3 min-[640px]:grid-cols-5">
               <NumberField
                 label={t("set.threads")}
                 value={draft.engine_threads}
@@ -1885,25 +1944,7 @@ export default function SettingsPage({
               <p className="mt-1.5 text-[12px] leading-relaxed text-ink3">{t("set.syzygyNote")}</p>
             </div>
             <p className="mt-3 text-[12px] leading-relaxed text-ink3">{t("set.engineNote")}</p>
-          </>
-        ) : (
-          desktopOnly
-        ),
-    },
-    {
-      id: "engines",
-      group: "advanced",
-      icon: Cpu,
-      title: t("tn.section"),
-      summary: t("tn.sectionSummary"),
-      content:
-        desktop && draft ? (
-          <EnginesSection
-            engines={draft.engines ?? []}
-            analysisPath={draft.engine_path}
-            onChange={(engines) => patch({ engines })}
-            onUseForAnalysis={(path) => patch({ engine_path: path })}
-          />
+          </EnginesSection>
         ) : (
           desktopOnly
         ),
@@ -2581,16 +2622,6 @@ export default function SettingsPage({
 
   const sectionList = (
     <div className="flex min-w-0 flex-col gap-4">
-      {dirty && (
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-gold-dim bg-gold-soft px-4 py-2.5 text-[12.5px] text-gold">
-          {t("set.dirtyHint")}
-          {desktop && draft && (
-            <Button primary onClick={save}>
-              <Check size={15} /> {t("common.save")}
-            </Button>
-          )}
-        </div>
-      )}
       {sections.map((section, index) => (
         <Fragment key={section.id}>
           {/* Jede Gruppe bekommt ihre Überschrift · sie ist das, was man beim
@@ -2744,14 +2775,10 @@ export default function SettingsPage({
         onSichtbar={revealAny}
         meldungen={meldungen}
         speichern={
-          desktop && draft ? (
-            <button
-              type="button"
-              onClick={save}
-              className={`blatt-kolumne tracking-[0.12em] text-accent ${dirty ? "" : "opacity-50"}`}
-            >
-              {t("common.save")}
-            </button>
+          desktop && draft && (saving || savedHint) ? (
+            <span role="status" className="blatt-kolumne tracking-[0.12em] text-ink3">
+              {saving ? t("set.saving") : t("set.saved")}
+            </span>
           ) : undefined
         }
       />
@@ -2766,12 +2793,9 @@ export default function SettingsPage({
       {/* Die Kopfzeile trägt auf dem Handy nur noch die eine Zeile, die sagt,
           was hier zu finden ist: Den Seitennamen nennt schon die App-Bar
           darüber (die Überschrift ist dort ohnehin ausgeblendet, siehe
-          `.page-title` in src/index.css), und „Speichern" steht im
-          Hinweisstreifen, sobald es etwas zu speichern gibt (siehe
-          `sectionList`). Vorher stand der Knopf zusätzlich hier — meist blass,
-          weil nichts zu speichern war, und mangels Platz neben dem Text in
-          einer eigenen Zeile darunter. Das war die dritte Zeile eines Kopfes,
-          der eigentlich nur einen Satz zu sagen hat. */}
+          `.page-title` in src/index.css). Einen Knopf „Speichern" gibt es
+          nicht mehr · die Seite schreibt jede Änderung selbst (siehe
+          `persist`), und rechts steht nur kurz, dass sie es tut. */}
       <header
         className={`flex flex-wrap items-end justify-between gap-x-4 gap-y-3 ${
           compact ? "mb-4" : "mb-5"
@@ -2781,10 +2805,12 @@ export default function SettingsPage({
           <h1 className="page-title text-[21px] font-semibold tracking-tight">{t("set.title")}</h1>
           <p className="mt-0.5 text-[13px] text-ink3">{t("set.subtitle")}</p>
         </div>
-        {desktop && draft && !compact && (
-          <Button primary onClick={save} className={dirty ? "" : "opacity-50"}>
-            <Check size={15} /> {t("common.save")}
-          </Button>
+        {/* Gespeichert wird von selbst · hier steht nur, dass es geschieht. */}
+        {desktop && draft && (saving || savedHint) && (
+          <span role="status" className="flex items-center gap-1.5 text-[12.5px] text-ink3">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} className="text-accent" />}
+            {saving ? t("set.saving") : t("set.saved")}
+          </span>
         )}
       </header>
 

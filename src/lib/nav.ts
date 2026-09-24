@@ -49,8 +49,11 @@ export interface Route {
   shared?: SharePayload | null;
   /** Analyse: eine Zugfolge ab einer Stellung · etwa eine Partie gegen die Engine. */
   line?: { fen: string; sans: string[]; chess960: boolean } | null;
-  /** Spielen: Stellung, aus der gegen die Engine gespielt wird. */
-  play?: { fen: string; chess960: boolean } | null;
+  /**
+   * Spielen: Stellung, aus der gegen die Engine gespielt wird · samt der Züge,
+   * die von dort schon auf dem Brett standen.
+   */
+  play?: { fen: string; chess960: boolean; sans?: string[] } | null;
 }
 
 export type RouteParams = Omit<Route, "page">;

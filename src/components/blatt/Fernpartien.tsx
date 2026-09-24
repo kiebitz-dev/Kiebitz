@@ -64,7 +64,9 @@ export default function Fernpartien({
                 type="button"
                 onClick={() => openExternal(game.url)}
                 title={t("corr.open", { site: game.source })}
-                className="block w-full text-start transition-opacity hover:opacity-80"
+                className={`block w-full text-start transition-opacity ${
+                  game.myTurn ? "hover:opacity-80" : "opacity-50 hover:opacity-90 focus-visible:opacity-90"
+                }`}
                 style={mobile ? undefined : { width: KANTE + gutter }}
               >
                 <Diagramm

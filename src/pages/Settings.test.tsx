@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BackendState } from "../lib/backend";
 import { dbInfo, type Settings } from "../lib/settings";
@@ -207,34 +207,57 @@ async function renderDesktop(settings: Partial<Settings> = {}) {
 }
 
 /**
+ * Gespeichert wird ohne Knopf · kurz nach der letzten Änderung.
+ *
+ * Vorher hing alles an „Speichern", und der Knopf kam nicht einmal, wenn man
+ * eine Engine „Für Analyse" wählte.
+ */
+describe("saving", () => {
+  it("writes a change by itself, without a save button", async () => {
+    await renderDesktop();
+    expect(screen.queryByText("common.save")).toBeNull();
+
+    const soundToggle = screen
+      .getByText("set.soundToggle")
+      .closest("label")!
+      .querySelector("input") as HTMLInputElement;
+    fireEvent.click(soundToggle);
+
+    await waitFor(() =>
+      expect(mocks.setSettings).toHaveBeenCalledWith(expect.objectContaining({ sound_enabled: false }))
+    );
+    expect(mocks.setSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the engine chosen for analysis", async () => {
+    await renderDesktop({ engines: [{ name: "Reckless", path: "C:/reckless.exe" }] });
+
+    fireEvent.click(screen.getByRole("button", { name: "tn.use" }));
+
+    await waitFor(() =>
+      expect(mocks.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ engine_path: "C:/reckless.exe" })
+      )
+    );
+  });
+});
+
+/**
  * Der Lichess-Token liegt im Schlüsselspeicher und nicht in den Einstellungen.
  *
- * Das war der Grund, aus dem er sich am Speichern vorbeimogelte: Er wurde still
- * beim Verlassen des Feldes geschrieben, die Leiste „ungespeicherte Änderungen"
- * bekam ihn nie zu sehen, und wer stattdessen direkt oben auf Speichern klickte,
- * speicherte alles außer ihm.
+ * Er wird wie alles andere von selbst geschrieben · getrimmt, und nur, wenn
+ * sich wirklich etwas geändert hat.
  */
 describe("Lichess token", () => {
-  it("counts as an unsaved change and is written by the save button", async () => {
+  it("is written by itself, trimmed", async () => {
     await renderDesktop();
 
-    expect(screen.queryByText("set.dirtyHint")).toBeNull();
     const field = screen.getByPlaceholderText("lip_…");
     fireEvent.change(field, { target: { value: "  lip_abc  " } });
-
-    expect(screen.getByText("set.dirtyHint")).toBeTruthy();
     expect(screen.getByText("set.explorerTokenUnsaved")).toBeTruthy();
-    // Das Feld allein speichert nichts mehr · auch nicht beim Verlassen.
-    fireEvent.blur(field);
-    expect(mocks.setLichessToken).not.toHaveBeenCalled();
 
-    await act(async () => {
-      fireEvent.click(screen.getAllByText("common.save")[0]);
-    });
-
-    expect(mocks.setLichessToken).toHaveBeenCalledWith("lip_abc");
-    expect(screen.queryByText("set.dirtyHint")).toBeNull();
-    expect(screen.getByText("set.explorerTokenSaved")).toBeTruthy();
+    await waitFor(() => expect(mocks.setLichessToken).toHaveBeenCalledWith("lip_abc"));
+    expect(await screen.findByText("set.explorerTokenSaved")).toBeTruthy();
   });
 
   it("does not call a change what was only surrounded by spaces", async () => {
@@ -244,7 +267,8 @@ describe("Lichess token", () => {
     fireEvent.change(screen.getByPlaceholderText("lip_…"), {
       target: { value: " lip_abc " },
     });
-    expect(screen.queryByText("set.dirtyHint")).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(mocks.setLichessToken).not.toHaveBeenCalled();
   });
 });
 
@@ -440,8 +464,7 @@ describe("Settings loading", () => {
       "set.adsPrivacy",
       "set.support",
       "set.about",
-      // Erweitert
-      "set.engine",
+      // Erweitert · „Schach-Engine" und „Engines und Turnier" sind eins.
       "tn.section",
       "set.database",
       "set.chessdb",
