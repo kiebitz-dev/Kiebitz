@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Keystore,
     [string]$Alias = "kiebitz",
@@ -12,6 +12,11 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $pins = Get-Content -LiteralPath (Join-Path $repoRoot "config\toolchain-pins.json") -Raw |
     ConvertFrom-Json
 $androidPins = $pins.android
+
+# Stockfish-Quellen, jniLibs und Ausgabe liegen im Nextcloud-Ordner · siehe
+# scripts/lib/Assert-ReadableTree.ps1.
+. (Join-Path $PSScriptRoot "lib\Assert-ReadableTree.ps1")
+Assert-ReadableTree -Root $repoRoot -Paths @("src-tauri\gen\android", "artifacts")
 
 function Find-AndroidSdk {
     $candidates = @()

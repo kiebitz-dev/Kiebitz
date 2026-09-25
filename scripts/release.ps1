@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Validiert, versioniert, baut das Play-AAB, committet und veröffentlicht einen Kiebitz-Release.
 
@@ -25,8 +25,14 @@ function Invoke-Checked {
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "lib\Assert-ReadableTree.ps1")
 Push-Location $repoRoot
 try {
+  # Vor allem anderen · siehe scripts/lib/Assert-ReadableTree.ps1. Ohne
+  # laufenden Nextcloud-Client scheitert der Release sonst erst nach
+  # Build und Tests, mitten im Stockfish-Build.
+  Assert-ReadableTree -Root $repoRoot -Paths @("src", "scripts", "config", "src-tauri", "artifacts")
+
   if ((git branch --show-current).Trim() -ne "main") {
     throw "Releases dürfen nur vom main-Branch gestartet werden."
   }
