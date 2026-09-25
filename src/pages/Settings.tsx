@@ -1893,9 +1893,9 @@ export default function SettingsPage({
             onChange={setEngines}
             onUseForAnalysis={chooseAnalysisEngine}
           >
-            <div className="text-[13px] font-medium">{t("tn.calc")}</div>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-ink3">{t("tn.calcHint")}</p>
-            <div className="mt-3 grid grid-cols-2 gap-3 min-[640px]:grid-cols-5">
+            {/* Überschrift und Hinweis setzt der Abschnitt · die Werte stehen
+                hinter dem Stift der Engine, die rechnet. */}
+            <div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-5">
               <NumberField
                 label={t("set.threads")}
                 value={draft.engine_threads}

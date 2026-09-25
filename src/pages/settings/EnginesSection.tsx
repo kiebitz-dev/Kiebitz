@@ -12,8 +12,14 @@
  * der Pfad aus dem ersten stand in der Liste des zweiten nicht. Jetzt gibt es
  * nur die Liste. Jede Zeile ist kurz (Name, Herkunft, „Für Analyse"); Name,
  * Pfad und Test liegen hinter dem Stift, weil man sie einmal einrichtet und
- * dann nicht mehr ansieht. Die Rechenwerte darunter (`children`) gelten für
- * die Engine, die gerade rechnet.
+ * dann nicht mehr ansieht.
+ *
+ * Dahinter liegen auch die Rechenwerte (`children`: Threads, Hash, Tiefen,
+ * Tablebases). Bis 1.6.2 standen sie offen zwischen Liste und Turnier und
+ * sahen dort aus wie Einstellungen des Turniers. Gespeichert sind sie einmal
+ * und nicht je Engine · deshalb stehen sie hinter dem Stift der Engine, die
+ * gerade rechnet, und die übrigen sagen, dass sie erst dort gelten. Die
+ * mitgelieferte hat dafür ebenfalls einen Stift, nur ohne Name und Pfad.
  *
  * Die mitgelieferte Engine steht als feste erste Zeile darüber. Sie hat keinen
  * Eintrag in `engines` und keinen Pfad (`engine_path` leer heißt: sie rechnet),
@@ -70,7 +76,7 @@ export default function EnginesSection({
   onChange: (engines: EngineEntry[]) => void;
   /** `null` stellt auf die mitgelieferte Engine zurück. */
   onUseForAnalysis: (path: string | null) => void;
-  /** Die Rechenwerte · sie stehen zwischen Liste und Turnier. */
+  /** Die Rechenwerte · sie stehen hinter dem Stift der Engine, die rechnet. */
   children?: ReactNode;
 }) {
   const { t, locale } = useI18n();
@@ -83,8 +89,8 @@ export default function EnginesSection({
   const [notice, setNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
   const [tested, setTested] = useState<Record<number, { ok: boolean; name: string }>>({});
-  /** Die Zeile, deren Stift offen ist. */
-  const [editing, setEditing] = useState<number | null>(null);
+  /** Die Zeile, deren Stift offen ist · ihr Schlüssel in der Liste. */
+  const [editing, setEditing] = useState<string | null>(null);
   const [hallOpen, setHallOpen] = useState(false);
   const [bundledName, setBundledName] = useState("Stockfish");
   const alive = useRef(true);
@@ -129,7 +135,7 @@ export default function EnginesSection({
   }, [analysisPath, engines, onChange]);
 
   // Teilnehmer sind die mitgelieferte und die eingetragenen Engines; ohne
-  // Auswahl spielen alle. Ein Eintrag ohne Pfad (gerade von Hand angelegt)
+  // Auswahl spielen alle. Ein Eintrag ohne Pfad (im Stift geleert)
   // spielt nicht mit · das Backend läse ihn als die mitgelieferte.
   const takesPart = (key: string) => picked.length === 0 || picked.includes(key);
   const chosen: EngineEntry[] = [
@@ -151,12 +157,6 @@ export default function EnginesSection({
     const chosenPath = await openDialog({ multiple: false, directory: false });
     if (typeof chosenPath !== "string") return;
     onChange([...engines, { name: nameFromPath(chosenPath), path: chosenPath }].slice(0, MAX_ENGINES));
-  };
-
-  /** Ein leerer Eintrag · der Stift steht gleich offen, sonst gäbe es nichts auszufüllen. */
-  const addManual = () => {
-    onChange([...engines, { name: "", path: "" }]);
-    setEditing(engines.length);
   };
 
   const browse = async (index: number) => {
@@ -236,7 +236,7 @@ export default function EnginesSection({
     index?: number;
   }) => {
     const { index } = props;
-    const open = index != null && editing === index;
+    const open = editing === props.key;
     const engine = index != null ? engines[index] : null;
     const result = index != null ? tested[index] : undefined;
     return (
@@ -275,61 +275,76 @@ export default function EnginesSection({
               {t("tn.use")}
             </Button>
           )}
+          <Button
+            compact
+            onClick={() => setEditing(open ? null : props.key)}
+            title={t("tn.edit")}
+            label={t("tn.edit")}
+            className={open ? "border-accent-dim text-accent" : ""}
+          >
+            <Pencil size={14} />
+          </Button>
           {index != null && (
-            <>
-              <Button
-                compact
-                onClick={() => setEditing(open ? null : index)}
-                title={t("tn.edit")}
-                label={t("tn.edit")}
-                className={open ? "border-accent-dim text-accent" : ""}
-              >
-                <Pencil size={14} />
-              </Button>
-              <Button compact onClick={() => remove(index)} title={t("common.delete")} label={t("common.delete")} disabled={running}>
-                <Trash2 size={14} />
-              </Button>
-            </>
+            <Button compact onClick={() => remove(index)} title={t("common.delete")} label={t("common.delete")} disabled={running}>
+              <Trash2 size={14} />
+            </Button>
           )}
         </div>
-        {open && engine && (
+        {open && (
           <div className="flex flex-col gap-3 border-t border-line px-3 pb-3 pt-3">
-            <Field label={t("tn.engineName")}>
-              <input
-                value={engine.name}
-                onChange={(event) => patch(index, { name: event.target.value })}
-                aria-label={t("tn.engineName")}
-                className={inputCls}
-                autoFocus={!engine.name}
-              />
-            </Field>
-            <Field label={t("tn.enginePath")}>
-              <div className="flex gap-2">
-                <input
-                  value={engine.path}
-                  onChange={(event) => {
-                    const path = event.target.value;
-                    // Die rechnende Engine zieht mit · sonst zeigte der
-                    // Eintrag auf die neue Datei und gerechnet würde mit der alten.
-                    if (props.active) onUseForAnalysis(path || null);
-                    patch(index, { path });
-                  }}
-                  aria-label={t("tn.enginePath")}
-                  className={inputCls}
-                />
-                <Button onClick={() => browse(index)} title={t("tn.browse")} label={t("tn.browse")} compact>
-                  <FolderOpen size={14} />
-                </Button>
-                <Button onClick={() => check(index)} disabled={!engine.path.trim()}>
-                  {testing === index ? <Loader2 size={14} className="animate-spin" /> : t("set.engineTest")}
-                </Button>
-              </div>
-            </Field>
-            {result && (
-              <p className={`text-[12px] ${result.ok ? "text-accent" : "text-loss"}`}>
-                {result.ok ? t("set.engineOk", { name: result.name }) : t("set.engineFail", { name: result.name })}
-              </p>
+            {index != null && engine && (
+              <>
+                <Field label={t("tn.engineName")}>
+                  <input
+                    value={engine.name}
+                    onChange={(event) => patch(index, { name: event.target.value })}
+                    aria-label={t("tn.engineName")}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label={t("tn.enginePath")}>
+                  <div className="flex gap-2">
+                    <input
+                      value={engine.path}
+                      onChange={(event) => {
+                        const path = event.target.value;
+                        // Die rechnende Engine zieht mit · sonst zeigte der
+                        // Eintrag auf die neue Datei und gerechnet würde mit der alten.
+                        if (props.active) onUseForAnalysis(path || null);
+                        patch(index, { path });
+                      }}
+                      aria-label={t("tn.enginePath")}
+                      className={inputCls}
+                    />
+                    <Button onClick={() => browse(index)} title={t("tn.browse")} label={t("tn.browse")} compact>
+                      <FolderOpen size={14} />
+                    </Button>
+                    <Button onClick={() => check(index)} disabled={!engine.path.trim()}>
+                      {testing === index ? <Loader2 size={14} className="animate-spin" /> : t("set.engineTest")}
+                    </Button>
+                  </div>
+                </Field>
+                {result && (
+                  <p className={`text-[12px] ${result.ok ? "text-accent" : "text-loss"}`}>
+                    {result.ok ? t("set.engineOk", { name: result.name }) : t("set.engineFail", { name: result.name })}
+                  </p>
+                )}
+              </>
             )}
+            {/* Die Rechenwerte gelten nur für die Engine, die rechnet · bei
+                den anderen steht an ihrer Stelle, wo sie zu finden sind. */}
+            {children &&
+              (props.active ? (
+                <div data-testid="engine-calc" className={index != null ? "border-t border-line pt-3" : ""}>
+                  <div className="text-[13px] font-medium">{t("tn.calc")}</div>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink3">{t("tn.calcHint")}</p>
+                  <div className="mt-3">{children}</div>
+                </div>
+              ) : (
+                <p className={`text-[12px] leading-relaxed text-ink3 ${index != null ? "border-t border-line pt-3" : ""}`}>
+                  {t("tn.calcElsewhere")}
+                </p>
+              ))}
           </div>
         )}
       </div>
@@ -367,12 +382,7 @@ export default function EnginesSection({
         <Button onClick={add} disabled={engines.length >= MAX_ENGINES || running}>
           <Plus size={14} /> {t("tn.add")}
         </Button>
-        <Button onClick={addManual} disabled={engines.length >= MAX_ENGINES || running}>
-          <FolderOpen size={14} /> {t("tn.addManual")}
-        </Button>
       </div>
-
-      {children && <div className="mt-5 border-t border-line pt-4">{children}</div>}
 
       <div className="mt-5 border-t border-line pt-4">
         <div className="flex items-center gap-2 text-[13px] font-medium">

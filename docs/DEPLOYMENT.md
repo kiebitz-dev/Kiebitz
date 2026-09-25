@@ -708,7 +708,33 @@ window exists, unless the environment already says otherwise. The webview then
 draws over the older, portable path — invisible on a page made of chessboards
 and diagrams.
 
-Two things left for a user who still sees a black window:
+That was not the whole story: 1.6.2 still opened black on CachyOS (Wayland,
+current Mesa). The actual cause of `EGL_BAD_PARAMETER` there is the
+`libwayland-client.so.0` from Ubuntu 22.04 that linuxdeploy copies into the
+AppImage's `usr/lib`. AppRun puts that directory first, current Mesa's
+`libEGL_mesa` needs wayland ≥ 1.23 and fails to load against the old copy —
+before WebKit reads any of its variables, so no environment variable helps.
+See [tauri-apps/tauri#15976](https://github.com/tauri-apps/tauri/issues/15976).
+
+`release.yml` therefore:
+
+- seeds `~/.cache/tauri/linuxdeploy-x86_64.AppImage` with linuxdeploy
+  `1-alpha-20251107-1`, pinned by SHA-256 · Tauri reuses whatever lies there,
+  and the copy it downloads itself is too old to read the next variable;
+- sets `LINUXDEPLOY_EXCLUDED_LIBRARIES` to the display and graphics libraries
+  (`libwayland-*`, `libxkbcommon`, the `libxcb-*`/`libXau`/`libXdmcp` that come
+  with them, `libEGL`/`libGL`/`libgbm`/`libdrm`) so they come from the host;
+- extracts the finished AppImage and fails the job if any of them is still
+  inside. The AppImage is already on the draft by then, but a failed desktop
+  job keeps the release a draft.
+
+A user stuck on an older AppImage can start it against the system's wayland:
+
+```bash
+LD_PRELOAD=/usr/lib/libwayland-client.so.0:/usr/lib/libwayland-egl.so.1 ./Kiebitz_*.AppImage
+```
+
+Two more things for a user who still sees a black window:
 
 ```bash
 WEBKIT_DISABLE_COMPOSITING_MODE=1 ./Kiebitz_*.AppImage

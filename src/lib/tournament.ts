@@ -7,6 +7,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { Key } from "./i18n";
 
 export interface EngineRef {
   name: string;
@@ -117,4 +118,27 @@ export function onTournamentProgress(cb: (status: TournamentStatus) => void): Pr
 /** Punkte, wie sie in einer Tabelle stehen: 3 Halbe sind „1,5". */
 export function points(halfPoints: number, locale: string): string {
   return (halfPoints / 2).toLocaleString(locale, { maximumFractionDigits: 1 });
+}
+
+/**
+ * Gründe, die das Backend meldet · alles andere bleibt ohne Zusatz. Beide
+ * Fassungen des Turniersaals lesen sie von hier.
+ */
+export const REASON_KEY: Record<string, Key> = {
+  mate: "end.reason.mate",
+  stalemate: "end.reason.stalemate",
+  insufficient: "end.reason.insufficient",
+  fifty: "end.reason.fifty",
+  repetition: "end.reason.repetition",
+  invalidMove: "tn.reasonInvalid",
+  engineError: "tn.reasonEngine",
+  adjudicated: "tn.reasonAdjudicated",
+};
+
+/** Das Ergebnis, wie es in der Tabelle steht · Remis als ½–½. */
+export const resultText = (result: string) => result.replace("1/2-1/2", "½–½");
+
+/** Felder des letzten Zuges · `e1g1` wird zu e1 und g1. */
+export function lastMoveSquares(uci: string): string[] {
+  return uci.length >= 4 ? [uci.slice(0, 2), uci.slice(2, 4)] : [];
 }

@@ -410,6 +410,14 @@ async fn stop_live(app: tauri::AppHandle) {
 /// Seite, die Schachbretter und Diagramme zeigt, nichts Messbares und ist der
 /// Preis dafür, dass die App überhaupt aufgeht.
 ///
+/// Allein reichte das nicht: Auch 1.6.2 blieb auf CachyOS schwarz. Der
+/// eigentliche Grund für `EGL_BAD_PARAMETER` war die libwayland-client aus
+/// Ubuntu 22.04, die linuxdeploy ins AppImage gepackt hatte · ein aktuelles
+/// Mesa lädt gegen sie nicht, und das passiert, bevor WebKit diese Variable
+/// überhaupt liest. Ab dem Release nach 1.6.2 kommen die Display-Bibliotheken vom System
+/// (siehe `.github/workflows/release.yml`). Die Variable bleibt trotzdem
+/// gesetzt · für den proprietären NVIDIA-Treiber ist sie weiter die Abhilfe.
+///
 /// Gesetzt wird nur, was nicht schon gesetzt ist: Wer den Renderer bewusst
 /// anlässt (`WEBKIT_DISABLE_DMABUF_RENDERER=0`), behält ihn.
 #[cfg(all(desktop, target_os = "linux"))]

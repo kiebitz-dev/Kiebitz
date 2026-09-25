@@ -181,7 +181,8 @@ describe("EnginesSection", () => {
     const onChange = vi.fn();
     show({ onChange });
     expect(screen.queryByRole("button", { name: "Testen" })).toBeNull();
-    fireEvent.click((await screen.findAllByRole("button", { name: "Engine bearbeiten" }))[0]);
+    // Der erste Stift gehört der mitgelieferten · sie hat weder Name noch Pfad.
+    fireEvent.click((await screen.findAllByRole("button", { name: "Engine bearbeiten" }))[1]);
     expect((screen.getByRole("textbox", { name: "Pfad der Engine" }) as HTMLInputElement).value).toBe("C:/sf.exe");
     fireEvent.click(screen.getByRole("button", { name: "Testen" }));
     await waitFor(() => expect(onChange).toHaveBeenCalled());
@@ -203,5 +204,29 @@ describe("EnginesSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /Turnier starten/ }));
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
     expect(mocks.start.mock.calls[0][0].engines).toEqual([BUNDLED, ENGINES[1]]);
+  });
+
+  /**
+   * Die Rechenwerte standen offen zwischen Liste und Turnier. Sie gelten für
+   * die Engine, die rechnet, und stehen deshalb hinter deren Stift.
+   */
+  it("keeps the calculation settings behind the pencil of the engine that calculates", async () => {
+    render(
+      <LocaleProvider>
+        <EnginesSection engines={ENGINES} analysisPath="C:/dragon.exe" onChange={() => {}} onUseForAnalysis={() => {}}>
+          <span>Rechenwerte hier</span>
+        </EnginesSection>
+      </LocaleProvider>
+    );
+    const pencils = await screen.findAllByRole("button", { name: "Engine bearbeiten" });
+    expect(pencils).toHaveLength(4);
+    expect(screen.queryByText("Rechenwerte hier")).toBeNull();
+    // Die mitgelieferte rechnet gerade nicht · ihr Stift sagt, wo die Werte stehen.
+    fireEvent.click(pencils[0]);
+    expect(screen.queryByText("Rechenwerte hier")).toBeNull();
+    expect(screen.getByText(/stehen hinter deren Stift/)).toBeTruthy();
+    fireEvent.click(pencils[2]);
+    expect(within(screen.getByTestId("engine-calc")).getByText("Rechenwerte hier")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Pfad von Hand/ })).toBeNull();
   });
 });

@@ -434,7 +434,8 @@ describe("Settings loading", () => {
     expect(soundToggle.checked).toBe(true);
     fireEvent.click(soundToggle);
     expect(soundToggle.checked).toBe(false);
-    expect(screen.getByText("set.engineNote")).toBeTruthy();
+    // Die Rechenwerte liegen hinter dem Stift · offen steht die Einleitung.
+    expect(screen.getByText("tn.lead")).toBeTruthy();
     // Jede Gruppe trägt ihre Überschrift zweimal: in der Seite und in der
     // Sprungleiste daneben.
     for (const group of ["set.group.basics", "set.group.account", "set.group.training", "set.group.app", "set.advanced"]) {

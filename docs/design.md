@@ -206,6 +206,15 @@ Its rules:
   focus (analysis, repertoire), `.blatt-formular` and `.blatt-fokusreihe`
   re-set it. The puzzle sheet has no "next" until a puzzle is over: skipping
   left no trace, while hint and solution are booked as failed attempts.
+- **The engine tournament is a page of the tournament book.** The ordinary hall
+  is tiles, a gradient progress bar and points as colour bars. On the sheet
+  (`pages/blatt/TurnierBlatt.tsx`, loaded by `settings/TournamentHall.tsx`,
+  which keeps the veil, Escape and portal) every live board is a printed
+  diagram with its caption — board and round as the number, the pairing as the
+  title, the engine to move where the caption says who is to move. The
+  standings are a table, the played games are rows, and the final position a
+  tile used to show lies behind its row and is uncovered on a tap. Stop, PGN
+  and close stay; nothing is computed that the backend status does not carry.
 - **Informator signs, from the analysis.** A book comments without words:
   ± = ∓, △ with the idea, ▽ aimed against, → with attack, ⊕ time trouble,
   bishop pair, passed and doubled pawns, ⊥ ending. The signs are derived in

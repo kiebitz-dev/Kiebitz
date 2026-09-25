@@ -12,34 +12,31 @@
  * Fokus-Brett (components/FocusBoard.tsx). Schließen beendet das Turnier
  * nicht · es läuft im Backend weiter, und die Einstellungen führen wieder
  * hierher zurück.
+ *
+ * Im Diagramm-Modus liegt auf demselben Schleier ein Bogen aus dem
+ * Turnierbuch (pages/blatt/TurnierBlatt.tsx), nachgeladen wie jede
+ * Blatt-Fassung. Schleier, Escape und Portal bleiben hier · beide Fassungen
+ * lesen denselben Stand und bieten dieselben Griffe.
  */
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Download, Square, Trophy, X } from "lucide-react";
 import { Button } from "../../components/ui";
 import { DiagrammFelder } from "../../components/blatt/Diagramm";
-import { useI18n, type Key } from "../../lib/i18n";
+import { useI18n } from "../../lib/i18n";
+import { useDiagramMode } from "../../lib/diagramMode";
 import { deInt } from "../../lib/format";
-import { points, type LiveBoard, type PlayedGame, type TournamentStatus } from "../../lib/tournament";
+import {
+  REASON_KEY,
+  lastMoveSquares,
+  points,
+  resultText,
+  type LiveBoard,
+  type PlayedGame,
+  type TournamentStatus,
+} from "../../lib/tournament";
 
-/** Gründe, die das Backend meldet · alles andere bleibt ohne Zusatz. */
-export const REASON_KEY: Record<string, Key> = {
-  mate: "end.reason.mate",
-  stalemate: "end.reason.stalemate",
-  insufficient: "end.reason.insufficient",
-  fifty: "end.reason.fifty",
-  repetition: "end.reason.repetition",
-  invalidMove: "tn.reasonInvalid",
-  engineError: "tn.reasonEngine",
-  adjudicated: "tn.reasonAdjudicated",
-};
-
-const resultText = (result: string) => result.replace("1/2-1/2", "½–½");
-
-/** Felder des letzten Zuges · `e1g1` wird zu e1 und g1. */
-function lastMoveSquares(uci: string): string[] {
-  return uci.length >= 4 ? [uci.slice(0, 2), uci.slice(2, 4)] : [];
-}
+const TurnierBlatt = lazy(() => import("../blatt/TurnierBlatt"));
 
 /** Ein Spieler am Brett · der Punkt pulsiert, solange diese Seite rechnet. */
 function PlayerLine({ name, white, thinking }: { name: string; white: boolean; thinking: boolean }) {
@@ -111,6 +108,7 @@ export default function TournamentHall({
   onSavePgn: () => void;
 }) {
   const { t, locale } = useI18n();
+  const blatt = useDiagramMode();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -139,6 +137,11 @@ export default function TournamentHall({
         if (event.target === event.currentTarget) onClose();
       }}
     >
+      {blatt ? (
+        <Suspense fallback={null}>
+          <TurnierBlatt status={status} onClose={onClose} onStop={onStop} onSavePgn={onSavePgn} />
+        </Suspense>
+      ) : (
       <div className="tournament-hall-panel relative flex max-h-full w-full max-w-[1320px] flex-col overflow-hidden border-line2 bg-panel shadow-2xl shadow-black/50 sm:rounded-2xl sm:border">
         {/* Ein Hauch Gold hinter dem Kopf · der Saal, nicht der Einstellungsdialog. */}
         <div aria-hidden className="tournament-hall-glow pointer-events-none absolute inset-x-0 top-0 h-40" />
@@ -256,6 +259,7 @@ export default function TournamentHall({
           </aside>
         </div>
       </div>
+      )}
     </div>,
     document.body
   );
