@@ -35,7 +35,7 @@ import { syncInfo } from "./lib/sync";
 import { configureAutoSync, useSyncStatus } from "./lib/syncManager";
 import { setBoardSoundEnabled, setBoardSoundVolume } from "./lib/sound";
 import { setBoardSignsEnabled } from "./lib/boardSigns";
-import { installCrashReporter, logEvent, startHeartbeat } from "./lib/diag";
+import { installCrashReporter, logEvent } from "./lib/diag";
 import { onDeviceShake } from "./lib/shake";
 import {
   checkUpdate,
@@ -272,10 +272,15 @@ export default function App() {
   useEffect(() => {
     if (backend.mode !== "desktop") return;
     const uninstall = installCrashReporter();
-    const stopHeartbeat = startHeartbeat();
+    let stopHeartbeat: (() => void) | null = null;
+    let active = true;
+    void import("./lib/heartbeat").then(({ startHeartbeat }) => {
+      if (active) stopHeartbeat = startHeartbeat();
+    });
     return () => {
+      active = false;
       uninstall();
-      stopHeartbeat();
+      stopHeartbeat?.();
     };
   }, [backend.mode]);
 

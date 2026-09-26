@@ -7,9 +7,9 @@ import {
   installCrashReporter,
   logEvent,
   sendFeedback,
-  startHeartbeat,
   type FeedbackDraft,
 } from "./diag";
+import { startHeartbeat } from "./heartbeat";
 
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
