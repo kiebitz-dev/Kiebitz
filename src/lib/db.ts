@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emitDataChange, onDataChange } from "./changes";
+import type { DashboardWindow } from "./stats";
 
 /** Spiegelt db::GameRecord aus dem Rust-Backend (snake_case wie serialisiert). */
 export interface GameSummary {
@@ -104,12 +105,14 @@ export interface UpsertResult {
 
 let gamesRequest: Promise<GameRecord[]> | null = null;
 let summariesRequest: Promise<GameSummary[]> | null = null;
+let dashboardRequest: { key: string; request: Promise<DashboardData> } | null = null;
 const detailRequests = new Map<number, Promise<GameRecord>>();
 let statsRequest: Promise<{ total: number }> | null = null;
 
 onDataChange(() => {
   gamesRequest = null;
   summariesRequest = null;
+  dashboardRequest = null;
   detailRequests.clear();
   statsRequest = null;
 }, ["games", "analysis", "database"]);
@@ -125,9 +128,92 @@ export function listGamesForExport(): Promise<GameRecord[]> {
   return gamesRequest;
 }
 
+/**
+ * Die Partienübersicht kommt kompakt: Feldnamen einmal, dann eine Zeile je
+ * Partie (`CompactSummaries` in db.rs) · als rohe Bytes, ohne zweite
+ * Umwandlung in der IPC. Hier werden daraus wieder Objekte.
+ *
+ * Nimmt auch schon fertige Objekte (Tests, Web-Vorschau) und Zahlenfelder,
+ * falls die IPC ausnahmsweise über `postMessage` statt das eigene Protokoll
+ * läuft und Bytes als Array ankommen.
+ */
+export function decodeSummaries(raw: unknown): GameSummary[] {
+  const payload = decodePayload(raw);
+  if (Array.isArray(payload)) return payload as GameSummary[];
+  return fromCompact(payload as CompactSummaries);
+}
+
+interface CompactSummaries {
+  cols: string[];
+  rows: unknown[][];
+}
+
+function fromCompact(compact: CompactSummaries): GameSummary[] {
+  const { cols, rows } = compact;
+  const out = new Array<GameSummary>(rows.length);
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const game: Record<string, unknown> = {};
+    for (let c = 0; c < cols.length; c++) game[cols[c]] = row[c];
+    out[r] = game as unknown as GameSummary;
+  }
+  return out;
+}
+
+function decodePayload(raw: unknown): unknown {
+  let bytes: Uint8Array | null = null;
+  // Über das interne Tag statt `instanceof` · ein Puffer aus einem anderen
+  // Realm (Worker, Test-DOM) ist sonst keiner.
+  if (Object.prototype.toString.call(raw) === "[object ArrayBuffer]") {
+    bytes = new Uint8Array(raw as ArrayBuffer);
+  } else if (ArrayBuffer.isView(raw)) {
+    bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  } else if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "number") {
+    bytes = Uint8Array.from(raw as number[]);
+  }
+  return bytes ? JSON.parse(new TextDecoder().decode(bytes)) : raw;
+}
+
+/** Was das Dashboard braucht · siehe `dashboard_data` in lib.rs. */
+export interface DashboardData {
+  /** Alle Partien der Bibliothek. */
+  total: number;
+  /** Länge der Analyse-Warteschlange. */
+  unanalyzed: number;
+  /** Die fünf jüngsten der Bibliothek, auch ausgeschlossene. */
+  recent: GameSummary[];
+  /** Die Partien, über die `buildDashboard` rechnet. */
+  games: GameSummary[];
+}
+
+export function dashboardData(window: DashboardWindow): Promise<DashboardData> {
+  const key = JSON.stringify(window);
+  if (dashboardRequest?.key !== key) {
+    const request = invoke<unknown>("dashboard_data", { window }).then((raw) => {
+      const data = decodePayload(raw) as {
+        total: number;
+        unanalyzed: number;
+        recent: unknown;
+        games: unknown;
+      };
+      return {
+        total: data.total,
+        unanalyzed: data.unanalyzed,
+        recent: decodeSummaries(data.recent),
+        games: decodeSummaries(data.games),
+      };
+    });
+    dashboardRequest = { key, request };
+    void request.catch(() => {
+      if (dashboardRequest?.request === request) dashboardRequest = null;
+    });
+  }
+  return dashboardRequest.request;
+}
+
 export function listGameSummaries(): Promise<GameSummary[]> {
   if (!summariesRequest) {
-    const request = invoke<GameSummary[]>("list_game_summaries");
+    const request = invoke<unknown>("list_game_summaries").then(decodeSummaries);
     summariesRequest = request;
     void request.catch(() => {
       if (summariesRequest === request) summariesRequest = null;

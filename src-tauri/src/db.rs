@@ -1,10 +1,135 @@
 //! SQLite-Persistenz: die lokale Partien-Datenbank.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-pub struct Db(pub Mutex<Connection>);
+/// Die Datenbank der App: eine Schreibverbindung und ein Pool von Lesern.
+///
+/// `.0` ist die eine Verbindung, über die alles Schreibende läuft · sie bleibt
+/// ein Mutex, damit Migrationen, Importe und Sync sich nicht überholen.
+/// Lesende Befehle gehen über [`Db::read`]: Im WAL-Modus sieht ein Leser den
+/// zuletzt bestätigten Stand und hält den Schreiber nicht auf. Vorher wartete
+/// jede Übersicht, bis ein Import oder eine Analyse die Sperre freigab.
+pub struct Db(pub Mutex<Connection>, pub Readers);
+
+impl Db {
+    pub fn new(conn: Connection, path: &Path) -> Self {
+        let readers = Readers::default();
+        readers.reset(&conn, path);
+        Db(Mutex::new(conn), readers)
+    }
+
+    /// Führt eine reine Leseabfrage aus · auf einem Leser, wenn es einen gibt,
+    /// sonst auf der Schreibverbindung. `f` darf nichts schreiben: Die Leser
+    /// sind schreibgeschützt geöffnet und lehnen es ab.
+    pub fn read<T>(&self, f: impl FnOnce(&Connection) -> Result<T, String>) -> Result<T, String> {
+        match self.1.checkout() {
+            Some((conn, generation)) => {
+                let result = f(&conn);
+                self.1.checkin(conn, generation);
+                result
+            }
+            None => {
+                let conn = self.0.lock().map_err(|e| e.to_string())?;
+                f(&conn)
+            }
+        }
+    }
+}
+
+/// Wie viele Leser höchstens auf Vorrat offen bleiben. Mehr gleichzeitige
+/// Abfragen dürfen sein · der Überschuss wird danach geschlossen.
+const MAX_IDLE_READERS: usize = 3;
+
+/// Schreibgeschützte Verbindungen zur selben Datei, wiederverwendet.
+///
+/// Nur im WAL-Modus aktiv. Ohne WAL (etwa auf einem Netzlaufwerk, wo SQLite
+/// ihn verweigert) hielte ein Leser mit seiner Lesesperre den Schreiber auf;
+/// dann läuft alles wie früher über die eine Verbindung.
+///
+/// Ein Leser ohne offene Abfrage hält keine Sperre und stört weder Checkpoint
+/// noch Wiederherstellung. Trotzdem schließt [`Readers::reset`] alle, sobald
+/// die Datei wechselt oder neu befüllt wird · ein Leser, der gerade unterwegs
+/// ist, wird danach nicht mehr in den Vorrat zurückgelegt.
+#[derive(Default)]
+pub struct Readers(Mutex<ReaderPool>);
+
+#[derive(Default)]
+struct ReaderPool {
+    /// `None`: kein WAL oder keine Datei · alles über die Schreibverbindung.
+    path: Option<PathBuf>,
+    generation: u64,
+    idle: Vec<Connection>,
+}
+
+impl Readers {
+    /// Richtet den Pool auf die Datei der Schreibverbindung aus und verwirft
+    /// alle Leser von vorher.
+    pub fn reset(&self, writer: &Connection, path: &Path) {
+        let wal = writer
+            .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+            .map(|mode| mode.eq_ignore_ascii_case("wal"))
+            .unwrap_or(false);
+        let Ok(mut pool) = self.0.lock() else {
+            return;
+        };
+        pool.generation += 1;
+        pool.idle.clear();
+        pool.path = wal.then(|| path.to_path_buf());
+    }
+
+    /// Schließt alle Leser im Vorrat · vor Wiederherstellung und Zurücksetzen.
+    pub fn close_idle(&self) {
+        if let Ok(mut pool) = self.0.lock() {
+            pool.generation += 1;
+            pool.idle.clear();
+        }
+    }
+
+    fn checkout(&self) -> Option<(Connection, u64)> {
+        let (path, generation) = {
+            let mut pool = self.0.lock().ok()?;
+            let generation = pool.generation;
+            if let Some(conn) = pool.idle.pop() {
+                return Some((conn, generation));
+            }
+            (pool.path.clone()?, generation)
+        };
+        // Außerhalb der Sperre öffnen · das dauert ein paar Millisekunden.
+        match open_reader(&path) {
+            Ok(conn) => Some((conn, generation)),
+            Err(error) => {
+                log::warn!("Leseverbindung nicht geöffnet, nutze Schreibverbindung: {error}");
+                None
+            }
+        }
+    }
+
+    fn checkin(&self, conn: Connection, generation: u64) {
+        if let Ok(mut pool) = self.0.lock() {
+            if pool.generation == generation && pool.idle.len() < MAX_IDLE_READERS {
+                pool.idle.push(conn);
+            }
+        }
+    }
+}
+
+fn open_reader(path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI,
+    )
+    .map_err(|e| e.to_string())?;
+    // Ein Checkpoint im selben Augenblick kann kurz blockieren · warten statt
+    // der Oberfläche einen Fehler zu melden.
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    Ok(conn)
+}
 
 /// Current SQLite schema version. It is stored only after the complete
 /// migration has committed successfully.
@@ -1423,6 +1548,316 @@ pub fn list_game_summaries(conn: &Connection) -> Result<Vec<GameSummary>, String
         .map_err(|e| e.to_string())
 }
 
+// ── Kompakte Übersicht für die Oberfläche ───────────────────────────────────
+//
+// Die Partienübersicht ist die größte Antwort, die über die IPC geht: je
+// Partie 31 Felder, und als JSON-Objekte trägt jede Zeile alle 31 Namen mit.
+// Bei 1.500 Partien sind das 1,06 MB, davon mehr als die Hälfte Feldnamen.
+// Als Spalten plus Zeilen-Arrays sind es 0,42 MB. Die Namen stehen einmal
+// vorn · die Oberfläche setzt die Objekte daraus wieder zusammen
+// (`decodeSummaries` in lib/db.ts) und merkt davon sonst nichts.
+//
+// Kodiert bleibt es JSON: `JSON.parse` ist im WebView nativ und schneller als
+// jeder Binärdekoder in JavaScript, gerade bei vielen kurzen Texten. Binär ist
+// der Weg · als `tauri::ipc::Response` gehen die fertigen Bytes ohne zweite
+// Umwandlung hinüber.
+
+/// Feldnamen von [`GameSummary`] in der Reihenfolge von [`SummaryRow`].
+const SUMMARY_FIELDS: [&str; 31] = [
+    "id",
+    "source",
+    "url",
+    "played_at",
+    "played_ts",
+    "time_class",
+    "color",
+    "my_name",
+    "opponent",
+    "opp_elo",
+    "my_elo",
+    "result",
+    "opening",
+    "eco",
+    "moves_count",
+    "accuracy",
+    "accuracy_opening",
+    "accuracy_middlegame",
+    "accuracy_endgame",
+    "opponent_accuracy",
+    "opponent_accuracy_opening",
+    "opponent_accuracy_middlegame",
+    "opponent_accuracy_endgame",
+    "tags",
+    "analyzed",
+    "analysis_excluded",
+    "has_moves",
+    "has_note",
+    "termination",
+    "variant",
+    "start_fen",
+];
+
+/// Partienübersicht als `{ "cols": [...], "rows": [[...], ...] }`.
+pub struct CompactSummaries<'a>(pub &'a [GameSummary]);
+
+impl Serialize for CompactSummaries<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeSeq, SerializeStruct};
+        struct Rows<'a>(&'a [GameSummary]);
+        impl Serialize for Rows<'_> {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+                for game in self.0 {
+                    seq.serialize_element(&SummaryRow(game))?;
+                }
+                seq.end()
+            }
+        }
+        let mut out = serializer.serialize_struct("CompactSummaries", 2)?;
+        out.serialize_field("cols", &SUMMARY_FIELDS)?;
+        out.serialize_field("rows", &Rows(self.0))?;
+        out.end()
+    }
+}
+
+/// Eine Partie als Array · dieselbe Reihenfolge wie [`SUMMARY_FIELDS`].
+struct SummaryRow<'a>(&'a GameSummary);
+
+impl Serialize for SummaryRow<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let g = self.0;
+        let mut row = serializer.serialize_tuple(SUMMARY_FIELDS.len())?;
+        row.serialize_element(&g.id)?;
+        row.serialize_element(&g.source)?;
+        row.serialize_element(&g.url)?;
+        row.serialize_element(&g.played_at)?;
+        row.serialize_element(&g.played_ts)?;
+        row.serialize_element(&g.time_class)?;
+        row.serialize_element(&g.color)?;
+        row.serialize_element(&g.my_name)?;
+        row.serialize_element(&g.opponent)?;
+        row.serialize_element(&g.opp_elo)?;
+        row.serialize_element(&g.my_elo)?;
+        row.serialize_element(&g.result)?;
+        row.serialize_element(&g.opening)?;
+        row.serialize_element(&g.eco)?;
+        row.serialize_element(&g.moves_count)?;
+        row.serialize_element(&g.accuracy)?;
+        row.serialize_element(&g.accuracy_opening)?;
+        row.serialize_element(&g.accuracy_middlegame)?;
+        row.serialize_element(&g.accuracy_endgame)?;
+        row.serialize_element(&g.opponent_accuracy)?;
+        row.serialize_element(&g.opponent_accuracy_opening)?;
+        row.serialize_element(&g.opponent_accuracy_middlegame)?;
+        row.serialize_element(&g.opponent_accuracy_endgame)?;
+        row.serialize_element(&g.tags)?;
+        row.serialize_element(&g.analyzed)?;
+        row.serialize_element(&g.analysis_excluded)?;
+        row.serialize_element(&g.has_moves)?;
+        row.serialize_element(&g.has_note)?;
+        row.serialize_element(&g.termination)?;
+        row.serialize_element(&g.variant)?;
+        row.serialize_element(&g.start_fen)?;
+        row.end()
+    }
+}
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+//
+// Das Dashboard ist die erste Seite und brauchte bisher die ganze Übersicht:
+// Karten, Verlauf und Warteschlange rechnete `buildDashboard` (lib/stats.ts)
+// über alle Partien. Gebraucht werden davon nur wenige · hier werden genau
+// die herausgesucht, und `buildDashboard` rechnet über sie wie bisher. Das
+// Ergebnis ist dasselbe, weil jede Partie, die dort den Ausschlag geben kann,
+// dabei ist, samt allen Gleichständen im selben Zeitpunkt.
+
+/// Zeitgrenzen, die die Oberfläche festlegt (`dashboardWindow` in
+/// lib/stats.ts) · so stehen die Regeln nur an einer Stelle.
+#[derive(Deserialize, Debug, Clone, Copy)]
+pub struct DashboardWindow {
+    /// Unix-Sekunden · jünger zählt als „letzte 30 Tage".
+    pub recent_from: i64,
+    /// Unix-Sekunden · ab hier braucht der Verlauf jede Partie.
+    pub history_from: i64,
+    /// Länge der Sparkline.
+    pub spark: usize,
+}
+
+#[derive(Serialize)]
+pub struct DashboardData<'a> {
+    /// Alle Partien der Bibliothek.
+    pub total: i64,
+    /// Nicht ausgeschlossen, nicht analysiert, mit Zügen · wie die Warteschlange.
+    pub unanalyzed: i64,
+    /// Die fünf jüngsten der Bibliothek, auch ausgeschlossene.
+    pub recent: CompactSummaries<'a>,
+    /// Die Auswahl für Karten und Verlauf · nicht ausgeschlossen, jüngste zuerst.
+    pub games: CompactSummaries<'a>,
+}
+
+/// Leichte Zeile für die Auswahl · ohne Texte außer dem Reihenschlüssel.
+struct Pick {
+    id: i64,
+    key: (String, String, bool),
+    played_ts: i64,
+    rated: bool,
+}
+
+/// Ids der Partien, die `buildDashboard` braucht.
+///
+/// `picks` kommen jüngste zuerst. Je Reihe (Plattform, Modus, Chess960):
+/// die jüngste Partie und alle nach `recent_from` (Aktivität), und von den
+/// gewerteten die `spark` jüngsten, die erste, die letzte bis `recent_from`
+/// und alle ab `history_from`. „Die n jüngsten" schließt Gleichstände am Rand
+/// ein · `buildDashboard` sortiert stabil, und welche von zwei gleich alten
+/// Partien vorn steht, entscheidet dort die Reihenfolge der Liste.
+fn dashboard_ids(picks: &[Pick], window: &DashboardWindow) -> std::collections::HashSet<i64> {
+    use std::collections::{HashMap, HashSet};
+    let mut by_key: HashMap<&(String, String, bool), Vec<&Pick>> = HashMap::new();
+    for pick in picks {
+        by_key.entry(&pick.key).or_default().push(pick);
+    }
+    let mut ids = HashSet::new();
+    for games in by_key.values() {
+        // Jüngste zuerst, wie die Abfrage sie liefert.
+        if let Some(newest) = games.first() {
+            ids.insert(newest.id);
+        }
+        ids.extend(
+            games
+                .iter()
+                .filter(|g| g.played_ts > window.recent_from)
+                .map(|g| g.id),
+        );
+        let rated: Vec<&Pick> = games.iter().copied().filter(|g| g.rated).collect();
+        let Some(first) = rated.last() else {
+            continue;
+        };
+        let with_ties = |ts: i64| {
+            rated
+                .iter()
+                .filter(move |g| g.played_ts == ts)
+                .map(|g| g.id)
+        };
+        // Sparkline und aktueller Wert.
+        let edge = rated.get(window.spark.max(1) - 1).unwrap_or(first);
+        ids.extend(
+            rated
+                .iter()
+                .filter(|g| g.played_ts >= edge.played_ts)
+                .map(|g| g.id),
+        );
+        // Die erste · Bezug, wenn es nichts vor der 30-Tage-Grenze gibt.
+        ids.extend(with_ties(first.played_ts));
+        // Die letzte bis zur 30-Tage-Grenze · Bezug des Deltas.
+        if let Some(before) = rated.iter().find(|g| g.played_ts <= window.recent_from) {
+            ids.extend(with_ties(before.played_ts));
+        }
+        // Der Verlauf.
+        ids.extend(
+            rated
+                .iter()
+                .filter(|g| g.played_ts >= window.history_from)
+                .map(|g| g.id),
+        );
+    }
+    ids
+}
+
+/// Die Rohdaten des Dashboards: Gesamtzahl, Warteschlange, die fünf jüngsten
+/// und die Auswahl nach [`dashboard_ids`].
+pub struct DashboardGames {
+    pub total: i64,
+    pub unanalyzed: i64,
+    pub recent: Vec<GameSummary>,
+    pub games: Vec<GameSummary>,
+}
+
+fn summaries_where(
+    conn: &Connection,
+    filter: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<GameSummary>, String> {
+    let sql = format!(
+        "SELECT {GAME_SUMMARY_COLUMNS} FROM games {filter}
+         ORDER BY played_ts DESC, played_at DESC, id DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params, game_summary_from_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn dashboard_games(
+    conn: &Connection,
+    window: &DashboardWindow,
+) -> Result<DashboardGames, String> {
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM games", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    let unanalyzed: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM games
+             WHERE analysis_excluded = 0 AND analyzed = 0 AND TRIM(moves) != ''",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let recent = {
+        let sql = format!(
+            "SELECT {GAME_SUMMARY_COLUMNS}
+             FROM games ORDER BY played_ts DESC, played_at DESC, id DESC LIMIT 5"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], game_summary_from_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+
+    // Dieselbe Regel wie `countsForRating` in lib/stats.ts: eine Wertung, und
+    // bei chess.com lesbare Züge (ältere 960-Importe haben keine).
+    let picks: Vec<Pick> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, source, time_class, variant = 'chess960', played_ts,
+                        my_elo > 0 AND (source != 'chess.com' OR TRIM(moves) != '')
+                 FROM games WHERE analysis_excluded = 0
+                 ORDER BY played_ts DESC, played_at DESC, id DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(Pick {
+                    id: r.get(0)?,
+                    key: (r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0),
+                    played_ts: r.get(4)?,
+                    rated: r.get::<_, i64>(5)? != 0,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    let ids = dashboard_ids(&picks, window);
+    let ids_json = serde_json::to_string(&ids).map_err(|e| e.to_string())?;
+    let games = summaries_where(
+        conn,
+        "WHERE id IN (SELECT value FROM json_each(?1))",
+        params![ids_json],
+    )?;
+    Ok(DashboardGames {
+        total,
+        unanalyzed,
+        recent,
+        games,
+    })
+}
+
 pub fn get_game(conn: &Connection, id: i64) -> Result<GameRecord, String> {
     conn.query_row(
         "SELECT id, source, source_id, url, played_at, played_ts, time_class, color, my_name, opponent,
@@ -1542,6 +1977,279 @@ pub fn list_games_page(conn: &Connection, request: &GamePageRequest) -> Result<G
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_summaries_carry_every_field_under_its_name() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+        let mut game = sample("compact");
+        game.accuracy = Some(88.5);
+        game.tags = vec!["Fehler".into(), "Endspiel".into()];
+        game.note = "merken".into();
+        game.variant = "chess960".into();
+        upsert_games(&mut conn, &[game]).unwrap();
+        let summaries = list_game_summaries(&conn).unwrap();
+
+        let plain = serde_json::to_value(&summaries[0]).unwrap();
+        let compact = serde_json::to_value(CompactSummaries(&summaries)).unwrap();
+        let cols = compact["cols"].as_array().unwrap();
+        let row = compact["rows"][0].as_array().unwrap();
+        assert_eq!(cols.len(), row.len());
+        let rebuilt: serde_json::Map<String, serde_json::Value> = cols
+            .iter()
+            .zip(row)
+            .map(|(name, value)| (name.as_str().unwrap().to_string(), value.clone()))
+            .collect();
+        assert_eq!(serde_json::Value::Object(rebuilt), plain);
+    }
+
+    fn pick(id: i64, source: &str, tc: &str, ts: i64, rated: bool) -> Pick {
+        Pick {
+            id,
+            key: (source.into(), tc.into(), false),
+            played_ts: ts,
+            rated,
+        }
+    }
+
+    fn picked(mut picks: Vec<Pick>, window: DashboardWindow) -> Vec<i64> {
+        // Jüngste zuerst, bei Gleichstand höhere Id zuerst · wie die Abfrage.
+        picks.sort_by_key(|p| (std::cmp::Reverse(p.played_ts), std::cmp::Reverse(p.id)));
+        let mut ids: Vec<i64> = dashboard_ids(&picks, &window).into_iter().collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    const DAY: i64 = 86_400;
+
+    #[test]
+    fn dashboard_ids_keep_spark_edge_ties_and_the_references() {
+        let now = 1_000 * DAY;
+        let window = DashboardWindow {
+            recent_from: now - 30 * DAY,
+            history_from: now - 200 * DAY,
+            spark: 3,
+        };
+        let picks = vec![
+            // Die erste gewertete Partie überhaupt · Bezug ohne ältere Partie.
+            pick(1, "lichess", "rapid", now - 900 * DAY, true),
+            // Mittendrin, weder Verlauf noch Bezug · bleibt draußen.
+            pick(2, "lichess", "rapid", now - 500 * DAY, true),
+            // Zwei gleich alte vor der 30-Tage-Grenze · beide sind Bezug.
+            pick(3, "lichess", "rapid", now - 40 * DAY, true),
+            pick(4, "lichess", "rapid", now - 40 * DAY, true),
+            // Die drei jüngsten, und am Rand der Sparkline ein Gleichstand.
+            pick(5, "lichess", "rapid", now - 20 * DAY, true),
+            pick(6, "lichess", "rapid", now - 10 * DAY, true),
+            pick(7, "lichess", "rapid", now - 10 * DAY, true),
+            pick(8, "lichess", "rapid", now - DAY, true),
+        ];
+        // 3 und 4 liegen auch im Verlauf (ab 200 Tagen) · 2 nicht.
+        assert_eq!(picked(picks, window), vec![1, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn dashboard_ids_count_unrated_games_only_for_activity() {
+        let now = 1_000 * DAY;
+        let window = DashboardWindow {
+            recent_from: now - 30 * DAY,
+            history_from: now - 60 * DAY,
+            spark: 12,
+        };
+        let picks = vec![
+            pick(1, "chess.com", "daily", now - 400 * DAY, true),
+            // Ohne Züge (alter 960-Import) · zählt nicht als Wertung, aber als
+            // jüngste Partie der Reihe und für die letzten 30 Tage.
+            pick(2, "chess.com", "daily", now - 300 * DAY, false),
+            pick(3, "chess.com", "daily", now - 5 * DAY, false),
+            // Eine Reihe ganz ohne Wertung · nur ihre jüngste Partie.
+            pick(4, "lichess", "bullet", now - 700 * DAY, false),
+            pick(5, "lichess", "bullet", now - 600 * DAY, false),
+        ];
+        assert_eq!(picked(picks, window), vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn dashboard_games_split_library_and_analysis_view() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+        let mut games = Vec::new();
+        for (index, id) in ["a", "b", "c", "d", "e", "f"].iter().enumerate() {
+            let mut game = sample(id);
+            game.played_ts = 1_783_769_082 - index as i64 * DAY;
+            games.push(game);
+        }
+        games[5].moves = String::new();
+        upsert_games(&mut conn, &games).unwrap();
+        conn.execute(
+            "UPDATE games SET analysis_excluded = 1 WHERE source_id = 'a'",
+            [],
+        )
+        .unwrap();
+        conn.execute("UPDATE games SET analyzed = 1 WHERE source_id = 'b'", [])
+            .unwrap();
+
+        let window = DashboardWindow {
+            recent_from: 1_783_769_082 - 30 * DAY,
+            history_from: 0,
+            spark: 12,
+        };
+        let found = dashboard_games(&conn, &window).unwrap();
+        assert_eq!(found.total, 6);
+        // c, d, e · a ist ausgeschlossen, b analysiert, f ohne Züge.
+        assert_eq!(found.unanalyzed, 3);
+        let recent: Vec<&str> = found.recent.iter().map(|g| g.url.as_str()).collect();
+        assert_eq!(recent.len(), 5);
+        assert!(
+            recent[0].ends_with("/a"),
+            "die Bibliothek zeigt auch Ausgeschlossene"
+        );
+        assert!(found.games.iter().all(|g| !g.analysis_excluded));
+        assert_eq!(found.games.len(), 5);
+        assert!(found
+            .games
+            .windows(2)
+            .all(|pair| pair[0].played_ts >= pair[1].played_ts));
+    }
+
+    /// Schreibt Übersicht und Dashboard-Auswahl einer echten Datenbank als JSON
+    /// · für den Abgleich mit `buildDashboard` in lib/stats.ts. Aufruf:
+    /// `KIEBITZ_DASH_DB=… KIEBITZ_DASH_OUT=… cargo test dashboard_export -- --ignored`
+    #[test]
+    #[ignore]
+    fn dashboard_export() {
+        let db = std::env::var("KIEBITZ_DASH_DB").expect("KIEBITZ_DASH_DB");
+        let out = PathBuf::from(std::env::var("KIEBITZ_DASH_OUT").expect("KIEBITZ_DASH_OUT"));
+        let window: DashboardWindow = serde_json::from_str(
+            &std::env::var("KIEBITZ_DASH_WINDOW").expect("KIEBITZ_DASH_WINDOW"),
+        )
+        .unwrap();
+        let conn = Connection::open_with_flags(&db, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let all = list_game_summaries(&conn).unwrap();
+        let started = std::time::Instant::now();
+        let found = dashboard_games(&conn, &window).unwrap();
+        let took = started.elapsed();
+        let data = DashboardData {
+            total: found.total,
+            unanalyzed: found.unanalyzed,
+            recent: CompactSummaries(&found.recent),
+            games: CompactSummaries(&found.games),
+        };
+        std::fs::write(
+            out.join("all.json"),
+            serde_json::to_vec(&CompactSummaries(&all)).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("dashboard.json"),
+            serde_json::to_vec(&data).unwrap(),
+        )
+        .unwrap();
+        eprintln!(
+            "DASH all={} picked={} dashboard_games={:?}",
+            all.len(),
+            found.games.len(),
+            took
+        );
+    }
+
+    /// Eine frische Datei im Temp-Ordner · WAL braucht eine echte Datei.
+    fn temp_db(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "kiebitz-readers-{tag}-{}-{}",
+            std::process::id(),
+            now_ts()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("kiebitz.db")
+    }
+
+    fn open_app_db(path: &Path) -> Db {
+        let conn = Connection::open(path).unwrap();
+        init(&conn).unwrap();
+        Db::new(conn, path)
+    }
+
+    fn reader_count(db: &Db) -> usize {
+        db.1 .0.lock().unwrap().idle.len()
+    }
+
+    #[test]
+    fn readers_see_committed_writes_and_are_reused() {
+        let path = temp_db("reuse");
+        let db = open_app_db(&path);
+        {
+            let mut conn = db.0.lock().unwrap();
+            upsert_games(&mut conn, &[sample("a"), sample("b")]).unwrap();
+        }
+        let count = db
+            .read(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM games", [], |r| r.get::<_, i64>(0))
+                    .map_err(|e| e.to_string())
+            })
+            .unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(reader_count(&db), 1, "der Leser geht zurück in den Vorrat");
+
+        // Der nächste Aufruf nimmt denselben Leser und sieht den neuen Stand.
+        {
+            let mut conn = db.0.lock().unwrap();
+            upsert_games(&mut conn, &[sample("c")]).unwrap();
+        }
+        let summaries = db.read(list_game_summaries).unwrap();
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(reader_count(&db), 1);
+    }
+
+    #[test]
+    fn readers_do_not_wait_for_the_writer_lock() {
+        let path = temp_db("parallel");
+        let db = open_app_db(&path);
+        // Die Schreibverbindung ist belegt, etwa von einem Import · lesen geht trotzdem.
+        let _writer = db.0.lock().unwrap();
+        let stats = db.read(stats).unwrap();
+        assert_eq!(stats.total, 0);
+    }
+
+    #[test]
+    fn readers_refuse_writes() {
+        let path = temp_db("readonly");
+        let db = open_app_db(&path);
+        let result = db.read(|conn| {
+            conn.execute("DELETE FROM games", [])
+                .map_err(|e| e.to_string())
+        });
+        assert!(result.is_err(), "ein Leser darf nichts schreiben");
+    }
+
+    #[test]
+    fn close_idle_drops_readers_even_when_they_are_in_use() {
+        let path = temp_db("close");
+        let db = open_app_db(&path);
+        db.read(stats).unwrap();
+        assert_eq!(reader_count(&db), 1);
+        db.1.close_idle();
+        assert_eq!(reader_count(&db), 0);
+
+        // Ein Leser, der während des Leerens unterwegs war, kommt nicht zurück.
+        db.read(|conn| {
+            db.1.close_idle();
+            stats(conn)
+        })
+        .unwrap();
+        assert_eq!(reader_count(&db), 0);
+    }
+
+    #[test]
+    fn without_wal_everything_goes_through_the_writer() {
+        let conn = Connection::open_in_memory().unwrap();
+        init(&conn).unwrap();
+        let db = Db::new(conn, Path::new(":memory:"));
+        assert!(db.1 .0.lock().unwrap().path.is_none());
+        assert_eq!(db.read(stats).unwrap().total, 0);
+        assert_eq!(reader_count(&db), 0);
+    }
 
     fn sample(source_id: &str) -> GameRecord {
         GameRecord {

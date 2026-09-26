@@ -654,8 +654,7 @@ pub async fn next_puzzle(
 ) -> Result<Option<PuzzleOut>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let db = app.state::<db::Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        next_puzzle_from_conn(&conn, theme, source, min_rating, max_rating)
+        db.read(|conn| next_puzzle_from_conn(conn, theme, source, min_rating, max_rating))
     })
     .await
     .map_err(|e| format!("Puzzle-Auswahl fehlgeschlagen: {e}"))?
@@ -1074,8 +1073,7 @@ pub async fn puzzle_history(
 ) -> Result<Vec<AttemptRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let db = app.state::<db::Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        puzzle_history_from_conn(&conn, limit.unwrap_or(25).clamp(1, 200))
+        db.read(|conn| puzzle_history_from_conn(conn, limit.unwrap_or(25).clamp(1, 200)))
     })
     .await
     .map_err(|e| format!("Puzzle-Verlauf fehlgeschlagen: {e}"))?
@@ -1161,12 +1159,13 @@ pub async fn puzzle_insights(
 ) -> Result<PuzzleInsights, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let db = app.state::<db::Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        puzzle_insights_from_conn(&conn, now, days.unwrap_or(30).clamp(7, 365))
+        db.read(|conn| {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            puzzle_insights_from_conn(conn, now, days.unwrap_or(30).clamp(7, 365))
+        })
     })
     .await
     .map_err(|e| format!("Puzzle-Analyse fehlgeschlagen: {e}"))?

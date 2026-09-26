@@ -168,8 +168,9 @@ fn day_entry(map: &mut BTreeMap<i64, LoadDay>, day: i64) -> &mut LoadDay {
 
 #[tauri::command(async)]
 pub fn training_program(db: State<db::Db>, days: Option<i64>) -> Result<TrainingProgram, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    training_program_from_conn(&conn, now_ts(), days.unwrap_or(180).clamp(28, 730))
+    db.read(|conn| {
+        training_program_from_conn(conn, now_ts(), days.unwrap_or(180).clamp(28, 730))
+    })
 }
 
 fn training_program_from_conn(

@@ -663,7 +663,13 @@ fn ensure_workers_idle(app: &tauri::AppHandle) -> Result<(), String> {
 fn switch_to(app: &tauri::AppHandle, path: PathBuf) -> Result<DbInfo, String> {
     let conn = Connection::open(&path).map_err(|e| format!("Öffnen fehlgeschlagen: {e}"))?;
     db::init(&conn)?;
-    *app.state::<db::Db>().0.lock().map_err(|e| e.to_string())? = conn;
+    {
+        let state = app.state::<db::Db>();
+        let mut writer = state.0.lock().map_err(|e| e.to_string())?;
+        *writer = conn;
+        // Die Leser zeigen noch auf die alte Datei.
+        state.1.reset(&writer, &path);
+    }
     *app.state::<analysis::DbPath>()
         .0
         .lock()
@@ -813,8 +819,10 @@ pub fn restore_database(app: tauri::AppHandle, source: String) -> Result<DbInfo,
     {
         let state = app.state::<db::Db>();
         let mut destination = state.0.lock().map_err(|e| e.to_string())?;
+        state.1.close_idle();
         restore_from(&source_path, &mut destination)?;
         db::init(&destination)?;
+        state.1.reset(&destination, &current_path);
     }
     collect_db_info(&app)
 }
@@ -829,6 +837,8 @@ pub fn factory_reset(app: tauri::AppHandle) -> Result<(), String> {
     {
         let state = app.state::<db::Db>();
         let conn = state.0.lock().map_err(|e| e.to_string())?;
+        // Kein Leser darf VACUUM und Checkpoint unten aufhalten.
+        state.1.close_idle();
         let tables: Vec<String> = {
             let mut stmt = conn
                 .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")

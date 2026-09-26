@@ -12,14 +12,19 @@ import {
 } from "../data/demo";
 import { useBackendInfo } from "../lib/backend";
 import { LOCALE_TAGS, useI18n } from "../lib/i18n";
-import { getGame, listGameSummaries, type GameRecord, type GameSummary } from "../lib/db";
+import { dashboardData, getGame, type DashboardData, type GameRecord } from "../lib/db";
 import { gameAnalysis, type MoveEvalRow } from "../lib/analysis";
 import { begruendeZug, erklaereFazit, erklaereZug } from "../lib/erklaerung";
 import { useDiagramMode } from "../lib/diagramMode";
 import { getSettings } from "../lib/settings";
 import { repStats, type RepStats } from "../lib/repertoire";
 import { puzzleStats as fetchPuzzleStats, type PuzzleStats } from "../lib/puzzles";
-import { buildDashboard, type HistoryPoint, type RatingHistorySeries } from "../lib/stats";
+import {
+  buildDashboard,
+  dashboardWindow,
+  type HistoryPoint,
+  type RatingHistorySeries,
+} from "../lib/stats";
 import { modeKey, type GamesFilter, type UiGame } from "../lib/gameUi";
 import { Card, ExtLink, GameCard, ResultBadge, SourceBadge, Spark, Button } from "../components/ui";
 import { useMobileShell } from "../components/MobileShell";
@@ -158,7 +163,9 @@ export default function Dashboard({
   const { locale, t } = useI18n();
   const storeCapture = isStoreCapture();
   const mobile = useMobileShell();
-  const [records, setRecords] = useState<GameSummary[] | null>(null);
+  // Nicht die ganze Übersicht, nur was Karten, Verlauf und Warteschlange
+  // brauchen · das Backend sucht es heraus (`dashboard_data`).
+  const [data, setData] = useState<DashboardData | null>(null);
   const [rep, setRep] = useState<RepStats | null>(null);
   const [pz, setPz] = useState<PuzzleStats | null>(null);
   // Desktop startet ohne Demo-Konto; die echten Werte kommen aus den Settings.
@@ -184,7 +191,7 @@ export default function Dashboard({
 
   useEffect(() => {
     if (backend.mode === "desktop") {
-      listGameSummaries().then(setRecords).catch(() => setRecords(null));
+      dashboardData(dashboardWindow()).then(setData).catch(() => setData(null));
       repStats().then(setRep).catch(() => {});
       fetchPuzzleStats().then(setPz).catch(() => {});
       getSettings()
@@ -196,12 +203,14 @@ export default function Dashboard({
     }
   }, [backend.mode]);
 
-  const live = records !== null && records.length > 0;
+  const live = data !== null && data.total > 0;
 
   const dash = useMemo(
     () =>
-      live ? buildDashboard(records!, { locale, ccUser: users.cc, liUser: users.li }) : null,
-    [live, records, locale, users]
+      live
+        ? buildDashboard(data!.games, { locale, ccUser: users.cc, liUser: users.li }, data!)
+        : null,
+    [live, data, locale, users]
   );
 
   const cards = dash
@@ -455,7 +464,7 @@ export default function Dashboard({
         <DashboardBlatt
           fernschach={fernschach("")}
           mobile={mobile}
-          bestand={live ? records!.length : null}
+          bestand={live ? data!.total : null}
           quelle={quelle}
           angebot={
             // Nur wenn die Stellung *nicht* aus einer Partie kommt · dann
@@ -517,7 +526,7 @@ export default function Dashboard({
           <h1 className="text-[21px] font-semibold tracking-tight">{greeting}, {name}</h1>
           <p className="mt-0.5 text-[13px] text-ink3">
             {new Date().toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-            {live ? t("dash.gamesInDb", { n: deInt(records!.length) }) : storeCapture ? "" : t("dash.demoData")}
+            {live ? t("dash.gamesInDb", { n: deInt(data!.total) }) : storeCapture ? "" : t("dash.demoData")}
           </p>
         </div>
         {!storeCapture && <div className="flex gap-2">

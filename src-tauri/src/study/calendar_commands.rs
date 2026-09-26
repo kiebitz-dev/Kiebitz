@@ -4,8 +4,9 @@ pub fn study_calendar(
     start_day: String,
     end_day: String,
 ) -> Result<StudyCalendar, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    calendar_from_conn(&conn, &start_day, &end_day, now_ts())
+    db.read(|conn| {
+        calendar_from_conn(conn, &start_day, &end_day, now_ts())
+    })
 }
 
 #[tauri::command(async)]
@@ -414,15 +415,16 @@ pub fn delete_study_unit(
 
 #[tauri::command(async)]
 pub fn study_data(app: tauri::AppHandle, db: State<db::Db>) -> Result<StudyData, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let now = now_ts();
-    let puzzle_goal = app
-        .state::<settings::SettingsState>()
-        .0
-        .lock()
-        .map(|s| s.puzzle_goal as i64)
-        .unwrap_or(20);
-    study_data_from_conn(&conn, now, puzzle_goal)
+    db.read(|conn| {
+        let now = now_ts();
+        let puzzle_goal = app
+            .state::<settings::SettingsState>()
+            .0
+            .lock()
+            .map(|s| s.puzzle_goal as i64)
+            .unwrap_or(20);
+        study_data_from_conn(conn, now, puzzle_goal)
+    })
 }
 
 fn study_data_from_conn(

@@ -151,8 +151,7 @@ pub(crate) fn load_nodes(conn: &Connection) -> Result<Vec<RepNodeOut>, String> {
 
 #[tauri::command(async)]
 pub fn rep_list(db: State<db::Db>) -> Result<Vec<RepNodeOut>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    load_nodes(&conn)
+    db.read(load_nodes)
 }
 
 /// Reihenfolge der Varianten einer Seite festschreiben.
@@ -254,11 +253,12 @@ pub fn rep_lookup(
     sans: Vec<String>,
 ) -> Result<Vec<RepNodeOut>, String> {
     let key = chess::fen_key(&position_after(&sans)?);
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    Ok(load_nodes(&conn)?
-        .into_iter()
-        .filter(|n| n.side == side && n.fen_key == key)
-        .collect())
+    db.read(|conn| {
+        Ok(load_nodes(conn)?
+            .into_iter()
+            .filter(|n| n.side == side && n.fen_key == key)
+            .collect())
+    })
 }
 
 /// Fügt eine Zugfolge ab der Grundstellung ein; vorhandene Knoten werden
@@ -545,51 +545,52 @@ pub fn rep_due(
     due_limit: Option<i64>,
     new_limit: Option<i64>,
 ) -> Result<Vec<DueItem>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let nodes = load_nodes(&conn)?;
-    let by_id: HashMap<i64, RepNodeOut> = nodes.iter().map(|n| (n.id, n.clone())).collect();
-    let now = now_ts();
+    db.read(|conn| {
+        let nodes = load_nodes(conn)?;
+        let by_id: HashMap<i64, RepNodeOut> = nodes.iter().map(|n| (n.id, n.clone())).collect();
+        let now = now_ts();
 
-    let mut due: Vec<(&RepNodeOut, bool)> = nodes
-        .iter()
-        .filter(|n| n.my_move && (n.reps == 0 || n.due_ts <= now))
-        .map(|n| (n, n.reps == 0))
-        .collect();
-    // Fällige zuerst (älteste zuerst), neue danach.
-    due.sort_by_key(|(n, is_new)| (*is_new, n.due_ts, n.depth));
+        let mut due: Vec<(&RepNodeOut, bool)> = nodes
+            .iter()
+            .filter(|n| n.my_move && (n.reps == 0 || n.due_ts <= now))
+            .map(|n| (n, n.reps == 0))
+            .collect();
+        // Fällige zuerst (älteste zuerst), neue danach.
+        due.sort_by_key(|(n, is_new)| (*is_new, n.due_ts, n.depth));
 
-    let due_cap = due_limit.filter(|v| *v > 0).map(|v| v as usize);
-    let new_cap = new_limit.filter(|v| *v > 0).map(|v| v as usize);
-    let mut taken_due = 0usize;
-    let mut taken_new = 0usize;
+        let due_cap = due_limit.filter(|v| *v > 0).map(|v| v as usize);
+        let new_cap = new_limit.filter(|v| *v > 0).map(|v| v as usize);
+        let mut taken_due = 0usize;
+        let mut taken_new = 0usize;
 
-    Ok(due
-        .into_iter()
-        .filter(|(_, is_new)| {
-            let (count, cap) = if *is_new {
-                (&mut taken_new, new_cap)
-            } else {
-                (&mut taken_due, due_cap)
-            };
-            if cap.is_some_and(|c| *count >= c) {
-                return false;
-            }
-            *count += 1;
-            true
-        })
-        .map(|(n, is_new)| {
-            let mut prompt = path_to(&by_id, n.id);
-            prompt.pop(); // letzter Zug ist die gesuchte Antwort
-            DueItem {
-                node_id: n.id,
-                side: n.side.clone(),
-                prompt_sans: prompt,
-                expected_san: n.san.clone(),
-                line: line_name(&by_id, n.id),
-                is_new,
-            }
-        })
-        .collect())
+        Ok(due
+            .into_iter()
+            .filter(|(_, is_new)| {
+                let (count, cap) = if *is_new {
+                    (&mut taken_new, new_cap)
+                } else {
+                    (&mut taken_due, due_cap)
+                };
+                if cap.is_some_and(|c| *count >= c) {
+                    return false;
+                }
+                *count += 1;
+                true
+            })
+            .map(|(n, is_new)| {
+                let mut prompt = path_to(&by_id, n.id);
+                prompt.pop(); // letzter Zug ist die gesuchte Antwort
+                DueItem {
+                    node_id: n.id,
+                    side: n.side.clone(),
+                    prompt_sans: prompt,
+                    expected_san: n.san.clone(),
+                    line: line_name(&by_id, n.id),
+                    is_new,
+                }
+            })
+            .collect())
+    })
 }
 
 #[derive(Serialize)]
@@ -829,57 +830,58 @@ pub fn rep_stats(
     plies: Option<i64>,
     games: Option<i64>,
 ) -> Result<RepStats, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let nodes = load_nodes(&conn)?;
-    let now = now_ts();
-    let my_positions = nodes.iter().filter(|n| n.my_move).count() as i64;
-    let due_now = nodes
-        .iter()
-        .filter(|n| n.my_move && (n.reps == 0 || n.due_ts <= now))
-        .count() as i64;
+    db.read(|conn| {
+        let nodes = load_nodes(conn)?;
+        let now = now_ts();
+        let my_positions = nodes.iter().filter(|n| n.my_move).count() as i64;
+        let due_now = nodes
+            .iter()
+            .filter(|n| n.my_move && (n.reps == 0 || n.due_ts <= now))
+            .count() as i64;
 
-    let depth = clamp_plies(plies);
-    let children = book_children(&nodes);
-    let games = recent_games(&conn, clamp_games(games))?;
+        let depth = clamp_plies(plies);
+        let children = book_children(&nodes);
+        let games = recent_games(conn, clamp_games(games))?;
 
-    let mut covered = 0i64;
-    let mut per_side: HashMap<String, (i64, i64)> = HashMap::new();
-    for (color, moves, _) in &games {
-        // Buch verlassen: nur mein eigener Abweichler zählt gegen mich, und
-        // nur wenn das Buch hier überhaupt eine Fortsetzung kennt.
-        let ok = match walk_book(&children, color, moves, depth as usize) {
-            Some(d) => !(is_my_move(color, d.ply) && d.book_has_moves),
-            None => true,
-        };
-        let entry = per_side.entry(color.clone()).or_insert((0, 0));
-        entry.0 += 1;
-        if ok {
-            entry.1 += 1;
-            covered += 1;
+        let mut covered = 0i64;
+        let mut per_side: HashMap<String, (i64, i64)> = HashMap::new();
+        for (color, moves, _) in &games {
+            // Buch verlassen: nur mein eigener Abweichler zählt gegen mich, und
+            // nur wenn das Buch hier überhaupt eine Fortsetzung kennt.
+            let ok = match walk_book(&children, color, moves, depth as usize) {
+                Some(d) => !(is_my_move(color, d.ply) && d.book_has_moves),
+                None => true,
+            };
+            let entry = per_side.entry(color.clone()).or_insert((0, 0));
+            entry.0 += 1;
+            if ok {
+                entry.1 += 1;
+                covered += 1;
+            }
         }
-    }
 
-    let checked = games.len() as i64;
-    let mut by_side: Vec<SideCoverage> = ["white", "black"]
-        .iter()
-        .filter_map(|side| {
-            per_side.get(*side).map(|(total, ok)| SideCoverage {
-                side: (*side).to_string(),
-                games: *total,
-                covered: *ok,
-                pct: pct(*ok as f64, *total as f64),
+        let checked = games.len() as i64;
+        let mut by_side: Vec<SideCoverage> = ["white", "black"]
+            .iter()
+            .filter_map(|side| {
+                per_side.get(*side).map(|(total, ok)| SideCoverage {
+                    side: (*side).to_string(),
+                    games: *total,
+                    covered: *ok,
+                    pct: pct(*ok as f64, *total as f64),
+                })
             })
-        })
-        .collect();
-    by_side.sort_by_key(|side| std::cmp::Reverse(side.games));
+            .collect();
+        by_side.sort_by_key(|side| std::cmp::Reverse(side.games));
 
-    Ok(RepStats {
-        my_positions,
-        due_now,
-        coverage_pct: pct(covered as f64, checked as f64),
-        games_checked: checked,
-        plies: depth,
-        by_side,
+        Ok(RepStats {
+            my_positions,
+            due_now,
+            coverage_pct: pct(covered as f64, checked as f64),
+            games_checked: checked,
+            plies: depth,
+            by_side,
+        })
     })
 }
 
@@ -893,55 +895,56 @@ pub fn rep_gaps(
     games: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Vec<RepGap>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let nodes = load_nodes(&conn)?;
-    let by_id: HashMap<i64, RepNodeOut> = nodes.iter().map(|n| (n.id, n.clone())).collect();
-    let children = book_children(&nodes);
-    let depth = clamp_plies(plies.or(Some(20)));
-    let games = recent_games(&conn, clamp_games(games))?;
+    db.read(|conn| {
+        let nodes = load_nodes(conn)?;
+        let by_id: HashMap<i64, RepNodeOut> = nodes.iter().map(|n| (n.id, n.clone())).collect();
+        let children = book_children(&nodes);
+        let depth = clamp_plies(plies.or(Some(20)));
+        let games = recent_games(conn, clamp_games(games))?;
 
-    // (node_id, side, san) → (Anzahl, Punkte, Pfad, mein Zug?)
-    type GapKey = (i64, String, String);
-    type GapAggregate = (i64, f64, Vec<String>, bool);
-    let mut found: HashMap<GapKey, GapAggregate> = HashMap::new();
-    for (color, moves, result) in &games {
-        let Some(d) = walk_book(&children, color, moves, depth as usize) else {
-            continue;
-        };
-        // Ohne bekannte Fortsetzung ist das schlicht das Ende der Linie und
-        // keine Lücke · sonst stünde jede Blattstellung in der Liste.
-        if !d.book_has_moves {
-            continue;
+        // (node_id, side, san) → (Anzahl, Punkte, Pfad, mein Zug?)
+        type GapKey = (i64, String, String);
+        type GapAggregate = (i64, f64, Vec<String>, bool);
+        let mut found: HashMap<GapKey, GapAggregate> = HashMap::new();
+        for (color, moves, result) in &games {
+            let Some(d) = walk_book(&children, color, moves, depth as usize) else {
+                continue;
+            };
+            // Ohne bekannte Fortsetzung ist das schlicht das Ende der Linie und
+            // keine Lücke · sonst stünde jede Blattstellung in der Liste.
+            if !d.book_has_moves {
+                continue;
+            }
+            let entry = found
+                .entry((d.node_id, color.clone(), d.san.clone()))
+                .or_insert((0, 0.0, d.path.clone(), is_my_move(color, d.ply)));
+            entry.0 += 1;
+            entry.1 += score_of(result);
         }
-        let entry = found
-            .entry((d.node_id, color.clone(), d.san.clone()))
-            .or_insert((0, 0.0, d.path.clone(), is_my_move(color, d.ply)));
-        entry.0 += 1;
-        entry.1 += score_of(result);
-    }
 
-    let mut out: Vec<RepGap> = found
-        .into_iter()
-        .map(
-            |((node_id, side, san), (count, score, path, mine))| RepGap {
-                book_sans: children
-                    .get(&(side.clone(), node_id))
-                    .map(|k| k.iter().map(|(s, _)| s.clone()).collect())
-                    .unwrap_or_default(),
-                line: line_name(&by_id, node_id),
-                node_id,
-                side,
-                path_sans: path,
-                san,
-                count,
-                mine,
-                score_pct: pct(score, count as f64),
-            },
-        )
-        .collect();
-    out.sort_by(|a, b| b.count.cmp(&a.count).then(a.san.cmp(&b.san)));
-    out.truncate(limit.unwrap_or(12).clamp(1, 100) as usize);
-    Ok(out)
+        let mut out: Vec<RepGap> = found
+            .into_iter()
+            .map(
+                |((node_id, side, san), (count, score, path, mine))| RepGap {
+                    book_sans: children
+                        .get(&(side.clone(), node_id))
+                        .map(|k| k.iter().map(|(s, _)| s.clone()).collect())
+                        .unwrap_or_default(),
+                    line: line_name(&by_id, node_id),
+                    node_id,
+                    side,
+                    path_sans: path,
+                    san,
+                    count,
+                    mine,
+                    score_pct: pct(score, count as f64),
+                },
+            )
+            .collect();
+        out.sort_by(|a, b| b.count.cmp(&a.count).then(a.san.cmp(&b.san)));
+        out.truncate(limit.unwrap_or(12).clamp(1, 100) as usize);
+        Ok(out)
+    })
 }
 
 #[derive(Serialize)]
@@ -965,79 +968,80 @@ pub struct NodeGameStats {
 /// wie lief es, und wo wurde vom Buch abgewichen.
 #[tauri::command(async)]
 pub fn rep_node_games(db: State<db::Db>, node_id: i64) -> Result<NodeGameStats, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let (fen_key, side): (String, String) = conn
-        .query_row(
-            "SELECT fen_key, side FROM rep_nodes WHERE id = ?1",
-            params![node_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .map_err(|_| "Knoten nicht gefunden".to_string())?;
+    db.read(|conn| {
+        let (fen_key, side): (String, String) = conn
+            .query_row(
+                "SELECT fen_key, side FROM rep_nodes WHERE id = ?1",
+                params![node_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(|_| "Knoten nicht gefunden".to_string())?;
 
-    let book_sans: Vec<String> = {
-        let mut stmt = conn
-            .prepare("SELECT san FROM rep_nodes WHERE parent_id = ?1 ORDER BY id")
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map(params![node_id], |r| r.get(0))
-            .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?
-    };
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT p.game_id, MIN(p.ply), g.result, g.moves
-             FROM positions p JOIN games g ON g.id = p.game_id
-             WHERE p.fen_key = ?1 AND g.color = ?2 AND g.analysis_excluded = 0
-             GROUP BY p.game_id",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows: Vec<(i64, u32, String, String)> = stmt
-        .query_map(params![fen_key, side], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-
-    let mut score = 0.0;
-    let mut followed = 0i64;
-    let mut dev: Vec<Deviation> = Vec::new();
-    for (_id, ply, result, moves) in &rows {
-        score += match result.as_str() {
-            "win" => 1.0,
-            "draw" => 0.5,
-            _ => 0.0,
+        let book_sans: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT san FROM rep_nodes WHERE parent_id = ?1 ORDER BY id")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map(params![node_id], |r| r.get(0))
+                .map_err(|e| e.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
         };
-        if let Some(next) = moves.split_whitespace().nth(*ply as usize) {
-            if book_sans.iter().any(|s| s == next) {
-                followed += 1;
-            } else if !book_sans.is_empty() {
-                match dev.iter_mut().find(|d| d.san == next) {
-                    Some(d) => d.count += 1,
-                    None => dev.push(Deviation {
-                        san: next.to_string(),
-                        count: 1,
-                    }),
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT p.game_id, MIN(p.ply), g.result, g.moves
+                 FROM positions p JOIN games g ON g.id = p.game_id
+                 WHERE p.fen_key = ?1 AND g.color = ?2 AND g.analysis_excluded = 0
+                 GROUP BY p.game_id",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows: Vec<(i64, u32, String, String)> = stmt
+            .query_map(params![fen_key, side], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        let mut score = 0.0;
+        let mut followed = 0i64;
+        let mut dev: Vec<Deviation> = Vec::new();
+        for (_id, ply, result, moves) in &rows {
+            score += match result.as_str() {
+                "win" => 1.0,
+                "draw" => 0.5,
+                _ => 0.0,
+            };
+            if let Some(next) = moves.split_whitespace().nth(*ply as usize) {
+                if book_sans.iter().any(|s| s == next) {
+                    followed += 1;
+                } else if !book_sans.is_empty() {
+                    match dev.iter_mut().find(|d| d.san == next) {
+                        Some(d) => d.count += 1,
+                        None => dev.push(Deviation {
+                            san: next.to_string(),
+                            count: 1,
+                        }),
+                    }
                 }
             }
         }
-    }
-    dev.sort_by_key(|deviation| std::cmp::Reverse(deviation.count));
-    dev.truncate(4);
+        dev.sort_by_key(|deviation| std::cmp::Reverse(deviation.count));
+        dev.truncate(4);
 
-    let games = rows.len() as i64;
-    Ok(NodeGameStats {
-        games,
-        score_pct: if games > 0 {
-            (score / games as f64 * 1000.0).round() / 10.0
-        } else {
-            0.0
-        },
-        book_sans,
-        deviations: dev,
-        followed_book: followed,
+        let games = rows.len() as i64;
+        Ok(NodeGameStats {
+            games,
+            score_pct: if games > 0 {
+                (score / games as f64 * 1000.0).round() / 10.0
+            } else {
+                0.0
+            },
+            book_sans,
+            deviations: dev,
+            followed_book: followed,
+        })
     })
 }
 

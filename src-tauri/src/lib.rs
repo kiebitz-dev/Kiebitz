@@ -186,20 +186,40 @@ fn describe_engine(path: Option<PathBuf>) -> EngineInfo {
 
 #[tauri::command(async)]
 fn list_games_for_export(db: tauri::State<db::Db>) -> Result<Vec<db::GameRecord>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    db::list_games(&conn)
+    db.read(db::list_games)
 }
 
 #[tauri::command(async)]
-fn list_game_summaries(db: tauri::State<db::Db>) -> Result<Vec<db::GameSummary>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    db::list_game_summaries(&conn)
+fn list_game_summaries(db: tauri::State<db::Db>) -> Result<tauri::ipc::Response, String> {
+    // Kompakt und als fertige Bytes · siehe `db::CompactSummaries`.
+    let games = db.read(db::list_game_summaries)?;
+    serde_json::to_vec(&db::CompactSummaries(&games))
+        .map(tauri::ipc::Response::new)
+        .map_err(|e| e.to_string())
+}
+
+/// Was das Dashboard braucht, statt der ganzen Übersicht · siehe
+/// `db::dashboard_games`.
+#[tauri::command(async)]
+fn dashboard_data(
+    db: tauri::State<db::Db>,
+    window: db::DashboardWindow,
+) -> Result<tauri::ipc::Response, String> {
+    let found = db.read(|conn| db::dashboard_games(conn, &window))?;
+    let data = db::DashboardData {
+        total: found.total,
+        unanalyzed: found.unanalyzed,
+        recent: db::CompactSummaries(&found.recent),
+        games: db::CompactSummaries(&found.games),
+    };
+    serde_json::to_vec(&data)
+        .map(tauri::ipc::Response::new)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
 fn game_detail(db: tauri::State<db::Db>, id: i64) -> Result<db::GameRecord, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    db::get_game(&conn, id)
+    db.read(|conn| db::get_game(conn, id))
 }
 
 #[tauri::command(async)]
@@ -207,8 +227,7 @@ fn list_games_page(
     db: tauri::State<db::Db>,
     request: db::GamePageRequest,
 ) -> Result<db::GamePage, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    db::list_games_page(&conn, &request)
+    db.read(|conn| db::list_games_page(conn, &request))
 }
 
 #[tauri::command(async)]
@@ -316,8 +335,7 @@ fn write_pgn_file(path: String, contents: String) -> Result<usize, String> {
 
 #[tauri::command(async)]
 fn db_stats(db: tauri::State<db::Db>) -> Result<db::DbStats, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    db::stats(&conn)
+    db.read(db::stats)
 }
 
 /// Ein Merker der Oberfläche, der einen Neuaufbau der WebView überleben muss.
@@ -617,7 +635,7 @@ pub fn run() {
             // Sync · es überschreibt hier die Kopie aus der settings.json.
             settings::adopt_study_prefs(&conn, &mut loaded);
             app.manage(settings::SettingsState(std::sync::Mutex::new(loaded)));
-            app.manage(db::Db(std::sync::Mutex::new(conn)));
+            app.manage(db::Db::new(conn, &db_file));
             app.manage(analysis::DbPath(std::sync::Mutex::new(db_file)));
             app.manage(analysis::AnalysisState::default());
             app.manage(live::LiveEngine::default());
@@ -712,6 +730,7 @@ pub fn run() {
             stop_live,
             list_games_for_export,
             list_game_summaries,
+            dashboard_data,
             game_detail,
             list_games_page,
             upsert_games,

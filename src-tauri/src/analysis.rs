@@ -902,55 +902,56 @@ pub struct MoveEvalRow {
 
 #[tauri::command(async)]
 pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    // Die Varianten liegen in UCI, die Oberfläche zeigt Züge. Übersetzt wird
-    // hier, weil dafür die Stellung vor dem Halbzug nötig ist — und die steht
-    // nirgends in `move_evals`, sondern entsteht aus der Zugliste der Partie.
-    let (moves, start_fen): (String, String) = conn
-        .query_row(
-            "SELECT moves, start_fen FROM games WHERE id = ?1",
-            params![game_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .unwrap_or_default();
-    let fens: Vec<String> = chess::walk_from(&start_fen, &moves)
-        .into_iter()
-        .map(|w| w.fen_before)
-        .collect();
-    let mut stmt = conn
-        .prepare(
-            "SELECT ply, san, eval_cp, mate_in, best_uci, judgment, phase,
-                    loss_cp, motif, motif_detail, pv, signs
-             FROM move_evals WHERE game_id = ?1 ORDER BY ply",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(params![game_id], |r| {
-            let ply: u32 = r.get(0)?;
-            let pv: String = r.get(10)?;
-            let signs: String = r.get(11)?;
-            Ok(MoveEvalRow {
-                ply,
-                san: r.get(1)?,
-                eval_cp: r.get(2)?,
-                mate_in: r.get(3)?,
-                best_uci: r.get(4)?,
-                judgment: r.get(5)?,
-                phase: r.get(6)?,
-                loss_cp: r.get(7)?,
-                motif: r.get(8)?,
-                motif_detail: r.get(9)?,
-                pv: fens
-                    .get(ply as usize - 1)
-                    .map(|fen| crate::motifs::pv_sans(fen, &pv))
-                    .unwrap_or_default(),
-                signs: serde_json::from_str(&signs)
-                    .unwrap_or_else(|_| serde_json::Value::Array(Vec::new())),
+    db.read(|conn| {
+        // Die Varianten liegen in UCI, die Oberfläche zeigt Züge. Übersetzt wird
+        // hier, weil dafür die Stellung vor dem Halbzug nötig ist — und die steht
+        // nirgends in `move_evals`, sondern entsteht aus der Zugliste der Partie.
+        let (moves, start_fen): (String, String) = conn
+            .query_row(
+                "SELECT moves, start_fen FROM games WHERE id = ?1",
+                params![game_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap_or_default();
+        let fens: Vec<String> = chess::walk_from(&start_fen, &moves)
+            .into_iter()
+            .map(|w| w.fen_before)
+            .collect();
+        let mut stmt = conn
+            .prepare(
+                "SELECT ply, san, eval_cp, mate_in, best_uci, judgment, phase,
+                        loss_cp, motif, motif_detail, pv, signs
+                 FROM move_evals WHERE game_id = ?1 ORDER BY ply",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![game_id], |r| {
+                let ply: u32 = r.get(0)?;
+                let pv: String = r.get(10)?;
+                let signs: String = r.get(11)?;
+                Ok(MoveEvalRow {
+                    ply,
+                    san: r.get(1)?,
+                    eval_cp: r.get(2)?,
+                    mate_in: r.get(3)?,
+                    best_uci: r.get(4)?,
+                    judgment: r.get(5)?,
+                    phase: r.get(6)?,
+                    loss_cp: r.get(7)?,
+                    motif: r.get(8)?,
+                    motif_detail: r.get(9)?,
+                    pv: fens
+                        .get(ply as usize - 1)
+                        .map(|fen| crate::motifs::pv_sans(fen, &pv))
+                        .unwrap_or_default(),
+                    signs: serde_json::from_str(&signs)
+                        .unwrap_or_else(|_| serde_json::Value::Array(Vec::new())),
+                })
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    })
 }
 
 // ── Erklärungen für schon analysierte Partien ────────────────────────────────
@@ -1328,42 +1329,43 @@ pub struct PhaseErrors {
 
 #[tauri::command(async)]
 pub fn error_stats(db: State<db::Db>) -> Result<Vec<PhaseErrors>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT e.phase, e.judgment, COUNT(*) FROM move_evals e
-             JOIN games g ON g.id = e.game_id
-             WHERE e.judgment != '' AND g.analysis_excluded = 0
-               AND ((g.color = 'white' AND e.ply % 2 = 1) OR (g.color = 'black' AND e.ply % 2 = 0))
-             GROUP BY e.phase, e.judgment",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows: Vec<(String, String, i64)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+    db.read(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT e.phase, e.judgment, COUNT(*) FROM move_evals e
+                 JOIN games g ON g.id = e.game_id
+                 WHERE e.judgment != '' AND g.analysis_excluded = 0
+                   AND ((g.color = 'white' AND e.ply % 2 = 1) OR (g.color = 'black' AND e.ply % 2 = 0))
+                 GROUP BY e.phase, e.judgment",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows: Vec<(String, String, i64)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
 
-    let mut out: Vec<PhaseErrors> = ["opening", "middlegame", "endgame"]
-        .iter()
-        .map(|p| PhaseErrors {
-            phase: p.to_string(),
-            inaccuracy: 0,
-            mistake: 0,
-            blunder: 0,
-        })
-        .collect();
-    for (phase, judgment, count) in rows {
-        if let Some(entry) = out.iter_mut().find(|e| e.phase == phase) {
-            match judgment.as_str() {
-                "inaccuracy" => entry.inaccuracy = count,
-                "mistake" => entry.mistake = count,
-                "blunder" => entry.blunder = count,
-                _ => {}
+        let mut out: Vec<PhaseErrors> = ["opening", "middlegame", "endgame"]
+            .iter()
+            .map(|p| PhaseErrors {
+                phase: p.to_string(),
+                inaccuracy: 0,
+                mistake: 0,
+                blunder: 0,
+            })
+            .collect();
+        for (phase, judgment, count) in rows {
+            if let Some(entry) = out.iter_mut().find(|e| e.phase == phase) {
+                match judgment.as_str() {
+                    "inaccuracy" => entry.inaccuracy = count,
+                    "mistake" => entry.mistake = count,
+                    "blunder" => entry.blunder = count,
+                    _ => {}
+                }
             }
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 // ── Positionssuche ───────────────────────────────────────────────────────────
@@ -1400,89 +1402,90 @@ type PositionRow = (i64, u32, String, String, String, String, String, String);
 #[tauri::command(async)]
 pub fn search_position(db: State<db::Db>, fen: String) -> Result<PositionSearch, String> {
     let key = chess::normalize_fen(&fen)?;
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT p.game_id, p.ply, g.moves, g.opponent, g.color, g.result, g.played_at, g.time_class
-             FROM positions p JOIN games g ON g.id = p.game_id
-             WHERE p.fen_key = ?1
-             ORDER BY g.played_ts DESC, p.ply ASC LIMIT 800",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows: Vec<PositionRow> = stmt
-        .query_map(params![key], |r| {
-            Ok((
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                r.get(3)?,
-                r.get(4)?,
-                r.get(5)?,
-                r.get(6)?,
-                r.get(7)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+    db.read(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT p.game_id, p.ply, g.moves, g.opponent, g.color, g.result, g.played_at, g.time_class
+                 FROM positions p JOIN games g ON g.id = p.game_id
+                 WHERE p.fen_key = ?1
+                 ORDER BY g.played_ts DESC, p.ply ASC LIMIT 800",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows: Vec<PositionRow> = stmt
+            .query_map(params![key], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
 
-    // Pro Partie nur das erste Erreichen der Stellung zählen (Zugwiederholung).
-    let mut seen = std::collections::HashSet::new();
-    let mut agg: Vec<(String, i64, f64)> = Vec::new(); // san, games, score sum
-    let mut sample = Vec::new();
-    let mut total = 0i64;
+        // Pro Partie nur das erste Erreichen der Stellung zählen (Zugwiederholung).
+        let mut seen = std::collections::HashSet::new();
+        let mut agg: Vec<(String, i64, f64)> = Vec::new(); // san, games, score sum
+        let mut sample = Vec::new();
+        let mut total = 0i64;
 
-    for (game_id, ply, moves, opponent, color, result, played_at, time_class) in rows {
-        if !seen.insert(game_id) {
-            continue;
-        }
-        total += 1;
-        let next_san = moves
-            .split_whitespace()
-            .nth(ply as usize)
-            .unwrap_or("—")
-            .to_string();
-        let score = match result.as_str() {
-            "win" => 1.0,
-            "draw" => 0.5,
-            _ => 0.0,
-        };
-        match agg.iter_mut().find(|(s, _, _)| *s == next_san) {
-            Some(e) => {
-                e.1 += 1;
-                e.2 += score;
+        for (game_id, ply, moves, opponent, color, result, played_at, time_class) in rows {
+            if !seen.insert(game_id) {
+                continue;
             }
-            None => agg.push((next_san.clone(), 1, score)),
+            total += 1;
+            let next_san = moves
+                .split_whitespace()
+                .nth(ply as usize)
+                .unwrap_or("—")
+                .to_string();
+            let score = match result.as_str() {
+                "win" => 1.0,
+                "draw" => 0.5,
+                _ => 0.0,
+            };
+            match agg.iter_mut().find(|(s, _, _)| *s == next_san) {
+                Some(e) => {
+                    e.1 += 1;
+                    e.2 += score;
+                }
+                None => agg.push((next_san.clone(), 1, score)),
+            }
+            if sample.len() < 12 {
+                sample.push(PositionHit {
+                    game_id,
+                    ply,
+                    opponent,
+                    color,
+                    result,
+                    played_at,
+                    time_class,
+                    next_san,
+                });
+            }
         }
-        if sample.len() < 12 {
-            sample.push(PositionHit {
-                game_id,
-                ply,
-                opponent,
-                color,
-                result,
-                played_at,
-                time_class,
-                next_san,
-            });
-        }
-    }
 
-    agg.sort_by_key(|row| std::cmp::Reverse(row.1));
-    let next_moves = agg
-        .into_iter()
-        .take(6)
-        .map(|(san, games, score)| NextMoveStat {
-            san,
-            games,
-            score_pct: (score / games as f64 * 1000.0).round() / 10.0,
+        agg.sort_by_key(|row| std::cmp::Reverse(row.1));
+        let next_moves = agg
+            .into_iter()
+            .take(6)
+            .map(|(san, games, score)| NextMoveStat {
+                san,
+                games,
+                score_pct: (score / games as f64 * 1000.0).round() / 10.0,
+            })
+            .collect();
+
+        Ok(PositionSearch {
+            total_games: total,
+            next_moves,
+            sample,
         })
-        .collect();
-
-    Ok(PositionSearch {
-        total_games: total,
-        next_moves,
-        sample,
     })
 }
 

@@ -109,8 +109,7 @@ fn record_attempt(
 /// Fortschritt je Drill (Versuche, Erfolge, letzter Erfolg).
 #[tauri::command(async)]
 pub fn endgame_stats(db: tauri::State<db::Db>) -> Result<Vec<DrillStat>, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    stats(&conn)
+    db.read(stats)
 }
 
 fn stats(conn: &rusqlite::Connection) -> Result<Vec<DrillStat>, String> {

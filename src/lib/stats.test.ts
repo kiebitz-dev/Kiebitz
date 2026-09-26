@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDashboard, buildInsights } from "./stats";
+import { buildDashboard, buildInsights, dashboardWindow } from "./stats";
 import type { GameRecord } from "./db";
 
 const NOW = Math.floor(Date.now() / 1000);
@@ -235,5 +235,30 @@ describe("buildInsights", () => {
     expect(ins.bounceBack).toEqual({ games: 1, scorePct: 100 });
     expect(ins.longestLossStreak).toBe(1);
     expect(ins.accuracyConsistency).toBeCloseTo(8.2, 1);
+  });
+});
+
+describe("dashboardWindow", () => {
+  it("reicht so weit zurück, wie Karten und Verlauf schauen", () => {
+    const nowMs = new Date(2026, 8, 26, 13, 0).getTime();
+    const window = dashboardWindow(nowMs);
+    expect(window.spark).toBe(12);
+    expect(window.recent_from).toBe(Math.floor(nowMs / 1000) - 30 * 86400);
+    // Verlauf ab 1. April · der erste Stützpunkt sieht 35 Tage weiter zurück.
+    expect(window.history_from).toBe(Math.floor(new Date(2026, 3, 1).getTime() / 1000) - 35 * 86400);
+  });
+});
+
+describe("buildDashboard mit Auswahl aus dem Backend", () => {
+  it("nimmt die jüngsten Partien und die Warteschlange aus der Bibliothek", () => {
+    const shown = g({ id: 1, opponent: "aus der Auswahl" });
+    const excluded = g({ id: 2, opponent: "ausgeschlossen", analysis_excluded: true, played_ts: NOW + 60 });
+    const d = buildDashboard([shown], { locale: "en", ccUser: "u", liUser: "u" }, {
+      recent: [excluded, shown],
+      unanalyzed: 17,
+    });
+    expect(d.recent.map((game) => game.opponent)).toEqual(["ausgeschlossen", "aus der Auswahl"]);
+    expect(d.unanalyzed).toBe(17);
+    expect(d.cards).toHaveLength(1);
   });
 });

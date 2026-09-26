@@ -133,84 +133,96 @@ body {
    Dasselbe angedeutete Brett wie auf der Website (.band-grid), aber nicht
    statisch nach links ausgeblendet, sondern von einem sehr langsam wandernden
    Licht freigelegt · so wie der BoardBackdrop in Sekundant, dort in Flutter
-   gezeichnet, hier als Maske.
+   gezeichnet.
 
    Sichtbar wird das Muster nur innerhalb dieses Lichts, und dort nur um
-   wenige Prozent heller als der Grund. Alles andere bleibt Schwarz. */
+   wenige Prozent heller als der Grund. Alles andere bleibt Schwarz.
+
+   Gebaut ist das Licht als Deckel, nicht als Maske: Das Muster liegt fest,
+   darüber eine Fläche in der Grundfarbe mit einem weichen Loch, und nur diese
+   Fläche wandert · per `transform`. Das rechnet die GPU, ohne dass je ein
+   Pixel neu gezeichnet wird. Die frühere Maske (`mask-position` animiert)
+   zeichnete das ganze Fenster sechzigmal je Sekunde neu, auch unter
+   Windows, auch im Leerlauf. Das Bild ist dasselbe: Grund plus Muster mal
+   Maske ist Muster plus Grund mal (1 − Maske).
+
+   Maße aus der alten Maske (124 % groß, Lichtkegel `closest-side`): Der
+   Kegel hat die Halbachsen 62vw × 62vh, und seine Mitte liegt bei
+   62 % − 24 % · Position. Der Deckel ist doppelt so groß wie der Kegel reicht,
+   damit er das Fenster auch am Rand der Bahn ganz überdeckt. */
 .chess-backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  overflow: hidden;
   background-image: repeating-conic-gradient(
     var(--color-backdrop) 0% 25%,
     transparent 0% 50%
   );
   background-size: 72px 72px;
-  /* Ein kompakter, weich auslaufender Lichtkegel hält das Muster auf eine
-     kleine Fläche begrenzt, ohne beim Wandern eine sichtbare Kante zu bilden. */
-  -webkit-mask-image: radial-gradient(
-    closest-side,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.6) 22%,
-    rgba(0, 0, 0, 0.2) 48%,
-    rgba(0, 0, 0, 0) 72%
+}
+.chess-backdrop::after {
+  content: "";
+  position: absolute;
+  /* Mitte des Deckels auf der linken oberen Fensterecke · `transform` schiebt
+     sie dann auf die Mitte des Lichts. */
+  left: -124vw;
+  top: -124vh;
+  width: 248vw;
+  height: 248vh;
+  background: radial-gradient(
+    ellipse 25% 25% at 50% 50%,
+    transparent 0%,
+    color-mix(in srgb, var(--color-bg) 40%, transparent) 22%,
+    color-mix(in srgb, var(--color-bg) 80%, transparent) 48%,
+    var(--color-bg) 72%
   );
-  mask-image: radial-gradient(
-    closest-side,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.6) 22%,
-    rgba(0, 0, 0, 0.2) 48%,
-    rgba(0, 0, 0, 0) 72%
-  );
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: 124% 124%;
-  mask-size: 124% 124%;
-  -webkit-mask-position: 18% 14%;
-  mask-position: 18% 14%;
+  transform: translate3d(57.68vw, 58.64vh, 0);
+  will-change: transform;
   animation: chess-drift 90s ease-in-out infinite;
 }
 
 /* Ein voller Umlauf dauert über eine Minute · die Bewegung soll auffallen,
-   wenn man sie sucht, und sonst nicht. */
+   wenn man sie sucht, und sonst nicht. Die vier Stationen sind die Positionen
+   der alten Maske (18/14, 76/32, 58/84, 6/62 %) umgerechnet in Lichtmitten. */
 @keyframes chess-drift {
   0% {
-    -webkit-mask-position: 18% 14%;
-    mask-position: 18% 14%;
+    transform: translate3d(57.68vw, 58.64vh, 0);
   }
   25% {
-    -webkit-mask-position: 76% 32%;
-    mask-position: 76% 32%;
+    transform: translate3d(43.76vw, 54.32vh, 0);
   }
   50% {
-    -webkit-mask-position: 58% 84%;
-    mask-position: 58% 84%;
+    transform: translate3d(48.08vw, 41.84vh, 0);
   }
   75% {
-    -webkit-mask-position: 6% 62%;
-    mask-position: 6% 62%;
+    transform: translate3d(60.56vw, 47.12vh, 0);
   }
   100% {
-    -webkit-mask-position: 18% 14%;
-    mask-position: 18% 14%;
+    transform: translate3d(57.68vw, 58.64vh, 0);
   }
 }
 
 /* Reduzierte Bewegung und reproduzierbare Store-Screenshots lassen das Licht
-   stehen; das Muster selbst bleibt sichtbar. */
+   stehen; das Muster selbst bleibt sichtbar. Ein verborgenes Fenster hält es
+   an (main.tsx setzt `data-hidden`) · es sieht ja niemand hin. */
 @media (prefers-reduced-motion: reduce) {
-  .chess-backdrop {
+  .chess-backdrop::after {
     animation: none;
   }
 }
-html[data-store-capture="true"] .chess-backdrop {
+html[data-store-capture="true"] .chess-backdrop::after {
   animation: none;
 }
+html[data-hidden="true"] .chess-backdrop::after {
+  animation-play-state: paused;
+}
 
-/* WebKitGTK · siehe main.tsx. Kein Licht, das wandert, und kein Weichzeichner
-   hinter Dialogen: Beides zeichnet dort das ganze Fenster je Bild neu. */
-html[data-webkitgtk="true"] .chess-backdrop {
+/* WebKitGTK · siehe main.tsx. Kein Weichzeichner hinter Dialogen, und das
+   Licht bleibt stehen: Ohne DMA-BUF-Renderer ist dort auch eine
+   GPU-Animation nicht sicher billig. */
+html[data-webkitgtk="true"] .chess-backdrop::after {
   animation: none;
 }
 html[data-webkitgtk="true"] * {

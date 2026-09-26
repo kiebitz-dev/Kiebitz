@@ -98,19 +98,67 @@ export interface DashboardOptions {
   liUser: string;
 }
 
+/** Partien je Sparkline einer Wertungskarte. */
+const SPARK_LENGTH = 12;
+/** „Letzte 30 Tage" · Delta der Karten und Aktivität der Reihen. */
+const RECENT_DAYS = 30;
+
+/** Erster Tag des Ratingverlaufs · der Erste des Monats vor fünf Monaten. */
+function historyFirstDay(nowMs: number): Date {
+  const today = new Date(nowMs);
+  today.setHours(0, 0, 0, 0);
+  return new Date(today.getFullYear(), today.getMonth() - (HISTORY_MONTHS - 1), 1);
+}
+
+/**
+ * Zeitgrenzen für `dashboard_data` (db.rs). Das Backend sucht damit genau die
+ * Partien heraus, die `buildDashboard` braucht · die Regeln stehen hier, nicht
+ * doppelt in Rust.
+ */
+export interface DashboardWindow {
+  /** Unix-Sekunden · jünger zählt als „letzte 30 Tage". */
+  recent_from: number;
+  /** Unix-Sekunden · ab hier braucht der Verlauf jede gewertete Partie. */
+  history_from: number;
+  spark: number;
+}
+
+export function dashboardWindow(nowMs = Date.now()): DashboardWindow {
+  const now = Math.floor(nowMs / 1000);
+  // Der erste Stützpunkt des Verlaufs sieht bis zu `HISTORY_IDLE_DAYS` zurück.
+  const firstDay = Math.floor(historyFirstDay(nowMs).getTime() / 1000);
+  return {
+    recent_from: now - RECENT_DAYS * 86400,
+    history_from: firstDay - HISTORY_IDLE_DAYS * 86400,
+    spark: SPARK_LENGTH,
+  };
+}
+
+/**
+ * Was die Bibliothek beisteuert, wenn `buildDashboard` nur die Auswahl aus
+ * `dashboard_data` bekommt: die fünf jüngsten (auch ausgeschlossene) und die
+ * Länge der Warteschlange.
+ */
+export interface DashboardLibrary {
+  recent: GameSummary[];
+  unanalyzed: number;
+}
+
 export function buildDashboard(
   records: GameSummary[],
-  opts: DashboardOptions = { locale: "de", ccUser: "Torim98", liUser: "Torim98" }
+  opts: DashboardOptions = { locale: "de", ccUser: "Torim98", liUser: "Torim98" },
+  library?: DashboardLibrary
 ): LiveDashboard {
-  const libraryRecords = records;
+  const libraryRecords = library?.recent ?? records;
   records = records.filter((game) => !game.analysis_excluded);
   const profileUrl: Record<string, string> = {
     "chess.com": `https://www.chess.com/member/${opts.ccUser}`,
     lichess: `https://lichess.org/@/${opts.liUser}`,
   };
   const asc = [...records].sort((a, b) => a.played_ts - b.played_ts);
-  const now = Math.floor(Date.now() / 1000);
-  const cutoff30d = now - 30 * 86400;
+  const nowMs = Date.now();
+  const now = Math.floor(nowMs / 1000);
+  const cutoff30d = now - RECENT_DAYS * 86400;
 
   const cards: RatingCard[] = [];
   for (const platform of ["chess.com", "lichess"] as const) {
@@ -124,7 +172,7 @@ export function buildDashboard(
         const value = bucket[bucket.length - 1].my_elo;
         const older = bucket.filter((g) => g.played_ts <= cutoff30d);
         const ref = older.length > 0 ? older[older.length - 1].my_elo : bucket[0].my_elo;
-        let spark = bucket.slice(-12).map((g) => g.my_elo);
+        let spark = bucket.slice(-SPARK_LENGTH).map((g) => g.my_elo);
         if (spark.length === 1) spark = [spark[0], spark[0]];
         cards.push({
           id: seriesId(platform, tc, variant),
@@ -166,9 +214,9 @@ export function buildDashboard(
     label: `${card.platform} · ${card.tc}`,
   }));
 
-  const today = new Date(Date.now());
+  const today = new Date(nowMs);
   today.setHours(0, 0, 0, 0);
-  const firstDay = new Date(today.getFullYear(), today.getMonth() - (HISTORY_MONTHS - 1), 1);
+  const firstDay = historyFirstDay(nowMs);
   const history = historyPoints(asc, historySeries, firstDay, today, opts.locale, 1).points;
 
   return {
@@ -179,7 +227,9 @@ export function buildDashboard(
     // Keep this definition identical to the native analysis queue. Imported
     // metadata-only games without SAN moves cannot be analyzed and therefore
     // must not appear as a phantom backlog on the dashboard.
-    unanalyzed: records.filter((g) => !g.analyzed && (g.has_moves ?? Boolean(g.moves?.trim()))).length,
+    unanalyzed:
+      library?.unanalyzed ??
+      records.filter((g) => !g.analyzed && (g.has_moves ?? Boolean(g.moves?.trim()))).length,
   };
 }
 

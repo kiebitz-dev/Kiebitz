@@ -310,8 +310,9 @@ pub async fn study_metrics(
 ) -> Result<Vec<MetricWindow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let db = app.state::<db::Db>();
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        metrics_from_conn(&conn, &windows)
+        db.read(|conn| {
+            metrics_from_conn(conn, &windows)
+        })
     })
     .await
     .map_err(|e| format!("Wirkungsmessung fehlgeschlagen: {e}"))?
