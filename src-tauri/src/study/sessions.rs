@@ -30,7 +30,7 @@ const MAX_SESSION_SECONDS: i64 = 6 * 3600;
 /// ist die bisher gezählte Gesamtzeit, nicht ein Zuwachs. Damit ist der Aufruf
 /// wiederholbar: ein doppelt gesendeter Herzschlag ändert nichts, ein
 /// verlorener kostet nur die Sekunden bis zum nächsten.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_study_time(
     db: State<db::Db>,
     session_key: String,

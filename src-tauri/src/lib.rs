@@ -35,6 +35,7 @@ mod systembars;
 mod tournament;
 mod updater;
 mod verdict;
+mod watchdog;
 mod widgets;
 
 use serde::Serialize;
@@ -51,7 +52,7 @@ struct AppInfo {
     distribution: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn app_info(app: tauri::AppHandle) -> AppInfo {
     AppInfo {
         // Version aus tauri.conf.json (das Feld, das beim Release erhöht wird),
@@ -143,13 +144,13 @@ pub(crate) fn resolve_bundled_engine(app: &tauri::AppHandle) -> Option<PathBuf> 
     None
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn engine_info(app: tauri::AppHandle) -> EngineInfo {
     describe_engine(resolve_engine(&app))
 }
 
 /// Die mitgelieferte Engine · für ihre feste Zeile in „Engines und Turnier".
-#[tauri::command]
+#[tauri::command(async)]
 fn bundled_engine_info(app: tauri::AppHandle) -> EngineInfo {
     describe_engine(resolve_bundled_engine(&app))
 }
@@ -183,25 +184,25 @@ fn describe_engine(path: Option<PathBuf>) -> EngineInfo {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_games_for_export(db: tauri::State<db::Db>) -> Result<Vec<db::GameRecord>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::list_games(&conn)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_game_summaries(db: tauri::State<db::Db>) -> Result<Vec<db::GameSummary>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::list_game_summaries(&conn)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn game_detail(db: tauri::State<db::Db>, id: i64) -> Result<db::GameRecord, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::get_game(&conn, id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_games_page(
     db: tauri::State<db::Db>,
     request: db::GamePageRequest,
@@ -210,7 +211,7 @@ fn list_games_page(
     db::list_games_page(&conn, &request)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn upsert_games(
     db: tauri::State<db::Db>,
     games: Vec<db::GameRecord>,
@@ -219,13 +220,13 @@ fn upsert_games(
     db::upsert_games(&mut conn, &games)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_game_note(db: tauri::State<db::Db>, id: i64, note: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::set_note(&conn, id, &note)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_game_tags(
     db: tauri::State<db::Db>,
     id: i64,
@@ -235,13 +236,13 @@ fn set_game_tags(
     db::set_tags(&conn, id, &tags)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_game(db: tauri::State<db::Db>, id: i64) -> Result<bool, String> {
     let mut conn = db.0.lock().map_err(|e| e.to_string())?;
     db::delete_game(&mut conn, id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_pgn_file(path: String) -> Result<String, String> {
     let path = std::path::PathBuf::from(path.trim());
     if path.as_os_str().is_empty() {
@@ -290,7 +291,7 @@ fn foreign_as_pgn(path: &std::path::Path) -> Result<String, String> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn write_pgn_file(path: String, contents: String) -> Result<usize, String> {
     use std::io::Write;
     let path = std::path::PathBuf::from(path.trim());
@@ -313,7 +314,7 @@ fn write_pgn_file(path: String, contents: String) -> Result<usize, String> {
     Ok(contents.len())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn db_stats(db: tauri::State<db::Db>) -> Result<db::DbStats, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::stats(&conn)
@@ -331,13 +332,13 @@ fn db_stats(db: tauri::State<db::Db>) -> Result<db::DbStats, String> {
 /// Deshalb liegen solche Merker in der `meta`-Tabelle der kiebitz.db. Sie ist
 /// gerätelokal und reist bewusst nicht im Sync mit: Ob der Bericht auf dem
 /// Handy schon gelesen wurde, sagt über den Desktop nichts aus.
-#[tauri::command]
+#[tauri::command(async)]
 fn ui_flag_get(db: tauri::State<db::Db>, key: String) -> Result<Option<String>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     Ok(db::meta_get(&conn, &ui_flag_key(&key)))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn ui_flag_set(db: tauri::State<db::Db>, key: String, value: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     db::meta_set(&conn, &ui_flag_key(&key), &value)
@@ -580,6 +581,9 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             diag::set_log_file(data_dir.join("kiebitz.log"));
+            // Gleich nach dem Logbuch · friert das Fenster ein, steht in der
+            // Datei, ob der Hauptthread oder der WebKit-Prozess hängt.
+            watchdog::spawn(app.handle());
             diag::record(
                 "info",
                 "app",
@@ -698,6 +702,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            watchdog::ui_heartbeat,
             ads::set_ad_banner,
             ads::show_ad_privacy_options,
             review::request_play_review,

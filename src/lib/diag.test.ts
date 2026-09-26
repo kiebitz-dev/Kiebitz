@@ -7,6 +7,7 @@ import {
   installCrashReporter,
   logEvent,
   sendFeedback,
+  startHeartbeat,
   type FeedbackDraft,
 } from "./diag";
 
@@ -149,5 +150,38 @@ describe("logging", () => {
     invokeMock.mockClear();
     window.dispatchEvent(new ErrorEvent("error", { message: "danach" }));
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("startHeartbeat", () => {
+  it("pocht nur, solange ein Wachhund zuhört", async () => {
+    vi.useFakeTimers();
+    try {
+      invokeMock.mockResolvedValue(true);
+      const stop = startHeartbeat(1_000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(invokeMock).toHaveBeenCalledWith("ui_heartbeat", { visible: true });
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(invokeMock).toHaveBeenCalledTimes(4);
+
+      stop();
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(invokeMock).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hört nach dem ersten Schlag auf, wenn niemand zuhört (Windows, Android)", async () => {
+    vi.useFakeTimers();
+    try {
+      invokeMock.mockResolvedValue(false);
+      const stop = startHeartbeat(1_000);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

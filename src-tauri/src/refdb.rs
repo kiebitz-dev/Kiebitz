@@ -1419,7 +1419,7 @@ pub fn refdb_precheck(app: tauri::AppHandle, path: String) -> Result<Option<RefS
         .ok())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn refdb_import(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let state = app.state::<RefDbState>();
     if state.importing.swap(true, Ordering::SeqCst) {
@@ -1661,7 +1661,7 @@ fn shrink_source(
     Ok((removed, false))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn refdb_delete_source(app: tauri::AppHandle, id: i64) -> Result<(), String> {
     let state = app.state::<RefDbState>();
     if state.importing.swap(true, Ordering::SeqCst) {
@@ -1694,7 +1694,7 @@ pub fn refdb_delete_source(app: tauri::AppHandle, id: i64) -> Result<(), String>
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn refdb_cancel_import(app: tauri::AppHandle) -> Result<(), String> {
     app.state::<RefDbState>()
         .cancel
@@ -1704,7 +1704,7 @@ pub fn refdb_cancel_import(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Löscht die Referenzdatenbank vollständig · sie ist eine eigene Datei, die
 /// eigenen Partien können davon gar nicht betroffen sein.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn refdb_clear(app: tauri::AppHandle) -> Result<(), String> {
     if app.state::<RefDbState>().importing.load(Ordering::SeqCst) {
         return Err("Während eines laufenden Imports nicht möglich.".into());

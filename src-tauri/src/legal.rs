@@ -86,7 +86,7 @@ fn resolve(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {
     locate(app.path().resource_dir().ok().as_deref(), relative)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn legal_documents(app: tauri::AppHandle) -> Vec<LegalDoc> {
     #[cfg(target_os = "android")]
     let _ = app;
@@ -111,7 +111,7 @@ pub fn legal_documents(app: tauri::AppHandle) -> Vec<LegalDoc> {
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn legal_document(app: tauri::AppHandle, id: String) -> Result<String, String> {
     let (_, _, relative) = DOCS
         .iter()

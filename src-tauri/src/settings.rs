@@ -530,7 +530,7 @@ pub(crate) fn save(app: &tauri::AppHandle, s: &Settings) -> Result<(), String> {
     std::fs::write(&path, json).map_err(|e| format!("Einstellungen nicht speicherbar: {e}"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_settings(state: tauri::State<SettingsState>) -> Result<Settings, String> {
     Ok(state.0.lock().map_err(|e| e.to_string())?.clone())
 }
@@ -684,7 +684,7 @@ fn switch_to(app: &tauri::AppHandle, path: PathBuf) -> Result<DbInfo, String> {
 
 /// Verschiebt die Datenbank: konsistente Kopie per VACUUM INTO, dann Umschalten.
 /// Die alte Datei bleibt als Sicherung liegen.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_database(app: tauri::AppHandle, target: String) -> Result<DbInfo, String> {
     ensure_workers_idle(&app)?;
     let target = PathBuf::from(target.trim());
@@ -713,7 +713,7 @@ pub fn move_database(app: tauri::AppHandle, target: String) -> Result<DbInfo, St
 
 /// Nutzt eine Datenbank an einem anderen Ort (z. B. im Nextcloud-Ordner eines
 /// zweiten Geräts). Existiert die Datei nicht, wird dort eine neue angelegt.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn use_database(app: tauri::AppHandle, path: String) -> Result<DbInfo, String> {
     ensure_workers_idle(&app)?;
     let path = PathBuf::from(path.trim());
@@ -751,7 +751,7 @@ fn backup_to(source: &Connection, target: &std::path::Path) -> Result<(), String
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn backup_database(app: tauri::AppHandle, target: String) -> Result<String, String> {
     ensure_workers_idle(&app)?;
     let target = PathBuf::from(target.trim());
@@ -794,7 +794,7 @@ fn restore_from(source_path: &std::path::Path, destination: &mut Connection) -> 
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_database(app: tauri::AppHandle, source: String) -> Result<DbInfo, String> {
     ensure_workers_idle(&app)?;
     let source_path = PathBuf::from(source.trim());
@@ -823,7 +823,7 @@ pub fn restore_database(app: tauri::AppHandle, source: String) -> Result<DbInfo,
 /// Einstellungen verwerfen, Hilfsdateien löschen. Die Datenbankdatei selbst
 /// bleibt bestehen (der Connection-Handle wird weiterverwendet), aber sie ist
 /// danach leer und frisch migriert.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn factory_reset(app: tauri::AppHandle) -> Result<(), String> {
     ensure_workers_idle(&app)?;
     {

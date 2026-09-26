@@ -259,7 +259,7 @@ fn index_game_positions(
 }
 
 /// Indiziert alle Partien, die noch nicht im Positionsindex stehen.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn index_positions(db: State<db::Db>) -> Result<usize, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let missing: Vec<(i64, String, String)> = {
@@ -319,7 +319,7 @@ struct AllDone {
 
 /// Startet die Hintergrund-Analyse. `game_ids` analysiert gezielt (auch neu),
 /// sonst werden unanalysierte Partien abgearbeitet (neueste zuerst, `limit`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_analysis(
     app: tauri::AppHandle,
     state: State<AnalysisState>,
@@ -365,7 +365,7 @@ pub fn start_analysis(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_analysis(state: State<AnalysisState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }
@@ -900,7 +900,7 @@ pub struct MoveEvalRow {
     pub signs: serde_json::Value,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn game_analysis(db: State<db::Db>, game_id: i64) -> Result<Vec<MoveEvalRow>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     // Die Varianten liegen in UCI, die Oberfläche zeigt Züge. Übersetzt wird
@@ -1326,7 +1326,7 @@ pub struct PhaseErrors {
     pub blunder: i64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn error_stats(db: State<db::Db>) -> Result<Vec<PhaseErrors>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
@@ -1397,7 +1397,7 @@ pub struct PositionSearch {
 
 type PositionRow = (i64, u32, String, String, String, String, String, String);
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_position(db: State<db::Db>, fen: String) -> Result<PositionSearch, String> {
     let key = chess::normalize_fen(&fen)?;
     let conn = db.0.lock().map_err(|e| e.to_string())?;

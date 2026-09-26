@@ -276,7 +276,7 @@ struct ImportDone {
 
 /// Importiert den Lichess-Puzzle-Dump. Mit `path` aus einer lokalen Datei
 /// (.csv oder .csv.zst), ohne `path` als Direkt-Download (~250 MB).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_puzzles(
     app: tauri::AppHandle,
     state: State<PuzzleImportState>,
@@ -815,7 +815,7 @@ pub struct AttemptResult {
 
 /// Verbucht einen Versuch (gelöst/gescheitert am ersten Anlauf) und
 /// aktualisiert das persönliche Rating nach Elo.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn record_attempt(
     db: State<db::Db>,
     puzzle_id: String,

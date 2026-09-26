@@ -744,6 +744,33 @@ and, on a hybrid-graphics machine, running it on the integrated GPU
 (`__GLX_VENDOR_LIBRARY_NAME=mesa`). Where neither helps, the `.deb`/`.rpm`
 builds use the system's own WebKitGTK and sidestep the mismatch entirely.
 
+### The AppImage that opens and then freezes
+
+With the libraries fixed, 1.6.3 got as far as the dashboard on CachyOS and then
+froze completely (chart never loaded, no clicks). Two causes look alike from
+outside and are handled separately since:
+
+- **Main thread.** Tauri runs every command without `async` on the main
+  thread, and on Linux that thread also drives GTK, serves the `tauri://`
+  chunks and answers IPC. One slow command (SQLite lock, D-Bus, file) froze the
+  whole window. All commands are now `#[tauri::command(async)]` or `async fn`;
+  only `notify_now` stays on the main thread on Windows (WinRT toasts).
+- **WebKit process.** With the DMA-BUF renderer off, WebKitGTK paints much in
+  software. The drifting mask of `.chess-backdrop` and every `backdrop-filter`
+  repaint the full window per frame. `main.tsx` marks WebKitGTK with
+  `html[data-webkitgtk]`, and `index.css` stops both there.
+
+`src-tauri/src/watchdog.rs` tells the two apart on Linux and writes to
+`~/.local/share/de.torim.kiebitz/kiebitz.log` even while the window is frozen:
+`Hauptthread antwortet seit 5 s nicht` means a blocked main thread,
+`Oberfläche meldet sich seit … nicht` a stuck WebKit process. For a user
+report, the log plus a backtrace of the hung process say where exactly:
+
+```bash
+./Kiebitz_*.AppImage 2>&1 | tee kiebitz-start.txt
+gdb -p "$(pgrep -f -n kiebitz)" -batch -ex "thread apply all bt" > kiebitz-bt.txt
+```
+
 ## Auto-update
 
 The updater plugin (`tauri-plugin-updater`) is wired up for desktop. Behavior in

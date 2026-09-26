@@ -149,12 +149,12 @@ pub fn install() {
     }));
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn log_event(level: String, source: String, message: String) {
     record(&level, &source, &message);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diag_logs(limit: Option<usize>) -> Vec<LogEntry> {
     let take = limit.unwrap_or(BUFFER_LINES).min(BUFFER_LINES);
     let Ok(buffer) = BUFFER.lock() else {
@@ -167,7 +167,7 @@ pub fn diag_logs(limit: Option<usize>) -> Vec<LogEntry> {
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diag_clear() {
     if let Ok(mut buffer) = BUFFER.lock() {
         buffer.clear();
@@ -181,7 +181,7 @@ pub fn diag_clear() {
     record("info", "app", "Logbuch geleert");
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diag_log_path() -> String {
     LOG_FILE
         .lock()
@@ -194,7 +194,7 @@ pub fn diag_log_path() -> String {
 /// und nichts, was den Nutzer identifiziert. Kontonamen, Partien, Notizen und
 /// der Sync-Code bleiben draußen; von den Pfaden interessiert nur, ob der
 /// Standardort benutzt wird.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diag_report(app: tauri::AppHandle, db: tauri::State<crate::db::Db>) -> String {
     let mut out = String::new();
     let package = app.package_info();
@@ -280,7 +280,7 @@ pub fn diag_report(app: tauri::AppHandle, db: tauri::State<crate::db::Db>) -> St
 }
 
 /// Schreibt einen Bericht in eine Datei · für "Bericht speichern" im UI.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn diag_save_report(path: String, contents: String) -> Result<String, String> {
     let path = PathBuf::from(path.trim());
     if path.as_os_str().is_empty() {

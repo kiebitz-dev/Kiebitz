@@ -486,7 +486,8 @@ pub fn show(_app_id: &str, _title: &str, _body: &str) -> Result<(), String> {
 }
 
 /// Sofortige Benachrichtigung aus dem Frontend (App läuft).
-#[tauri::command]
+#[cfg_attr(windows, tauri::command)]
+#[cfg_attr(not(windows), tauri::command(async))]
 pub fn notify_now(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -695,7 +696,7 @@ const SCHEDULE_RECHECK_SECS: i64 = 7 * 86_400;
 
 /// Bringt die Betriebssystem-Planung mit den Einstellungen in Einklang.
 /// Rückgabe: Name der Aufgabe (leer = keine Planung nötig/möglich).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sync_reminder_schedule(app: tauri::AppHandle) -> Result<String, String> {
     use tauri::Manager;
     let settings = app
@@ -763,7 +764,7 @@ pub struct Snapshot {
 }
 
 /// Hinterlegt den zuletzt bekannten Stand für den Hintergrundlauf.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_reminder_snapshot(
     app: tauri::AppHandle,
     title: String,

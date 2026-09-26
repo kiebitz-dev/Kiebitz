@@ -1,4 +1,4 @@
-#[tauri::command]
+#[tauri::command(async)]
 pub fn study_calendar(
     db: State<db::Db>,
     start_day: String,
@@ -8,7 +8,7 @@ pub fn study_calendar(
     calendar_from_conn(&conn, &start_day, &end_day, now_ts())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_study_template(
     db: State<db::Db>,
     template: StudyTemplateInput,
@@ -68,7 +68,7 @@ pub fn save_study_template(
 /// Die fünf Standardeinheiten bleiben: an ihnen hängt der Wochenvorschlag, und
 /// ein Bereich ohne Einheit fiele stillschweigend aus der Planung. Wer sie
 /// nicht mag, benennt sie um.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_study_template(db: State<db::Db>, template_id: i64) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let builtin: String = conn
@@ -171,7 +171,7 @@ fn insert_units(
     Ok(days.len())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn schedule_study_unit(
     db: State<db::Db>,
     template_id: i64,
@@ -221,7 +221,7 @@ pub struct PlannedUnitInput {
 /// Termine weg (`source = 'plan'`) und legt sie neu an. Von Hand geplante
 /// Einheiten und alles bereits Erledigte bleiben unangetastet — sonst würde ein
 /// zweiter Vorschlag die Woche entweder verdoppeln oder überschreiben.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn apply_week_plan(
     db: State<db::Db>,
     from_day: String,
@@ -271,7 +271,7 @@ fn new_series_key(conn: &Connection) -> Result<String, String> {
 /// stehen und bekommt das Raster, die weiteren Termine kommen dazu. Gehört er
 /// schon zu einer Serie, wird deren Zukunft ab diesem Tag neu gesetzt · so
 /// bleibt Abgehaktes in der Vergangenheit unberührt.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn repeat_study_unit(
     db: State<db::Db>,
     event_id: i64,
@@ -330,7 +330,7 @@ pub fn repeat_study_unit(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_study_unit(
     db: State<db::Db>,
     event_id: i64,
@@ -354,7 +354,7 @@ pub fn move_study_unit(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn complete_study_unit(
     db: State<db::Db>,
     event_id: i64,
@@ -379,7 +379,7 @@ pub fn complete_study_unit(
 /// Löscht eine geplante Einheit. `scope = "series"` löscht stattdessen diesen
 /// und alle folgenden Termine derselben Serie · vergangene Termine bleiben, weil
 /// dort schon abgehakt sein kann, was passiert ist.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_study_unit(
     db: State<db::Db>,
     event_id: i64,
@@ -412,7 +412,7 @@ pub fn delete_study_unit(
     .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn study_data(app: tauri::AppHandle, db: State<db::Db>) -> Result<StudyData, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let now = now_ts();

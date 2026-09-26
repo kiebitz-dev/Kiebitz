@@ -76,7 +76,7 @@ pub struct DrillStat {
 }
 
 /// Verbucht einen abgeschlossenen Versuch (Erfolg oder Fehlschlag).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn endgame_record(
     db: tauri::State<db::Db>,
     drill_id: String,
@@ -107,7 +107,7 @@ fn record_attempt(
 }
 
 /// Fortschritt je Drill (Versuche, Erfolge, letzter Erfolg).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn endgame_stats(db: tauri::State<db::Db>) -> Result<Vec<DrillStat>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     stats(&conn)

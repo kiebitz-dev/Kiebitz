@@ -35,7 +35,7 @@ import { syncInfo } from "./lib/sync";
 import { configureAutoSync, useSyncStatus } from "./lib/syncManager";
 import { setBoardSoundEnabled, setBoardSoundVolume } from "./lib/sound";
 import { setBoardSignsEnabled } from "./lib/boardSigns";
-import { installCrashReporter, logEvent } from "./lib/diag";
+import { installCrashReporter, logEvent, startHeartbeat } from "./lib/diag";
 import { onDeviceShake } from "./lib/shake";
 import {
   checkUpdate,
@@ -271,7 +271,12 @@ export default function App() {
   // die Datenbasis für einen Absturzbericht, den niemand abtippen muss.
   useEffect(() => {
     if (backend.mode !== "desktop") return;
-    return installCrashReporter();
+    const uninstall = installCrashReporter();
+    const stopHeartbeat = startHeartbeat();
+    return () => {
+      uninstall();
+      stopHeartbeat();
+    };
   }, [backend.mode]);
 
   // Ersteinrichtung: nur beim allerersten Start, danach nie wieder.

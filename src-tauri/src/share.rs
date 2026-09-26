@@ -112,7 +112,7 @@ fn from_base64(text: &str) -> Result<Vec<u8>, String> {
 /// Bewusst dieselbe Vorsicht wie beim PGN-Export: kein Überschreiben einer
 /// vorhandenen Datei, und der Zielordner wird angelegt, falls der Dialog auf
 /// einen frisch benannten Pfad zeigt.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_share_image(path: String, image: String) -> Result<usize, String> {
     use std::io::Write;
     let bytes = from_base64(&image)?;

@@ -149,7 +149,7 @@ pub(crate) fn load_nodes(conn: &Connection) -> Result<Vec<RepNodeOut>, String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_list(db: State<db::Db>) -> Result<Vec<RepNodeOut>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     load_nodes(&conn)
@@ -160,7 +160,7 @@ pub fn rep_list(db: State<db::Db>) -> Result<Vec<RepNodeOut>, String> {
 /// `node_ids` ist die vollständige Liste der Linien-Endpunkte in ihrer neuen
 /// Reihenfolge; jeder bekommt seinen Platz als 1-basierte Zahl. Später
 /// angelegte Linien behalten die 0 und hängen sich damit hinten an.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_reorder(db: State<db::Db>, side: String, node_ids: Vec<i64>) -> Result<(), String> {
     let mut conn = db.0.lock().map_err(|e| e.to_string())?;
     reorder_nodes(&mut conn, &side, &node_ids, now_ts())
@@ -194,7 +194,7 @@ fn reorder_nodes(
 }
 
 /// Notiz einer Stellung setzen (leerer Text löscht sie).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_set_note(db: State<db::Db>, node_id: i64, note: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let changed = conn
@@ -215,7 +215,7 @@ pub fn rep_set_note(db: State<db::Db>, node_id: i64, note: String) -> Result<(),
 /// den *neuen* Endpunkt, der alte trüge seinen Namen sonst weiter und stünde
 /// als zweite, gleichnamige Zeile in der Liste. Ein leerer Name macht aus ihm
 /// wieder einen gewöhnlichen Zwischenzug.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_set_name(db: State<db::Db>, node_id: i64, name: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let changed = conn
@@ -247,7 +247,7 @@ fn position_after(sans: &[String]) -> Result<chess::Position, String> {
 /// Das Repertoire ist ein Baum, Schach aber nicht: dieselbe Stellung über eine
 /// andere Zugfolge ist ein zweiter Knoten mit eigenem Lernstand. Wer das beim
 /// Anlegen sieht, kann sich für eine der beiden Fassungen entscheiden.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_lookup(
     db: State<db::Db>,
     side: String,
@@ -263,7 +263,7 @@ pub fn rep_lookup(
 
 /// Fügt eine Zugfolge ab der Grundstellung ein; vorhandene Knoten werden
 /// wiederverwendet. `name` benennt den letzten Knoten der Linie.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_add_line(
     db: State<db::Db>,
     side: String,
@@ -344,7 +344,7 @@ pub struct ImportResult {
 }
 
 /// Liest ein PGN mit Varianten in den Baum einer Seite ein.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_import_pgn(
     db: State<db::Db>,
     side: String,
@@ -380,7 +380,7 @@ pub fn rep_import_pgn(
 
 /// Wie `rep_import_pgn`, liest den Text aber aus einer Datei · das Frontend
 /// bekommt vom Dateidialog nur einen Pfad und kann selbst nichts lesen.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_import_pgn_file(
     db: State<db::Db>,
     side: String,
@@ -393,7 +393,7 @@ pub fn rep_import_pgn_file(
 }
 
 /// Schreibt das PGN einer Seite in eine Datei und meldet den Pfad zurück.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_export_pgn_file(
     db: State<db::Db>,
     side: String,
@@ -435,7 +435,7 @@ fn rep_export_pgn(db: State<db::Db>, side: String) -> Result<String, String> {
 }
 
 /// Löscht einen Knoten samt aller Untervarianten.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_delete(db: State<db::Db>, id: i64) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     // Pfad des Knotens für den Sync-Tombstone bestimmen (Wurzel → Knoten),
@@ -539,7 +539,7 @@ fn line_name(nodes: &HashMap<i64, RepNodeOut>, id: i64) -> String {
 /// Die Grenzen sind das Gegenstück zum Import: ein frisch eingelesenes Buch
 /// bringt hunderte neue Züge mit, und ein Stapel, den man nicht schaffen kann,
 /// wird gar nicht erst angefangen. `due_limit`/`new_limit` <= 0 heißt "alles".
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_due(
     db: State<db::Db>,
     due_limit: Option<i64>,
@@ -637,7 +637,7 @@ pub(crate) fn node_path(conn: &Connection, node_id: i64) -> Option<(String, Stri
 }
 
 /// Bewertet eine Trainingsantwort: 1 = falsch, 2 = schwer, 3 = gut, 4 = leicht.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_review(db: State<db::Db>, node_id: i64, grade: u8) -> Result<ReviewResult, String> {
     if !(1..=4).contains(&grade) {
         return Err("Grade muss 1–4 sein".into());
@@ -823,7 +823,7 @@ fn score_of(result: &str) -> f64 {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_stats(
     db: State<db::Db>,
     plies: Option<i64>,
@@ -886,7 +886,7 @@ pub fn rep_stats(
 /// Lücken im Buch aus den eigenen Partien: Stellungen, die das Buch kennt, in
 /// denen aber ein Zug fiel, den es nicht kennt · einmal als eigener Ausrutscher
 /// und einmal als unbeantwortete Gegnerantwort.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_gaps(
     db: State<db::Db>,
     plies: Option<i64>,
@@ -963,7 +963,7 @@ pub struct NodeGameStats {
 
 /// Statistik zu einem Repertoire-Knoten: wie oft wurde die Stellung erreicht,
 /// wie lief es, und wo wurde vom Buch abgewichen.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rep_node_games(db: State<db::Db>, node_id: i64) -> Result<NodeGameStats, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let (fen_key, side): (String, String) = conn

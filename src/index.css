@@ -208,6 +208,16 @@ html[data-store-capture="true"] .chess-backdrop {
   animation: none;
 }
 
+/* WebKitGTK · siehe main.tsx. Kein Licht, das wandert, und kein Weichzeichner
+   hinter Dialogen: Beides zeichnet dort das ganze Fenster je Bild neu. */
+html[data-webkitgtk="true"] .chess-backdrop {
+  animation: none;
+}
+html[data-webkitgtk="true"] * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-scroll) transparent;

@@ -543,7 +543,7 @@ fn run(app: tauri::AppHandle, config: TournamentConfig) {
     });
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tournament_start(app: tauri::AppHandle, mut config: TournamentConfig) -> Result<(), String> {
     // Ein leerer Pfad ist die mitgelieferte Engine · sie steht in der Liste
     // der Einstellungen als feste erste Zeile und hat keinen eigenen Eintrag.
@@ -573,7 +573,7 @@ pub fn tournament_start(app: tauri::AppHandle, mut config: TournamentConfig) -> 
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tournament_status(app: tauri::AppHandle) -> TournamentStatus {
     app.state::<TournamentState>()
         .status
@@ -582,7 +582,7 @@ pub fn tournament_status(app: tauri::AppHandle) -> TournamentStatus {
         .unwrap_or_default()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tournament_cancel(app: tauri::AppHandle) {
     app.state::<TournamentState>()
         .cancel
@@ -590,7 +590,7 @@ pub fn tournament_cancel(app: tauri::AppHandle) {
 }
 
 /// Die gespielten Partien als PGN · für „Speichern unter".
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tournament_pgn(app: tauri::AppHandle) -> String {
     let status = tournament_status(app);
     as_pgn(&status)

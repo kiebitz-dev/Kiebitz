@@ -47,7 +47,7 @@ fn collect_sync_info(app: &tauri::AppHandle) -> Result<SyncInfo, String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sync_server_start(app: tauri::AppHandle) -> Result<SyncInfo, String> {
     start_server(&app)?;
     collect_sync_info(&app)
@@ -105,7 +105,7 @@ fn qr_svg(data: &str) -> Result<String, String> {
 
 /// Desktop-Hub: Pairing-Infos inkl. QR-SVG. Mobile ist Client · dort Stub.
 #[cfg(desktop)]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sync_pair(app: tauri::AppHandle) -> Result<PairInfo, String> {
     let code = ensure_code(&app)?;
     let fingerprint = tls_material(&app)?.fingerprint;
@@ -125,7 +125,7 @@ pub fn sync_pair(app: tauri::AppHandle) -> Result<PairInfo, String> {
 
 /// Mobile-Stub: das Handy zeigt keinen QR (es scannt ihn nur).
 #[cfg(not(desktop))]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sync_pair(_app: tauri::AppHandle) -> Result<PairInfo, String> {
     Err("QR-Pairing wird nur auf dem Desktop-Hub angezeigt.".into())
 }
