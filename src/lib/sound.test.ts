@@ -84,7 +84,9 @@ it("plays tauri:// recordings through blob URLs", async () => {
   }
   let blobs = 0;
   TauriURL.createObjectURL = () => `blob:tauri://localhost/${++blobs}`;
-  const fetchMock = vi.fn(async () => new Response(new Blob(["RIFF"])));
+  // Kein echtes Response · Node-Response und jsdom-Blob vertragen sich nicht
+  // auf jeder Plattform (unter Linux in CI blieb die Antwort aus).
+  const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => new Blob(["RIFF"]) }));
   const sources: string[] = [];
   class FakeAudio {
     preload = "";
