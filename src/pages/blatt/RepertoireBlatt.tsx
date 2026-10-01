@@ -45,6 +45,7 @@
  */
 import {
   Fragment,
+  useCallback,
   useRef,
   useState,
   type KeyboardEvent,
@@ -63,6 +64,8 @@ import {
   Ergebniskasten,
   Feldname,
   Formularkopf,
+  Fussnote,
+  Kennzahlen,
   Kolumnentitel,
   Rubrik,
   Verzeichnisteil,
@@ -75,6 +78,8 @@ import { useI18n } from "../../lib/i18n";
 import { de, deInt } from "../../lib/format";
 import { notationLine, translateSan } from "../../lib/notation";
 import type { RepGap, SideCoverage } from "../../lib/repertoire";
+import { KartenTafeln, useAufdecken } from "../../components/RepertoireKarte";
+import { linieZu, SITZT_STABILITAET, type Karte, type Lage } from "../../lib/repertoireKarte";
 
 export interface BuchZeile {
   key: string;
@@ -184,6 +189,12 @@ export interface RepertoireBlattProps {
    * aufschlägt. Fehlt, wo sich zum Namen keine Familie mit Text findet.
    */
   idee?: { familie: string; text: string; offen: boolean; onUmschalten: () => void };
+  /**
+   * Das Repertoire als Landkarte · dieselbe Rechnung wie drüben
+   * (lib/repertoireKarte.ts), hier als Tafel gestochen. `namen` sind die
+   * Namen der Varianten, wie das Verzeichnis sie führt.
+   */
+  karte?: { daten: Karte; namen: Record<string, string> };
 }
 
 /** Was gerade am Zeiger hängt · Teil, Herkunft, Ziel und der Weg dorthin. */
@@ -232,6 +243,7 @@ export default function RepertoireBlatt({
   onZugSpielen,
   buch: buchAlsPgn,
   idee,
+  karte,
 }: RepertoireBlattProps) {
   const { locale, t } = useI18n();
   // Tippen–tippen liegt im selben Haken wie am Brett der gewöhnlichen Fassung
@@ -774,12 +786,29 @@ export default function RepertoireBlatt({
     </>
   );
 
+  /**
+   * Die Karte des Buches · eine Tafel quer unter den Spalten, wie die
+   * ausklappbare Karte hinten in einem Reiseführer. Auf dem Telefon steht sie
+   * vor dem Verzeichnis: Sie ist der Überblick, das Verzeichnis das
+   * Nachschlagen.
+   */
+  const tafel = karte && karte.daten.zaehlung.gesamt > 0 && (
+    <Kartentafel
+      karte={karte.daten}
+      namen={karte.namen}
+      aktiv={aktiv}
+      mobile={mobile}
+      onWaehlen={onWaehlen}
+    />
+  );
+
   if (mobile) {
     return (
       <div className="flex flex-col px-3.5 pb-6 pt-3">
         {kopf}
         <div className="mt-3.5">{diagrammBlock}</div>
         <div className="mt-4">{rechts}</div>
+        {tafel && <div className="mt-6">{tafel}</div>}
         <div className="mt-4">{buch}</div>
         {pgnBereich}
       </div>
@@ -813,7 +842,138 @@ export default function RepertoireBlatt({
         </div>
         {rechts}
       </div>
+      {tafel && <div className="mt-8">{tafel}</div>}
       {pgnBereich}
     </div>
+  );
+}
+
+/**
+ * Tafel I · das Repertoire als Karte, gestochen.
+ *
+ * Gesetzt wie eine Tafel im Atlas: Rubrik mit dem Stand in der Linie,
+ * darunter die Kennzahlen als Formularzeile, dann die Karte im doppelten
+ * Rahmen und die Bildunterschrift mit der Tafelnummer. Die Legende ist kein
+ * Kasten mit Farbfeldern, sondern eine Zeile mit den Zeichen, die auf der
+ * Karte stehen · und die Fußnote sagt, was „sitzt" heißt.
+ */
+function Kartentafel({
+  karte,
+  namen,
+  aktiv,
+  mobile,
+  onWaehlen,
+}: {
+  karte: Karte;
+  namen: Record<string, string>;
+  aktiv: string | null;
+  mobile: boolean;
+  onWaehlen: (key: string) => void;
+}) {
+  const { locale, t } = useI18n();
+  const { frisch, offen } = useAufdecken(karte);
+  const lageText = useCallback(
+    (lage: Lage) => t(lage === "klar" ? "rep.mapClear" : lage === "dunst" ? "rep.mapHaze" : "rep.mapFog"),
+    [t]
+  );
+  // Im Buch steht jeder Zug in der Sprache der Oberfläche · S statt N.
+  const zugText = useCallback(
+    (san: string, tiefe: number) =>
+      `${Math.ceil(tiefe / 2)}${tiefe % 2 === 1 ? "." : "…"}${translateSan(san, locale)}`,
+    [locale]
+  );
+  const { klar, dunst, nebel, gesamt } = karte.zaehlung;
+  const gewaehlt = linieZu(karte, aktiv);
+
+  /** Die Zeichen der Legende · dieselben Striche wie auf der Karte. */
+  const zeichen = (lage: Lage) => (
+    <svg aria-hidden width="26" height="10" viewBox="0 0 26 10" className="inline-block flex-none">
+      <line
+        x1="1"
+        y1="5"
+        x2="18"
+        y2="5"
+        style={{
+          stroke:
+            lage === "klar" ? "var(--color-ink)" : lage === "dunst" ? "var(--color-ink2)" : "var(--color-ink3)",
+        }}
+        strokeWidth={lage === "klar" ? 1.3 : 1}
+        strokeDasharray={lage === "klar" ? undefined : lage === "dunst" ? "1 2.4" : "3.5 3"}
+      />
+      <circle
+        cx="21"
+        cy="5"
+        r="2.5"
+        style={{
+          fill: lage === "klar" ? "var(--color-ink)" : "var(--color-bg)",
+          stroke:
+            lage === "klar" ? "var(--color-ink)" : lage === "dunst" ? "var(--color-ink2)" : "var(--color-ink3)",
+        }}
+        strokeWidth="0.9"
+      />
+    </svg>
+  );
+
+  return (
+    <section>
+      <Rubrik weg={t("rep.mapRevealed", { p: deInt(karte.anteil) })}>{t("blatt.mapTitle")}</Rubrik>
+      {/* Auf dem Telefon drei Spalten statt vier · der Anteil steht ohnehin
+          in der Rubrikzeile, und vier Spalten kürzten „Im Training" zu
+          „Im Traini…". */}
+      <Kennzahlen
+        zahlen={[
+          ...(mobile ? [] : [{ name: t("blatt.mapRevealed"), wert: `${deInt(karte.anteil)} %` }]),
+          { name: t("rep.mapClear"), wert: deInt(klar) },
+          { name: t("rep.mapHaze"), wert: deInt(dunst) },
+          { name: t("rep.mapFog"), wert: deInt(nebel) },
+        ]}
+      />
+      {frisch.size > 0 && (
+        <p className="buch mt-3 text-[13.5px] italic text-ink2">
+          {frisch.size === 1 ? t("rep.mapNew.one") : t("rep.mapNew.many", { n: deInt(frisch.size) })}
+        </p>
+      )}
+      <div className="mt-4">
+        <KartenTafeln
+          karte={karte}
+          blatt
+          zeilenHoehe={mobile ? 28 : 24}
+          aktiv={aktiv}
+          namen={namen}
+          zugText={zugText}
+          lageText={lageText}
+          terraIncognita={t("rep.mapTerra")}
+          teilTitel={(seite) => t(seite === "white" ? "common.asWhite" : "common.asBlack")}
+          teilZahl={(teil) =>
+            `${deInt(teil.linien.filter((linie) => linie.lage === "klar").length)} / ${deInt(teil.linien.length)}`
+          }
+          frisch={frisch}
+          offen={offen}
+          onWaehlen={onWaehlen}
+        />
+      </div>
+      <Bildunterschrift
+        nummer={t("blatt.mapPlate")}
+        gutter={0}
+        zeilen={[
+          t("blatt.mapCaption"),
+          gewaehlt && aktiv
+            ? `${namen[aktiv] ?? ""} · ${t("rep.mapSelected", {
+                s: deInt(gewaehlt.sitzend),
+                n: deInt(gewaehlt.eigene),
+              })}`
+            : t("rep.mapLines", { k: deInt(klar), n: deInt(gesamt) }),
+        ]}
+      />
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 border-t border-line pt-2.5 text-[12px] text-ink2">
+        {(["klar", "dunst", "nebel"] as const).map((lage) => (
+          <span key={lage} className="inline-flex items-center gap-2">
+            {zeichen(lage)}
+            <span className="buch italic">{lageText(lage)}</span>
+          </span>
+        ))}
+      </div>
+      <Fussnote>{t("rep.mapNote", { d: deInt(SITZT_STABILITAET) })}</Fussnote>
+    </section>
   );
 }

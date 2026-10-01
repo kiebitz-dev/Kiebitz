@@ -80,6 +80,8 @@ import { shareHistory } from "../lib/share/notation";
 import { isStoreCapture } from "../lib/storeCapture";
 import { batchDataChanges } from "../lib/changes";
 import { COVERAGE_PLIES, CoverageCard, GapsCard } from "./repertoire/RepertoireStats";
+import RepertoireKarteKarte from "../components/RepertoireKarte";
+import { repertoireKarte } from "../lib/repertoireKarte";
 
 export default function Repertoire() {
   const backend = useBackendInfo();
@@ -671,6 +673,26 @@ function LiveRepertoire() {
     setSelectedId(ply >= 0 ? (line.nodeIds?.[ply] ?? null) : null);
   }, []);
 
+  /**
+   * Das Repertoire als Landkarte · siehe lib/repertoireKarte.ts. Eine Rechnung
+   * für beide Fassungen; gerechnet wird, wenn sich das Buch ändert, nicht bei
+   * jedem Zeichnen der Seite.
+   */
+  const karte = useMemo(() => repertoireKarte(nodes, Math.floor(Date.now() / 1000)), [nodes]);
+  /** Die Namen der Varianten, wie die Liste sie führt · für Vorlesen und Auskunft. */
+  const kartenNamen = useMemo(
+    () => Object.fromEntries(variationLines.map((line) => [line.key, line.name])),
+    [variationLines]
+  );
+  /** Ein Ort auf der Karte schlägt seine Variante auf · wie eine Zeile der Liste. */
+  const waehleAufDerKarte = useCallback(
+    (key: string) => {
+      const line = variationLines.find((value) => value.key === key);
+      if (line) selectVariation(line, (line.nodeIds?.length ?? 0) - 1);
+    },
+    [selectVariation, variationLines]
+  );
+
   const selected = selectedId != null ? (byId.get(selectedId) ?? null) : null;
   const [sharing, setSharing] = useState<ShareSubject | null>(null);
   const baseSans = useMemo(() => pathSans(selectedId), [pathSans, selectedId]);
@@ -1128,6 +1150,16 @@ function LiveRepertoire() {
     </div>
   );
 
+  const kartenKarte = (
+    <RepertoireKarteKarte
+      karte={karte}
+      aktiv={selectedLineKey}
+      namen={kartenNamen}
+      compact={compact}
+      onWaehlen={waehleAufDerKarte}
+    />
+  );
+
   return (
     <div className="mx-auto max-w-[1560px] px-4 py-6 sm:px-6">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
@@ -1411,18 +1443,27 @@ function LiveRepertoire() {
               onUmschalten: () => setBookOpen((offen) => !offen),
               inhalt: <BookBody onDone={reload} onNotice={setNotice} />,
             }}
+            // Dieselbe Karte wie unter den Spalten drüben · als Tafel gestochen.
+            karte={{ daten: karte, namen: kartenNamen }}
           />
         </Suspense>
       ) : compact ? (
         // Auf dem Handy zuerst das Brett · der Variantenbaum ist eine lange
-        // Liste und schöbe sonst alles Wesentliche unter die Falz.
+        // Liste und schöbe sonst alles Wesentliche unter die Falz. Die Karte
+        // steht vor ihm: Sie ist der Überblick, die Liste das Nachschlagen.
         <div className="flex flex-col gap-4">
           {boardPane}
           {detailsPane}
+          {kartenKarte}
           {treePanel}
         </div>
       ) : (
-        <RepertoireGrid tree={treePanel} board={boardPane} details={detailsPane} />
+        <>
+          <RepertoireGrid tree={treePanel} board={boardPane} details={detailsPane} />
+          {/* Über die ganze Breite unter den drei Spalten · eine Karte will
+              man im Ganzen sehen, nicht in einer Spalte gestaucht. */}
+          <div className="mt-4">{kartenKarte}</div>
+        </>
       )}
 
       {sharing && <ShareDialog subject={sharing} onClose={() => setSharing(null)} />}

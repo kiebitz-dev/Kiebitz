@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Chess } from "chess.js";
 import {
   Check,
@@ -497,8 +506,26 @@ export default function RepertoireTrainer({
    * Kopf, Brett und Bedienung als benannte Bausteine · die Seite und das
    * Fokus-Brett zeigen dieselben. Das Brett bekommt je eine eigene Kennung,
    * weil react-chessboard seine Instanzen daran unterscheidet.
+   *
+   * `inFocus` sagt jedem Baustein, wo er steht, und im Fokus gilt eine Regel
+   * mehr: Keine Reihe darf ihre Höhe ändern, solange die Karte läuft. Das
+   * Fokus-Brett rechnet seine Größe aus dem Platz, den die Reihen darüber und
+   * darunter übrig lassen (siehe `useChrome` in components/FocusBoard.tsx) ·
+   * jede Reihe, die um eine Zeile wächst, macht das Brett im selben Augenblick
+   * kleiner, und es springt, während man darauf zieht. Genau so ist der
+   * Puzzle-Fokus früher gesprungen (siehe `actionRow` in pages/Puzzles.tsx),
+   * und der Trainer hatte gleich vier solcher Stellen:
+   *
+   *  · der Name der Variante, der auf dem Telefon je nach Karte umbrach,
+   *  · die Reihen der geschlagenen Figuren über und unter dem Brett, die erst
+   *    erschienen, wenn in der Linie zum ersten Mal geschlagen wurde,
+   *  · der Stellungsverlauf, dessen Beschriftung „Letzter Zug: 12…Sxe5" mit
+   *    jedem Zug länger wurde und die Tasten irgendwann in eine zweite Zeile
+   *    schob,
+   *  · und die Meldung unter dem Brett, die bei jeder Antwort zwischen Text,
+   *    Kasten und Kasten mit Knopf wechselte.
    */
-  const trainHead = (
+  const trainHead = (inFocus: boolean) => (
     <>
       {/* Der Name einer Variante ist lang · „Scandinavian Defense: Bronstein
           Variation" bricht auf dem Telefon in zwei Zeilen um. Der Zähler
@@ -507,8 +534,15 @@ export default function RepertoireTrainer({
           untereinander neben dem Merkmal standen. Er behält deshalb seine
           Breite, und beide Seiten stehen oben bündig · bei einzeiligem Namen
           sieht das aus wie vorher. */}
-      <div className="mb-3 flex items-start justify-between gap-3 text-[13px]">
-        <span className="min-w-0 font-medium">
+      {/* Im Fokus steht der Name schon in der Kopfzeile darüber · hier
+          bleibt er deshalb eine Zeile und kürzt, statt das Brett je nach
+          Karte um eine Zeile zu verkleinern. */}
+      <div
+        className={`flex justify-between gap-3 text-[13px] ${
+          inFocus ? "items-center" : "mb-3 items-start"
+        }`}
+      >
+        <span className={`min-w-0 font-medium ${inFocus ? "truncate" : ""}`}>
           {item.line || t("rep.fallbackLine")} ·{" "}
           {item.side === "white" ? t("common.white") : t("common.black")}
         </span>
@@ -528,7 +562,12 @@ export default function RepertoireTrainer({
           wirklich geschlagen, also steht es an der Seite, die es schlug. Ohne
           Namen bleibt es bei den Figuren allein; in einer Eröffnung ist meist
           nichts geschlagen, und dann entfällt die Zeile ganz. */}
-      <div className="mb-2 empty:hidden">
+      {/* Im Fokus hält die Reihe ihre Höhe, auch solange nichts geschlagen
+          ist · sonst wüchse sie beim ersten Schlagzug der Linie heraus. */}
+      <div
+        className={inFocus ? undefined : "mb-2 empty:hidden"}
+        style={inFocus ? { minHeight: 19 } : undefined}
+      >
         <CapturedPieces
           pieces={item.side === "white" ? captured.black : captured.white}
           color={item.side === "white" ? "white" : "black"}
@@ -538,7 +577,7 @@ export default function RepertoireTrainer({
     </>
   );
 
-  const trainBoard = (boardId: string) => (
+  const trainBoard = (boardId: string, inFocus = false) => (
     <>
       <div className="board-bleed">
         <Board
@@ -555,7 +594,10 @@ export default function RepertoireTrainer({
           mouseDrag
         />
       </div>
-      <div className="mt-2 empty:hidden">
+      <div
+        className={inFocus ? "mt-2" : "mt-2 empty:hidden"}
+        style={inFocus ? { minHeight: 19 } : undefined}
+      >
         <CapturedPieces
           pieces={item.side === "white" ? captured.white : captured.black}
           color={item.side === "white" ? "black" : "white"}
@@ -565,67 +607,128 @@ export default function RepertoireTrainer({
     </>
   );
 
-  /** Im Fokus fehlt der Griff zum Fokus · dort ist man schon. */
+  /**
+   * Eine Meldung und ihr Knopf · die Grundform aller drei Zustände unter dem
+   * Brett, dieselbe wie im Puzzle-Trainer (`actionShell` in pages/Puzzles.tsx).
+   *
+   * Nebeneinander, solange die Meldung dabei 10 rem behält, sonst rückt der
+   * Knopf darunter. Dort steht er über die ganze Breite und nicht klein an der
+   * rechten Kante: Das Verhältnis der Wachstumsfaktoren (999 zu 1) gibt auf
+   * der gemeinsamen Zeile praktisch allen freien Platz der Meldung und in der
+   * eigenen Zeile allen dem Knopf. Eine Grenze nach Schirmbreite bräuchte es
+   * dafür nicht · und sie träfe die Sprachen mit langen Meldungen falsch.
+   */
+  const meldung = (text: ReactNode, knopf?: ReactNode) => (
+    <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="min-w-0 grow-[999] basis-40">{text}</div>
+      {knopf && <div className="flex grow [&>button]:flex-1">{knopf}</div>}
+    </div>
+  );
+
+  /**
+   * Ein Zustand der Zeile unter dem Brett · sichtbar oder als Platzhalter.
+   *
+   * Alle drei liegen übereinander im selben Rasterfeld, und nur der geltende
+   * ist zu sehen · die Zeile ist damit so hoch wie ihr höchster Zustand und
+   * bleibt es, wenn die Antwort kommt. Gestreckt füllt jeder Kasten die ganze
+   * Höhe, statt mittig in einer leeren Fläche zu stehen. `invisible` hält den
+   * Platz und nimmt die verdeckten Knöpfe aus Tab-Folge und Vorlesen.
+   */
+  const zustand = (key: typeof state, inhalt: ReactNode) => (
+    <div
+      key={key}
+      data-trainer-row={key}
+      data-active={key === state ? "" : undefined}
+      className={`col-start-1 row-start-1 flex ${key === state ? "" : "invisible"}`}
+    >
+      {inhalt}
+    </div>
+  );
+
+  /**
+   * Stellungsverlauf und Meldung · im Fokus fehlt der Griff zum Fokus, dort
+   * ist man schon.
+   *
+   * Ob die Beschriftung neben den Tasten steht oder darüber, entscheidet die
+   * Breite der Reihe (`@container`) und nicht die Länge des letzten Zuges.
+   * Vorher brach die Reihe um, sobald „Letzter Zug: 12…Sxe5" nicht mehr
+   * daneben passte · mitten in der Linie, und im Fokus mit dem Brett.
+   */
   const trainControls = (inFocus: boolean) => (
     <>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-panel px-3 py-2">
-        <span className="text-[12.5px] text-ink2">{t("rep.lastMove", { move: previousMove })}</span>
-        <div className="flex items-center gap-1">
-          <Button onClick={() => setViewPly(0)} title={t("rep.firstPosition")} compact>
-            <ChevronFirst size={14} />
-          </Button>
-          <Button
-            onClick={() => setViewPly((value) => Math.max(0, value - 1))}
-            title={t("rep.previousPosition")}
-            compact
-          >
-            <ChevronLeft size={14} />
-          </Button>
-          <span className="min-w-[54px] text-center text-[11.5px] tabular-nums text-ink3">
-            {viewPly} / {lineSans.length}
+      <div className="@container mt-3 rounded-lg border border-line bg-panel px-3 py-2">
+        <div className="flex flex-col gap-2 @[26rem]:flex-row @[26rem]:items-center @[26rem]:justify-between">
+          <span className="min-w-0 truncate text-[12.5px] text-ink2">
+            {t("rep.lastMove", { move: previousMove })}
           </span>
-          <Button
-            onClick={() => setViewPly((value) => Math.min(lineSans.length, value + 1))}
-            title={t("rep.nextPosition")}
-            compact
-          >
-            <ChevronRight size={14} />
-          </Button>
-          <Button
-            onClick={() => setViewPly(lineSans.length)}
-            title={t("rep.promptPosition")}
-            compact
-          >
-            <ChevronLast size={14} />
-          </Button>
-          {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+          <div className="flex shrink-0 items-center justify-center gap-1">
+            <Button onClick={() => setViewPly(0)} title={t("rep.firstPosition")} compact>
+              <ChevronFirst size={14} />
+            </Button>
+            <Button
+              onClick={() => setViewPly((value) => Math.max(0, value - 1))}
+              title={t("rep.previousPosition")}
+              compact
+            >
+              <ChevronLeft size={14} />
+            </Button>
+            <span className="min-w-[54px] text-center text-[11.5px] tabular-nums text-ink3">
+              {viewPly} / {lineSans.length}
+            </span>
+            <Button
+              onClick={() => setViewPly((value) => Math.min(lineSans.length, value + 1))}
+              title={t("rep.nextPosition")}
+              compact
+            >
+              <ChevronRight size={14} />
+            </Button>
+            <Button
+              onClick={() => setViewPly(lineSans.length)}
+              title={t("rep.promptPosition")}
+              compact
+            >
+              <ChevronLast size={14} />
+            </Button>
+            {!inFocus && <FocusButton onClick={() => setFocused(true)} />}
+          </div>
         </div>
       </div>
-      <div className="mt-3 flex min-h-[52px] items-center">
-        {state === "correct" ? (
-          <div className="flex w-full items-center gap-2 rounded-lg border border-accent-dim bg-accent-soft px-4 py-2.5 text-[13.5px] font-medium text-accent">
-            <Check size={17} /> {t("rep.correct", { san: playedSan })}
-          </div>
-        ) : state === "wrong" ? (
-          <div className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-loss-dim bg-loss-soft px-4 py-2.5">
-            <span className="text-[13.5px] text-loss">
-              {t("rep.bookMoveIs", { san: expectedLabel })}
+      <div className="mt-3 grid min-h-[52px]">
+        {zustand(
+          "correct",
+          <div className="flex w-full items-center rounded-lg border border-accent-dim bg-accent-soft px-4 py-2.5">
+            <span className="flex items-center gap-2 text-[13.5px] font-medium text-accent">
+              <Check size={17} className="shrink-0" /> {t("rep.correct", { san: playedSan })}
             </span>
-            <Button onClick={revealAndNext} title={t("rep.revealShortcut")}>
-              {t("rep.showAndNext")}
-            </Button>
           </div>
-        ) : (
-          <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <span className="text-[13px] text-ink3">
-              {t("rep.whatToPlay", {
-                n: moveNo,
-                side: item.side === "white" ? t("common.white") : t("common.black"),
-              })}
-            </span>
-            <Button onClick={reveal} title={t("rep.revealShortcut")}>
-              <Lightbulb size={14} /> {t("rep.reveal")}
-            </Button>
+        )}
+        {zustand(
+          "wrong",
+          <div className="flex w-full items-center rounded-lg border border-loss-dim bg-loss-soft px-4 py-2.5">
+            {meldung(
+              <span className="text-[13.5px] text-loss">
+                {t("rep.bookMoveIs", { san: expectedLabel })}
+              </span>,
+              <Button onClick={revealAndNext} title={t("rep.revealShortcut")}>
+                {t("rep.showAndNext")}
+              </Button>
+            )}
+          </div>
+        )}
+        {zustand(
+          "ask",
+          <div className="flex w-full items-center rounded-lg border border-line bg-panel px-4 py-2.5">
+            {meldung(
+              <span className="text-[13px] text-ink3">
+                {t("rep.whatToPlay", {
+                  n: moveNo,
+                  side: item.side === "white" ? t("common.white") : t("common.black"),
+                })}
+              </span>,
+              <Button onClick={reveal} title={t("rep.revealShortcut")}>
+                <Lightbulb size={14} /> {t("rep.reveal")}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -796,7 +899,9 @@ export default function RepertoireTrainer({
               onSchliessen: () => setFocused(false),
               titel: t("rep.trainerTitle"),
               untertitel: item.line || t("rep.fallbackLine"),
-              brett: trainBoard("rep-train-focus"),
+              // Auch auf dem Bogen hält der Fokus die Reihen der geschlagenen
+              // Figuren stehen · siehe `trainHead`.
+              brett: trainBoard("rep-train-focus", true),
             },
           }}
         />
@@ -807,7 +912,7 @@ export default function RepertoireTrainer({
   return (
     <div className="grid grid-cols-1 gap-6 min-[1180px]:grid-cols-[minmax(0,var(--board-edge))_minmax(0,1fr)]">
       <div className="max-w-[var(--board-edge)]">
-        {trainHead}
+        {trainHead(false)}
         {trainBoard("rep-train")}
         {trainControls(false)}
 
@@ -816,10 +921,10 @@ export default function RepertoireTrainer({
           onClose={() => setFocused(false)}
           title={t("rep.trainerTitle")}
           subtitle={item.line || t("rep.fallbackLine")}
-          above={trainHead}
+          above={trainHead(true)}
           below={trainControls(true)}
         >
-          {trainBoard("rep-train-focus")}
+          {trainBoard("rep-train-focus", true)}
         </FocusBoard>
       </div>
 

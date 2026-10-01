@@ -61,8 +61,15 @@ const limits = {
   // seither außerhalb — die gerechneten Töne (lib/soundSynth.ts) und der
   // Kernsatz des Fazits (lib/fazit.ts) —, das holte 0,8 KiB zurück.
   // Gemessen: 458,4 KiB und 153,5 KiB gzip, dazu wieder rund zwei Prozent.
-  startupRouteJs: 468 * 1024,
-  startupRouteGzip: 157 * 1024,
+  //
+  // Oktober 2026: Die Grenze stand wieder genau auf dem Gemessenen (468,0 von
+  // 468 KiB, 157,0 von 157 KiB gzip), und die Karte des Repertoires riss sie
+  // um 0,8 KiB · das sind ihre sechzehn englischen Oberflächentexte, sonst
+  // nichts. Karte, Trainer und Puzzles sind nachgeladene Seiten; nachgeprüft,
+  // dass von ihnen nichts in die Startroute kam. Gemessen 468,0 KiB und
+  // 157,3 KiB gzip, dazu rund zwei Prozent.
+  startupRouteJs: 477 * 1024,
+  startupRouteGzip: 160 * 1024,
   singleJs: 450 * 1024,
   // Sieben Farbwelten kosten rund 6 KiB CSS (src/themes.css) · das ist der
   // Preis dafür, dass der Themenwechsel ein Attributwechsel bleibt und kein

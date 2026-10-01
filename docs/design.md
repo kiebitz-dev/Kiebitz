@@ -189,6 +189,23 @@ Its rules:
   (`pages/blatt/insights/WertungsverlaufBlatt.tsx`), where the table row is the
   legend and the switch at once.
 
+  The **repertoire map** was built for both layouts at once. The book drawn
+  as a road network: the starting position is a harbour, every move a
+  place, every variation ends in a named town, and whatever has not been
+  learned yet lies under fog. A line counts as learned when every own move in
+  it has at least seven days of FSRS stability *and* is still recalled today
+  — the same retrievability formula the scheduler uses, so neglected lines
+  fog over again. Whether a line is still in the fog is decided by its own
+  branch behind the last fork, not by the trunk: a learned 1.e4 does not
+  lift the fog off a variation whose moves were never asked. One computation
+  (`lib/repertoireKarte.ts`), two drawings (`components/RepertoireKarte.tsx`):
+  over there roads in the accent colour under drifting clouds, here an
+  engraved plate — ink, unsurveyed paths dashed, the unknown land hatched as
+  *Terra incognita*, with plate number and key under it. The fog is a mask of
+  radial gradients rather than a blur filter, because WebKitGTK has stalled
+  on less; what cleared since the last visit lifts visibly, and only over the
+  part that is actually new.
+
   Where a shared piece is a whole machine rather than a control — the planner
   is a window of seven days, a calendar, drag-and-drop, series and a template
   library — neither copying it nor handing it back works. Its state moves out
@@ -257,6 +274,7 @@ German, like the design vocabulary they carry: `Kolumnentitel`, `Rubrik`,
 | Diagram-mode page variants | `src/pages/blatt/*Blatt.tsx`, the five Insights tabs in `src/pages/blatt/insights/` |
 | Informator signs (derived, stored, drawn) | `src-tauri/src/informator.rs`, `src/lib/informator.ts`, `src/components/blatt/Zeichen.tsx` |
 | Shared field both modes write | `src/components/RepertoireNote.tsx` (ordinary), `src/components/blatt/Notizfeld.tsx` (sheet) |
+| Repertoire map (computed once, drawn twice) | `src/lib/repertoireKarte.ts`, `src/components/RepertoireKarte.tsx` |
 
 Each page renders its regular version and lazy-loads its `*Blatt.tsx` variant
 when the mode is on — Dashboard mode must not pay for type and layout it never

@@ -763,14 +763,20 @@ function TrainerView({
    * Knöpfen. Zwei Zeilen über der ganzen Breite sind nicht nur lesbarer,
    * sondern auch halb so hoch · und die Höhe ist im Fokus das Brett.
    *
-   * `ms-auto` stellt die Knöpfe an die rechte Kante · auf der gemeinsamen
-   * Zeile ohnehin, in der eigenen Zeile ebenso. `max-w-full` hält sie im
-   * Rahmen, falls selbst dort zwei nebeneinander nicht mehr passen.
+   * In der eigenen Zeile stehen die Knöpfe über die ganze Breite, zu gleichen
+   * Teilen. Vorher saßen sie dort klein an der rechten Kante, und links blieb
+   * die halbe Zeile leer · auf dem Telefon sah der Fokus damit aus, als hätte
+   * jemand die Knöpfe vergessen einzurücken. Das Verhältnis der
+   * Wachstumsfaktoren (999 zu 1) entscheidet beides ohne Schirmgrenze: Auf
+   * der gemeinsamen Zeile bekommt praktisch allen freien Platz die Meldung,
+   * in der eigenen Zeile alle die Knöpfe.
    */
   const actionShell = (message: ReactNode, buttons: ReactNode) => (
     <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
-      <div className="min-w-0 grow basis-40">{message}</div>
-      <div className="ms-auto flex max-w-full shrink-0 flex-wrap justify-end gap-2">{buttons}</div>
+      <div className="min-w-0 grow-[999] basis-40">{message}</div>
+      {buttons && (
+        <div className="flex max-w-full grow flex-wrap gap-2 [&>button]:flex-1">{buttons}</div>
+      )}
     </div>
   );
 
@@ -792,13 +798,19 @@ function TrainerView({
    *
    * `invisible` ist `visibility: hidden` · der Platz bleibt stehen, und die
    * Knöpfe der verdeckten Zustände sind weder anklickbar noch vorlesbar.
+   *
+   * Jeder Zustand ist ein Kasten, und jeder Kasten füllt das ganze Feld
+   * (`flex` mit gestrecktem Kind). Vorher stand der offene Zustand als blanker
+   * Text mittig im Feld, das der höhere Fehlversuch aufspannte · auf dem
+   * Telefon klaffte über „Finde die beste Fortsetzung" ein Loch, und die
+   * Knöpfe hingen ohne Rahmen darunter.
    */
   const actionRow = (key: typeof actionState | "reserve", content: ReactNode) => (
     <div
       key={key}
       data-action-row={key}
       data-active={key === actionState ? "" : undefined}
-      className={`col-start-1 row-start-1 w-full ${key === actionState ? "" : "invisible"}`}
+      className={`col-start-1 row-start-1 flex w-full ${key === actionState ? "" : "invisible"}`}
     >
       {content}
     </div>
@@ -816,7 +828,7 @@ function TrainerView({
    * gerade auf die Meldung schaut. Reserviert steht die Höhe von Anfang an.
    */
   const wrongRow = (delta: string) => (
-    <div className="rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-2.5">
+    <div className="flex w-full items-center rounded-lg border border-loss-dim bg-loss-soft px-3.5 py-2.5">
       {actionShell(
         <span className="text-[13.5px] text-loss">{t("pz.wrong", { d: delta })}</span>,
         <>
@@ -854,10 +866,10 @@ function TrainerView({
           ließ: Der Vorlauf, der es mittig stellt, ist durch den Platz
           begrenzt, der unter dem Brett wirklich bleibt (siehe `useChrome` in
           components/FocusBoard.tsx). Wuchs die Zeile, schrumpfte der Vorlauf. */}
-      <div className="mt-3 grid min-h-[52px] items-center">
+      <div className="mt-3 grid min-h-[52px]">
         {actionRow(
           "solved",
-          <div className="rounded-lg border border-accent-dim bg-accent-soft px-3.5 py-2.5">
+          <div className="flex w-full items-center rounded-lg border border-accent-dim bg-accent-soft px-3.5 py-2.5">
             {actionShell(
               <div className="flex items-center gap-2 text-[13.5px] font-medium text-accent">
                 <CheckCircle2 size={17} className="shrink-0" />
@@ -879,28 +891,30 @@ function TrainerView({
         {actionRow("reserve", wrongRow(" (Rating -00)"))}
         {actionRow(
           "open",
-          actionShell(
-            <span className="text-[13px] text-ink3">
-              {status === "loading"
-                ? t("pz.loadingNext")
-                : status === "empty"
-                  ? t("pz.noneFound")
-                  : t("pz.findBest")}
-            </span>,
-            // Tipp und Lösung auch vor dem ersten Fehlversuch · die Lösung
-            // stand bisher erst nach einem falschen Zug zur Wahl. Beides
-            // bucht einen Fehlversuch (siehe `takeHint`, `revealSolution`).
-            status === "playing" && (
-              <>
-                <Button onClick={takeHint}>
-                  <Lightbulb size={15} /> {t("pz.hint")}
-                </Button>
-                <Button onClick={revealSolution}>
-                  <Eye size={15} /> {t("pz.solution")}
-                </Button>
-              </>
-            )
-          )
+          <div className="flex w-full items-center rounded-lg border border-line bg-panel px-3.5 py-2.5">
+            {actionShell(
+              <span className="text-[13px] text-ink3">
+                {status === "loading"
+                  ? t("pz.loadingNext")
+                  : status === "empty"
+                    ? t("pz.noneFound")
+                    : t("pz.findBest")}
+              </span>,
+              // Tipp und Lösung auch vor dem ersten Fehlversuch · die Lösung
+              // stand bisher erst nach einem falschen Zug zur Wahl. Beides
+              // bucht einen Fehlversuch (siehe `takeHint`, `revealSolution`).
+              status === "playing" && (
+                <>
+                  <Button onClick={takeHint}>
+                    <Lightbulb size={15} /> {t("pz.hint")}
+                  </Button>
+                  <Button onClick={revealSolution}>
+                    <Eye size={15} /> {t("pz.solution")}
+                  </Button>
+                </>
+              )
+            )}
+          </div>
         )}
       </div>
       {(inFocus || (showHint && status === "playing")) && (
