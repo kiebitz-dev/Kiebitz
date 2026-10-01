@@ -518,7 +518,8 @@ export default function RepertoireTrainer({
    *
    *  · der Name der Variante, der auf dem Telefon je nach Karte umbrach,
    *  · die Reihen der geschlagenen Figuren über und unter dem Brett, die erst
-   *    erschienen, wenn in der Linie zum ersten Mal geschlagen wurde,
+   *    erschienen, wenn in der Linie zum ersten Mal geschlagen wurde · im
+   *    Fokus stehen sie deshalb gar nicht (siehe `trainBoard`),
    *  · der Stellungsverlauf, dessen Beschriftung „Letzter Zug: 12…Sxe5" mit
    *    jedem Zug länger wurde und die Tasten irgendwann in eine zweite Zeile
    *    schob,
@@ -562,21 +563,33 @@ export default function RepertoireTrainer({
           wirklich geschlagen, also steht es an der Seite, die es schlug. Ohne
           Namen bleibt es bei den Figuren allein; in einer Eröffnung ist meist
           nichts geschlagen, und dann entfällt die Zeile ganz. */}
-      {/* Im Fokus hält die Reihe ihre Höhe, auch solange nichts geschlagen
-          ist · sonst wüchse sie beim ersten Schlagzug der Linie heraus. */}
-      <div
-        className={inFocus ? undefined : "mb-2 empty:hidden"}
-        style={inFocus ? { minHeight: 19 } : undefined}
-      >
-        <CapturedPieces
-          pieces={item.side === "white" ? captured.black : captured.white}
-          color={item.side === "white" ? "white" : "black"}
-          advantage={item.side === "white" ? -captured.diff : captured.diff}
-        />
-      </div>
+      {!inFocus && (
+        <div className="mb-2 empty:hidden">
+          <CapturedPieces
+            pieces={item.side === "white" ? captured.black : captured.white}
+            color={item.side === "white" ? "white" : "black"}
+            advantage={item.side === "white" ? -captured.diff : captured.diff}
+          />
+        </div>
+      )}
     </>
   );
 
+  /**
+   * Das Brett · im Fokus allein, ohne die Reihen der geschlagenen Figuren.
+   *
+   * Der Fokus rechnet seine Brettgröße aus allem, was nicht Brett ist, und
+   * misst dafür die Reihen über und unter der Brettfläche (`useChrome` in
+   * components/FocusBoard.tsx). Was *in* der Brettfläche steht, zählt er als
+   * Brett · die Reihe unter dem Brett fehlte damit in der Rechnung, und der
+   * Fokus war auf dem Telefon um genau ihre Höhe zu lang. Das reichte für die
+   * Bildlaufleiste, und weil die 8 Pixel Breite kostet, wurde das Brett
+   * kleiner, passte, die Leiste verschwand, das Brett wuchs wieder · das Bild
+   * sprang im Takt. Der Puzzle-Fokus hat keine solche Reihe und lief deshalb
+   * ruhig; im Fokus des Trainers steht jetzt dasselbe: Kopf, Brett, Bedienung.
+   * Was geschlagen ist, zeigt das Brett ohnehin, und in einer Eröffnung ist
+   * es selten mehr als ein Bauer.
+   */
   const trainBoard = (boardId: string, inFocus = false) => (
     <>
       <div className="board-bleed">
@@ -594,16 +607,15 @@ export default function RepertoireTrainer({
           mouseDrag
         />
       </div>
-      <div
-        className={inFocus ? "mt-2" : "mt-2 empty:hidden"}
-        style={inFocus ? { minHeight: 19 } : undefined}
-      >
-        <CapturedPieces
-          pieces={item.side === "white" ? captured.white : captured.black}
-          color={item.side === "white" ? "black" : "white"}
-          advantage={item.side === "white" ? captured.diff : -captured.diff}
-        />
-      </div>
+      {!inFocus && (
+        <div className="mt-2 empty:hidden">
+          <CapturedPieces
+            pieces={item.side === "white" ? captured.white : captured.black}
+            color={item.side === "white" ? "black" : "white"}
+            advantage={item.side === "white" ? captured.diff : -captured.diff}
+          />
+        </div>
+      )}
     </>
   );
 
@@ -899,8 +911,8 @@ export default function RepertoireTrainer({
               onSchliessen: () => setFocused(false),
               titel: t("rep.trainerTitle"),
               untertitel: item.line || t("rep.fallbackLine"),
-              // Auch auf dem Bogen hält der Fokus die Reihen der geschlagenen
-              // Figuren stehen · siehe `trainHead`.
+              // Auch auf dem Bogen steht im Fokus nur das Brett · siehe
+              // `trainBoard`.
               brett: trainBoard("rep-train-focus", true),
             },
           }}

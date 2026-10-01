@@ -414,10 +414,18 @@ function FocusLayer({
   // `useChrome`. Er ersetzt das frühere `m-auto` an der Spalte: Zentriert man
   // die Spalte als Ganzes, wandert das Brett bei jeder Leiste mit, die unter
   // ihm um eine Zeile wächst.
+  //
+  // Scrollen darf die Fläche im Notfall, eine Bildlaufleiste zeigt sie nie
+  // (`no-scrollbar`). Die App gibt Bildlaufleisten 8 Pixel Breite
+  // (`::-webkit-scrollbar` in index.css), und hier ist Breite Brettgröße:
+  // War der Inhalt um ein paar Pixel zu hoch, erschien die Leiste, nahm dem
+  // Brett 8 Pixel, das Brett passte, die Leiste verschwand, das Brett wuchs
+  // wieder · ein Kreis, den man auf dem Telefon als zuckendes Bild sah
+  // (der Fokus des Eröffnungstrainers, Oktober 2026).
   const content = (
     <div
       ref={body}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-2"
+      className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-2"
     >
       <div
         ref={column}
