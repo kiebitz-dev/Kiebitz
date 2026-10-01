@@ -141,13 +141,22 @@ jobs:
 
       # WebKitGTK ist unter Linux die Webview; die übrigen Pakete braucht der
       # Tauri-Bundler für AppImage, deb und rpm.
+      #
+      # Die gstreamer1.0-*-Pakete gehören ins AppImage (bundleMediaFramework
+      # in tauri.linux.conf.json kopiert, was hier installiert ist). Das
+      # AppImage bringt libgstreamer aus 22.04 mit, und die sucht ihre
+      # Erweiterungen nur im AppImage, nie beim System. Fehlen sie dort, findet
+      # WebKit beim Vorladen der Brettklänge kein `autoaudiosink` und bricht
+      # ab · das Fenster bleibt beim ersten Bild stehen (1.6.4 auf CachyOS).
       - name: Linux-Systemabhängigkeiten
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
-            libxdo-dev libssl-dev libfuse2 patchelf file build-essential
+            libxdo-dev libssl-dev libfuse2 patchelf file build-essential \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-pulseaudio gstreamer1.0-alsa
 
       - name: Frontend-Abhängigkeiten installieren
         run: npm ci
@@ -256,11 +265,12 @@ jobs:
           prerelease: false
           includeUpdaterJson: false
 
-      # Nachweis, dass der Ausschluss gegriffen hat. tauri-action hat das
-      # AppImage da schon an den Draft gehängt; schlägt dieser Schritt fehl,
-      # bleibt der Release aber ein Draft (`publish` wartet auf diesen Job),
-      # und kein Linux-Nutzer bekommt ein schwarzes Fenster als Update.
-      - name: AppImage ohne mitgebrachte Display-Bibliotheken? (Linux)
+      # Nachweis, dass der Ausschluss gegriffen hat und die GStreamer-
+      # Erweiterungen drin sind. tauri-action hat das AppImage da schon an den
+      # Draft gehängt; schlägt dieser Schritt fehl, bleibt der Release aber ein
+      # Draft (`publish` wartet auf diesen Job), und kein Linux-Nutzer bekommt
+      # ein schwarzes oder stehendes Fenster als Update.
+      - name: AppImage-Inhalt prüfen (Linux)
         if: runner.os == 'Linux'
         run: |
           appimage=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n1)
@@ -269,13 +279,28 @@ jobs:
           cp "$appimage" "$workdir/app.AppImage"
           chmod +x "$workdir/app.AppImage"
           (cd "$workdir" && ./app.AppImage --appimage-extract > /dev/null)
-          found=$(find "$workdir/squashfs-root" \( -name 'libwayland-*' -o -name 'libxkbcommon.so*' -o -name 'libEGL.so*' -o -name 'libgbm.so*' \) -print)
+          root="$workdir/squashfs-root"
+          found=$(find "$root" \( -name 'libwayland-*' -o -name 'libxkbcommon.so*' -o -name 'libEGL.so*' -o -name 'libgbm.so*' \) -print)
           if [ -n "$found" ]; then
             echo "::error::Das AppImage bringt Display-Bibliotheken mit:"
             echo "$found"
             exit 1
           fi
           echo "Keine libwayland/libxkbcommon/libEGL/libgbm im AppImage."
+          # autoaudiosink (autodetect) ist das Element, an dem 1.6.4 abstürzte;
+          # die übrigen braucht WebKit, um die WAV-Klänge abzuspielen.
+          missing=""
+          for plugin in coreelements autodetect playback typefindfunctions \
+                        audioconvert audioresample volume wavparse app pulseaudio; do
+            [ -f "$root/usr/lib/gstreamer-1.0/libgst$plugin.so" ] || missing="$missing $plugin"
+          done
+          [ -x "$root/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" ] || missing="$missing gst-plugin-scanner"
+          [ -f "$root/apprun-hooks/linuxdeploy-plugin-gstreamer.sh" ] || missing="$missing apprun-hook"
+          if [ -n "$missing" ]; then
+            echo "::error::GStreamer fehlt im AppImage:$missing"
+            exit 1
+          fi
+          echo "GStreamer-Erweiterungen und Hook sind im AppImage."
 
   updater-manifest:
     # Alle Desktop-Artefakte und Signaturen sind jetzt am Draft. Das Manifest

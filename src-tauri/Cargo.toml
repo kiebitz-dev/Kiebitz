@@ -102,6 +102,11 @@ tauri-winrt-notification = "0.8"
 # Defender aus wie ein Schaedling, der sich einnistet · siehe reminder.rs.
 windows-registry = "0.6"
 
+# Die Webview unter Linux · für die Absturzwache des WebKit-Prozesses in
+# watchdog.rs. Dieselbe Version, die Tauri (wry) ohnehin mitbringt.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "2.0", features = ["v2_20"] }
+
 # QR-Scanner (nur Mobile): das Handy liest den Pairing-QR des Desktops per Kamera.
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2"

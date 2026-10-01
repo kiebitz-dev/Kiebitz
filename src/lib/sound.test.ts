@@ -69,3 +69,48 @@ it("preloads and plays every recorded board sound while respecting settings", ()
 
   vi.unstubAllGlobals();
 });
+
+// WebKitGTK (Linux) spielt `tauri://` nicht ab · dort laufen die Aufnahmen
+// über einmal geholte blob:-URLs.
+it("plays tauri:// recordings through blob URLs", async () => {
+  vi.resetModules();
+  const RealURL = URL;
+  class TauriURL extends RealURL {
+    // Nur die Klänge · der Modullader braucht seine file:-Adressen weiter.
+    override get href(): string {
+      const real = super.href;
+      return real.endsWith(".wav") ? `tauri://localhost/assets/${real.split("/").pop()}` : real;
+    }
+  }
+  let blobs = 0;
+  TauriURL.createObjectURL = () => `blob:tauri://localhost/${++blobs}`;
+  const fetchMock = vi.fn(async () => new Response(new Blob(["RIFF"])));
+  const sources: string[] = [];
+  class FakeAudio {
+    preload = "";
+    volume = 1;
+    currentTime = 0;
+    paused = true;
+    ended = false;
+    load = vi.fn();
+    pause = vi.fn();
+    play = vi.fn(() => Promise.resolve());
+    constructor(src: string) {
+      sources.push(src);
+    }
+  }
+  vi.stubGlobal("URL", TauriURL);
+  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("Audio", FakeAudio);
+
+  const sound = await import("./sound");
+  sound.setBoardSoundEnabled(true);
+  // Erst die Dateien holen, dann die Elemente · keins zeigt auf tauri://.
+  await vi.waitFor(() => expect(sources).toHaveLength(KINDS.length));
+  expect(sources.every((src) => src.startsWith("blob:"))).toBe(true);
+  // move.wav dient auch als Fehlerklang und wird nur einmal geholt.
+  expect(fetchMock).toHaveBeenCalledTimes(KINDS.length - 1);
+
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});

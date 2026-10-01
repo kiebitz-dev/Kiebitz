@@ -446,12 +446,52 @@ fn calm_webkit() {
     }
 }
 
+/// GStreamer im AppImage einen eigenen, schnellen Registry-Lauf geben · nur
+/// Linux und nur im AppImage (`APPIMAGE` setzt dessen Laufzeit).
+///
+/// Das AppImage bringt seine GStreamer-Erweiterungen selbst mit (siehe
+/// `bundleMediaFramework` in tauri.linux.conf.json). Es hängt sich aber bei
+/// jedem Start unter einem neuen `/tmp/.mount_…` ein, also hält GStreamer die
+/// Registry jedes Mal für veraltet und prüft alle gut 100 Erweiterungen neu ·
+/// im WebKit-Prozess, synchron, beim ersten Klang. Der Hook von linuxdeploy
+/// verlangt dafür je Erweiterung einen eigenen Scanner-Prozess
+/// (`GST_REGISTRY_REUSE_PLUGIN_SCANNER=no`). In einer Arch-VM kostete das
+/// 1,3 s, in denen die Oberfläche stand; mit einem Scanner für alle 0,15 s.
+///
+/// Die Registry bekommt außerdem eine eigene Datei. Sonst schreibt das
+/// AppImage seine Pfade in `~/.cache/gstreamer-1.0` und stößt damit bei jeder
+/// GStreamer-Anwendung des Systems ebenfalls einen Neuaufbau an.
+#[cfg(all(desktop, target_os = "linux"))]
+fn calm_gstreamer() {
+    if std::env::var_os("APPIMAGE").is_none() {
+        return;
+    }
+    std::env::set_var("GST_REGISTRY_REUSE_PLUGIN_SCANNER", "yes");
+    if std::env::var_os("GST_REGISTRY_1_0").is_some() {
+        return;
+    }
+    let cache = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".cache"))
+        });
+    if let Some(dir) = cache.map(|cache| cache.join("de.torim.kiebitz")) {
+        if std::fs::create_dir_all(&dir).is_ok() {
+            std::env::set_var("GST_REGISTRY_1_0", dir.join("gstreamer-registry.bin"));
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Vor allem anderen · WebKit liest die Umgebung beim ersten Fenster, und
     // ein abgestürzter Web-Prozess schreibt kein Logbuch mehr.
     #[cfg(all(desktop, target_os = "linux"))]
-    calm_webkit();
+    {
+        calm_webkit();
+        calm_gstreamer();
+    }
     // Logbuch und Panic-Hook zuerst · alles, was danach schiefgeht, ist damit
     // im Diagnosebericht sichtbar, auch wenn kein Fenster mehr aufgeht.
     diag::install();
@@ -560,6 +600,7 @@ pub fn run() {
                 // Der Standardton · das gewählte Thema meldet die Oberfläche
                 // gleich nach dem ersten Bild über `set_system_bars` nach.
                 systembars::apply_default(&window);
+                watchdog::guard_web_process(&window);
                 let _ = window.show();
             }
             if cfg!(debug_assertions) {

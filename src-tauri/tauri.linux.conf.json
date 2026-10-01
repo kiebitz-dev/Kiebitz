@@ -6,6 +6,11 @@
       "resources/stockfish/NOTICE.txt",
       "resources/stockfish/COPYING.txt",
       "resources/licenses/THIRD_PARTY_LICENSES.txt"
-    ]
+    ],
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
   }
 }

@@ -771,6 +771,66 @@ report, the log plus a backtrace of the hung process say where exactly:
 gdb -p "$(pgrep -f -n kiebitz)" -batch -ex "thread apply all bt" > kiebitz-bt.txt
 ```
 
+### The AppImage whose WebKit process dies (1.6.4)
+
+1.6.4 still froze after the first frame on CachyOS. Reproduced in a throwaway
+Arch Linux WSL distribution (2026-10-01), this was neither of the two causes
+above: `WebKitWebProcess` died with SIGABRT about half a second after start,
+while `kiebitz` kept running and kept showing the last frame. The watchdog
+logged nothing because the UI never got to its first heartbeat.
+
+The reason was audio. At startup the frontend preloads the board sounds
+(`new Audio(…)`), and WebKitGTK asks GStreamer for `autoaudiosink`. The
+AppImage shipped `libgstreamer` from Ubuntu 22.04 but **no GStreamer plugins at
+all**, and that libgstreamer only looks for plugins inside the AppImage
+(`usr/lib/gstreamer-1.0`), never on the host. stderr shows it right before the
+crash:
+
+```text
+GStreamer element autoaudiosink not found. Please install it
+(WebKitWebProcess): GLib-GObject-CRITICAL **: g_signal_connect_data: assertion 'G_TYPE_CHECK_INSTANCE (instance)' failed
+```
+
+The fix since then:
+
+- `tauri.linux.conf.json` sets `bundle.linux.appimage.bundleMediaFramework`.
+  linuxdeploy's GStreamer plugin then copies the build machine's plugins into
+  the AppImage and adds an AppRun hook that points `GST_PLUGIN_SYSTEM_PATH_1_0`
+  and `GST_PLUGIN_SCANNER_1_0` there.
+- `release.yml` installs `gstreamer1.0-plugins-base`, `-good`, `-pulseaudio`
+  and `-alsa` on the runner (the plugin copies only what is installed). The
+  AppImage check fails the job if `autodetect`, `playback`, `wavparse`,
+  `pulseaudio` and the other needed plugins, the scanner or the hook are
+  missing.
+- `watchdog::guard_web_process` listens for WebKit's `web-process-terminated`.
+  It writes `WebKit-Prozess abgestürzt · Fenster lädt neu (n/3)` to
+  `kiebitz.log` and reloads the window, at most three times per start.
+
+- `calm_gstreamer()` in `src-tauri/src/lib.rs` (AppImage only) sets
+  `GST_REGISTRY_REUSE_PLUGIN_SCANNER=yes` and gives GStreamer its own registry
+  file in `~/.cache/de.torim.kiebitz/`. The AppImage mounts under a new
+  `/tmp/.mount_…` path on every start, so GStreamer rescans all ~100 plugins
+  each time, synchronously in the WebKit process. With linuxdeploy's hook
+  (one scanner process per plugin) that froze the UI for 1.3 s on a cold
+  start in the test VM; with one shared scanner it takes 0.18 s. The own file
+  also stops the AppImage from overwriting the system's
+  `~/.cache/gstreamer-1.0` registry.
+
+The `.deb` and `.rpm` never had the crash. They use the system's WebKitGTK and
+GStreamer.
+
+The same tests turned up a second, older bug that hit every Linux build: the
+board sounds never played. WebKitGTK's media player accepts only `http(s)`,
+`blob`, `data` and `file` URLs. The frontend assets live under `tauri://`, and
+GStreamer has no source for that scheme (`No URI handler implemented for
+"tauri"`). `WEBKIT_GST_ALLOWED_URI_PROTOCOLS=tauri` lets the URL through the
+check, but playback still fails. So `src/lib/sound.ts` fetches each `tauri://`
+recording once and plays it from a `blob:` URL.
+
+The VM's audio could not be heard: WSLg's PulseAudio server plays nothing,
+not even for `paplay`. The test therefore ran against a separate PulseAudio
+with a null sink. A board move uncorked a `WebKitWebProcess` stream there.
+
 ## Auto-update
 
 The updater plugin (`tauri-plugin-updater`) is wired up for desktop. Behavior in

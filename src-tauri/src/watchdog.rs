@@ -9,17 +9,23 @@
 //!   Oberfläche. Steht er, lädt nichts mehr nach und kein Klick kommt an.
 //! * Der **WebKit-Prozess** hängt (Zeichnen, GPU, JavaScript). Der Hauptthread
 //!   läuft weiter, die Oberfläche meldet sich aber nicht mehr.
+//! * Der **WebKit-Prozess ist abgestürzt**. Das Fenster zeigt dann das letzte
+//!   Bild weiter, und der Herzschlag fängt nie an. So war es tatsächlich bei
+//!   1.6.4: Das AppImage brachte libgstreamer mit, aber keine einzige
+//!   GStreamer-Erweiterung. Das Vorladen der Brettklänge suchte
+//!   `autoaudiosink`, fand es nicht, und WebKit brach ab (SIGABRT).
 //!
-//! Der Wachhund unterscheidet beides und schreibt es ins Logbuch
+//! Der Wachhund unterscheidet die drei Fälle und schreibt sie ins Logbuch
 //! (`kiebitz.log` im Datenordner). Die Datei wird auch dann noch beschrieben,
-//! wenn das Fenster längst steht · genau die Zeilen braucht der Bericht.
+//! wenn das Fenster längst steht · genau die Zeilen braucht der Bericht. Nach
+//! einem Absturz lädt er das Fenster neu, höchstens dreimal je Start.
 //!
 //! Anderswo läuft nichts davon: `ui_heartbeat` antwortet dort mit `false`, und
 //! die Oberfläche fängt gar nicht erst an zu pochen.
 
 #[cfg(all(desktop, target_os = "linux"))]
 mod imp {
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
     use std::sync::mpsc;
     use std::sync::OnceLock;
     use std::time::{Duration, Instant};
@@ -46,6 +52,56 @@ mod imp {
     pub fn beat(visible: bool) {
         VISIBLE.store(visible, Ordering::Relaxed);
         LAST_BEAT.store(now_ms().max(1), Ordering::Relaxed);
+    }
+
+    /// So oft lädt das Fenster nach einem Absturz des WebKit-Prozesses neu.
+    /// Danach nicht mehr · ein Fehler, der jeden Neustart wieder trifft, soll
+    /// nicht endlos kreisen, sondern im Logbuch stehen bleiben.
+    pub const MAX_RELOADS: u32 = 3;
+    static RELOADS: AtomicU32 = AtomicU32::new(0);
+
+    pub fn guard_web_process(window: &tauri::WebviewWindow) {
+        let attached = window.with_webview(|webview| {
+            use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
+            webview
+                .inner()
+                .connect_web_process_terminated(|view, reason| {
+                    let why = match reason {
+                        // Beendet hat ihn Kiebitz selbst (Fenster schließt).
+                        WebProcessTerminationReason::TerminatedByApi => return,
+                        WebProcessTerminationReason::Crashed => "abgestürzt",
+                        WebProcessTerminationReason::ExceededMemoryLimit => {
+                            "über der Speichergrenze beendet"
+                        }
+                        _ => "unerwartet beendet",
+                    };
+                    // Die alte Oberfläche ist weg · ihr Schweigen ist kein
+                    // Hänger, den der Wachhund noch einmal melden müsste.
+                    LAST_BEAT.store(0, Ordering::Relaxed);
+                    let n = RELOADS.fetch_add(1, Ordering::Relaxed) + 1;
+                    if n <= MAX_RELOADS {
+                        crate::diag::record(
+                            "error",
+                            "watchdog",
+                            &format!(
+                                "WebKit-Prozess {why} · Fenster lädt neu ({n}/{MAX_RELOADS})"
+                            ),
+                        );
+                        view.reload();
+                    } else {
+                        crate::diag::record(
+                            "error",
+                            "watchdog",
+                            &format!(
+                                "WebKit-Prozess {why} · nach {MAX_RELOADS} Neustarts kein weiterer Versuch"
+                            ),
+                        );
+                    }
+                });
+        });
+        if let Err(error) = attached {
+            log::warn!("Absturzwache für WebKit nicht angebracht: {error}");
+        }
     }
 
     pub fn spawn(app: tauri::AppHandle) {
@@ -129,6 +185,15 @@ pub fn spawn(app: &tauri::AppHandle) {
     imp::spawn(app.clone());
     #[cfg(not(all(desktop, target_os = "linux")))]
     let _ = app;
+}
+
+/// Hängt dem Fenster die Absturzwache für den WebKit-Prozess an (nur
+/// Linux-Desktop, sonst ohne Wirkung).
+pub fn guard_web_process(window: &tauri::WebviewWindow) {
+    #[cfg(all(desktop, target_os = "linux"))]
+    imp::guard_web_process(window);
+    #[cfg(not(all(desktop, target_os = "linux")))]
+    let _ = window;
 }
 
 /// Herzschlag der Oberfläche. `true`, wenn ein Wachhund zuhört · nur dann

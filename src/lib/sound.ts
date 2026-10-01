@@ -69,12 +69,53 @@ function outputVolume(): number {
   return Math.pow(volume, 1.15);
 }
 
+/**
+ * Unter Linux spielt WebKitGTK Medien nur von http(s), blob, data und file ab.
+ * Die Aufnahmen liegen dort aber unter `tauri://`, und dafür hat sein
+ * GStreamer keine Quelle („No URI handler implemented for "tauri"") · die
+ * Klänge blieben stumm. Solche Adressen lädt `fetch` einmal (das kann es),
+ * gespielt wird dann die blob:-URL. Windows und Android liefern über
+ * http(s)://tauri.localhost aus und bleiben beim direkten Weg.
+ */
+const blobUrls = new Map<string, string | null>();
+let blobsLoading: Promise<void> | null = null;
+
+function needsBlob(url: string): boolean {
+  return url.startsWith("tauri:");
+}
+
+function loadBlobUrls(): Promise<void> {
+  blobsLoading ??= Promise.all(
+    [...new Set(Object.values(SOUND_URLS))].filter(needsBlob).map(async (url) => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        blobUrls.set(url, URL.createObjectURL(await response.blob()));
+      } catch {
+        // Bleibt still · ein fehlender Klang darf nichts aufhalten.
+        blobUrls.set(url, null);
+      }
+    }),
+  ).then(() => undefined);
+  return blobsLoading;
+}
+
+/** Die abspielbare Adresse · `null`, solange die blob:-URL noch lädt oder fehlt. */
+function playableUrl(url: string): string | null {
+  if (!needsBlob(url)) return url;
+  const blob = blobUrls.get(url);
+  if (blob === undefined) void loadBlobUrls();
+  return blob ?? null;
+}
+
 function createAudio(kind: BoardSoundKind): HTMLAudioElement | null {
   if (unavailable || typeof Audio === "undefined") return null;
   const url = SOUND_URLS[kind as Aufgenommen];
   if (!url) return null;
+  const src = playableUrl(url);
+  if (!src) return null;
   try {
-    const audio = new Audio(url);
+    const audio = new Audio(src);
     audio.preload = "auto";
     audio.volume = outputVolume();
     return audio;
@@ -86,8 +127,9 @@ function createAudio(kind: BoardSoundKind): HTMLAudioElement | null {
 
 function soundPool(kind: BoardSoundKind): HTMLAudioElement[] {
   const cached = pools.get(kind);
-  if (cached) return cached;
-  const pool: HTMLAudioElement[] = [];
+  // Ein leerer Pool wird neu versucht · etwa, sobald die blob:-URL da ist.
+  if (cached && cached.length > 0) return cached;
+  const pool = cached ?? [];
   const audio = createAudio(kind);
   if (audio) pool.push(audio);
   pools.set(kind, pool);
@@ -99,6 +141,13 @@ function soundPool(kind: BoardSoundKind): HTMLAudioElement[] {
  * Wiedergabe und erzeugt auch außerhalb eines Browsers keine Nebenwirkung.
  */
 function primeBoardSounds(): void {
+  // Unter Linux erst die blob:-URLs holen (siehe `playableUrl`).
+  if (Object.values(SOUND_URLS).some((url) => needsBlob(url) && !blobUrls.has(url))) {
+    void loadBlobUrls().then(() => {
+      if (enabled) primeBoardSounds();
+    });
+    return;
+  }
   // Nur die Aufnahmen · die gerechneten Töne haben nichts zu laden.
   for (const kind of Object.keys(SOUND_URLS) as Aufgenommen[]) {
     const pool = soundPool(kind);
