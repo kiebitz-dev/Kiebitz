@@ -1,0 +1,111 @@
+/* Fledermäuse beim Start · siehe Intro.tsx.
+
+   Steht bewusst nicht in src/index.css: Diese Datei hängt am nachgeladenen
+   Chunk der Animation und kommt nur in den Tagen, in denen das Event läuft.
+   Keine Tailwind-Klassen hier, sonst landeten sie im Stylesheet der App. */
+
+.halloween-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Für einen Augenblick wird es Nacht · zum Rand hin dunkler, in der Mitte
+   bleibt die App lesbar. */
+.halloween-nacht {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 55%, rgb(8 4 14 / 0.35), rgb(8 4 14 / 0.88) 75%);
+  animation: halloween-nacht 3.6s ease-in-out both;
+}
+
+.halloween-bahn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation-name: halloween-flug;
+  animation-timing-function: cubic-bezier(0.35, 0, 0.7, 1);
+  animation-fill-mode: both;
+  will-change: transform, opacity;
+}
+
+.halloween-fledermaus {
+  display: block;
+  overflow: visible;
+  height: auto;
+  translate: -50% -50%;
+  fill: #120c18;
+  stroke: #ff8a2a;
+  stroke-width: 0.55;
+  /* Schwarz auf Nacht sähe niemand · der Schein hebt sie in jedem Thema ab. */
+  filter: drop-shadow(0 0 4px rgb(255 110 10 / 0.75));
+  stroke-linejoin: round;
+}
+
+.halloween-fluegel {
+  transform-box: view-box;
+  transform-origin: 50% 40%;
+  animation: halloween-schlag var(--takt, 0.18s) ease-in-out infinite alternate;
+}
+
+.halloween-auge {
+  fill: #ffd23a;
+  stroke: none;
+}
+
+@keyframes halloween-flug {
+  0% {
+    transform: translate(var(--x0), var(--y0)) scale(var(--s0)) rotate(-10deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(
+        calc((var(--x0) + var(--x1)) / 2),
+        calc((var(--y0) + var(--y1)) / 2 + var(--bogen))
+      )
+      scale(calc((var(--s0) + var(--s1)) / 2))
+      rotate(6deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--x1), var(--y1)) scale(var(--s1)) rotate(-8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes halloween-schlag {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(-0.45);
+  }
+}
+
+@keyframes halloween-nacht {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Die Ebene wird bei abbestellter Bewegung gar nicht erst geladen (siehe
+   src/events/EventIntro.tsx) · das hier fängt den Wechsel mittendrin ab. */
+@media (prefers-reduced-motion: reduce) {
+  .halloween-intro {
+    display: none;
+  }
+}

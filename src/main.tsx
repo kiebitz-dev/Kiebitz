@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import EventIntro from "./events/EventIntro";
 import { LocaleProvider } from "./lib/i18n";
 import { initAppearance } from "./lib/theme";
 import "./index.css";
@@ -36,6 +37,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           und Mobile) denselben Hintergrund haben. */}
       <div className="chess-backdrop" aria-hidden="true" />
       <App />
+      {/* Startanimation eines laufenden Saison-Events (src/events/) · liegt
+          über der App, hält sie aber nicht auf. Außerhalb der Event-Tage
+          rendert sie nichts und lädt nichts nach. */}
+      <EventIntro />
     </LocaleProvider>
   </React.StrictMode>
 );

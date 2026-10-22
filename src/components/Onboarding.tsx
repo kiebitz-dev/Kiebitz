@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Bird, Check, Download, Loader2, SkipForward } from "lucide-react";
+import { Check, Download, Loader2, SkipForward } from "lucide-react";
 import { LOCALES, LOCALE_NAMES, useI18n, type Locale } from "../lib/i18n";
 import { setSettings, type Settings } from "../lib/settings";
 import { runAutoImport } from "../lib/autoImport";
 import { Button, Card, Chip } from "./ui";
+import BrandMark from "./BrandMark";
 
 /**
  * Ersteinrichtung beim allerersten Start: Sprache, dann (optional) die
@@ -66,9 +67,10 @@ export default function Onboarding({
       <div className="mx-auto flex min-h-full max-w-[560px] items-center px-4 py-8">
         <div className="w-full">
           <div className="mb-5 flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent">
-              <Bird size={24} />
-            </span>
+            <BrandMark
+              icon={24}
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent"
+            />
             <div>
               <div className="text-[19px] font-semibold tracking-tight">{t("onb.welcome")}</div>
               <div className="text-[12.5px] text-ink3">{t("onb.subtitle")}</div>

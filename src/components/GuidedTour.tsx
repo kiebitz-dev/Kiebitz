@@ -18,10 +18,11 @@
  * die Einschränkung · den Weg gibt hier der Rundgang vor.
  */
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Bird, Check, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { useT } from "../lib/i18n";
 import type { PageId } from "../lib/nav";
 import type { TourSide, TourStep } from "../lib/tourSteps";
+import BrandMark from "./BrandMark";
 
 /** Luft zwischen Element und Ausschnitt. */
 const PAD = 6;
@@ -323,9 +324,10 @@ export default function GuidedTour({
         style={style}
       >
         <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent-soft text-accent">
-            <Bird size={14} />
-          </span>
+          <BrandMark
+            icon={14}
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-accent-soft text-accent"
+          />
           <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink2">
             {t("tour.title")}
           </span>

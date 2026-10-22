@@ -7,11 +7,12 @@
  * vorhanden ist. Deshalb wandert dieselbe Navigation an die Seite.
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Bird, Settings as SettingsIcon, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon, type LucideIcon } from "lucide-react";
 import { useT, type Key } from "../lib/i18n";
 import { COMPACT_LIMIT, taglineKey, taglineWidth } from "../lib/tagline";
 import type { PageId } from "../lib/nav";
 import PlanBadge from "./PlanBadge";
+import BrandMark from "./BrandMark";
 
 export interface NavItem {
   id: PageId;
@@ -84,9 +85,10 @@ export function MobileAppBar({
           <ArrowLeft size={20} />
         </button>
       )}
-      <span className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-        <Bird size={17} />
-      </span>
+      <BrandMark
+        icon={17}
+        className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"
+      />
       {/* Marke bleibt auf jedem Tab stehen; dahinter der Kontext · auf dem
           Start ist das der Claim, sonst der Seitenname. */}
       <span className="min-w-0 flex-1 truncate px-2 text-[15px] tracking-tight">

@@ -13,7 +13,6 @@ import {
 import {
   Activity,
   BarChart3,
-  Bird,
   BookOpen,
   Crown,
   Database,
@@ -60,6 +59,7 @@ import { dismissLayers } from "./lib/backDismiss";
 import type { EndgameCategory } from "./data/endgames";
 import AdBanner from "./components/AdBanner";
 import PlanBadge from "./components/PlanBadge";
+import BrandMark from "./components/BrandMark";
 import PlusDialog from "./components/PlusDialog";
 import { installDeepLinks } from "./lib/plus/deepLink";
 import { usePlus } from "./lib/plus/usePlus";
@@ -694,9 +694,10 @@ export default function App() {
   ) : (
     <>
       <div className="flex items-center gap-2.5 px-5 pb-5 pt-6">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-          <Bird size={20} />
-        </span>
+        <BrandMark
+          icon={20}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-accent"
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[15px] font-semibold tracking-tight">Kiebitz</span>
@@ -1045,9 +1046,10 @@ export default function App() {
             <RegisterMarke gross={32} />
           ) : (
             <>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent">
-                <Bird size={17} />
-              </span>
+              <BrandMark
+                icon={17}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent"
+              />
               <span className="text-[15px] font-semibold tracking-tight">Kiebitz</span>
             </>
           )}

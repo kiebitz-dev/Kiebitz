@@ -15,12 +15,13 @@
  * hinzugehen und stehen kräftig.
  */
 import type { ReactNode } from "react";
-import { ArrowLeft, Bird, Settings as SettingsIcon, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings as SettingsIcon, type LucideIcon } from "lucide-react";
 import type { PageId } from "../../lib/nav";
 import { deInt } from "../../lib/format";
 import { useT, type Key } from "../../lib/i18n";
 import { COMPACT_LIMIT, taglineKey, taglineWidth } from "../../lib/tagline";
 import PlanBadge from "../PlanBadge";
+import BrandMark from "../BrandMark";
 import "./blatt.css";
 
 export interface RegisterItem {
@@ -92,9 +93,7 @@ function Marke() {
   return (
     <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
       {/* Kein Rund, kein Farbfeld · ein Kasten aus einer Haarlinie. */}
-      <span className="flex h-9 w-9 flex-none items-center justify-center border border-ink text-ink">
-        <Bird size={20} />
-      </span>
+      <BrandMark icon={20} className="flex h-9 w-9 flex-none items-center justify-center border border-ink text-ink" />
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold uppercase tracking-[0.14em]">Kiebitz</span>
@@ -195,12 +194,11 @@ export function RegisterSidebar({
 export function RegisterMarke({ gross = 32 }: { gross?: number }) {
   return (
     <>
-      <span
+      <BrandMark
+        icon={Math.round(gross * 0.53)}
         className="flex flex-none items-center justify-center border border-ink text-ink"
         style={{ height: gross, width: gross }}
-      >
-        <Bird size={Math.round(gross * 0.53)} />
-      </span>
+      />
       <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink">
         Kiebitz
       </span>
