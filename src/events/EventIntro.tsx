@@ -1,5 +1,5 @@
 /**
- * Die Startanimation des laufenden Events · neben der App, nicht in ihr.
+ * Die Startanimation des Events dieses Builds · neben der App, nicht in ihr.
  *
  * Sie hält nichts auf: Der Chunk wird erst nach dem ersten Bild geholt, die
  * Ebene fängt keine Klicks ab, und wenn das Laden scheitert, gibt es eben

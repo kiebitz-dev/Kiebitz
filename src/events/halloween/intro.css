@@ -1,7 +1,7 @@
 /* Fledermäuse beim Start · siehe Intro.tsx.
 
    Steht bewusst nicht in src/index.css: Diese Datei hängt am nachgeladenen
-   Chunk der Animation und kommt nur in den Tagen, in denen das Event läuft.
+   Chunk der Animation und kommt erst nach dem ersten Bild.
    Keine Tailwind-Klassen hier, sonst landeten sie im Stylesheet der App. */
 
 .halloween-intro {

@@ -6,7 +6,10 @@ unter ``src-tauri/installer/`` und sind eingecheckt · der Release-Build in der
 CI hat weder Python noch die Schriftarten. Dieses Skript ist nur da, damit die
 Bilder reproduzierbar bleiben, wenn sich Icon oder Farben ändern.
 
-    python scripts/make-installer-art.py
+    python scripts/make-installer-art.py [icon.png]
+
+Ohne Angabe ist das Icon ``src-tauri/icons/source-icon.png``; für ein Event
+(siehe ``scripts/set-app-icon.py``) kommt dessen Kachel als Argument.
 
 Maße und Fundstellen:
 
@@ -25,12 +28,13 @@ als man denkt. Die Maße stammen aus den WixUI-Dialogen (Dialogeinheiten × 4/3)
 Beides ist kein Ermessen: überlappt es, steht der schwarze Dialogtext im Logo.
 """
 
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ICON = ROOT / "src-tauri" / "icons" / "source-icon.png"
+ICON = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "src-tauri" / "icons" / "source-icon.png"
 OUT = ROOT / "src-tauri" / "installer"
 
 # Dieselben Werte wie in src/index.css.

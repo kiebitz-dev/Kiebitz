@@ -3,7 +3,7 @@ import { Bird } from "lucide-react";
 import { activeEvent } from "../events";
 
 /**
- * Die Marke · der Vogel in seinem Feld, an Event-Tagen das Logo des Events.
+ * Die Marke · der Vogel in seinem Feld, in einem Event-Build das Logo des Events.
  *
  * Das Event-Logo ist eine fertige Kachel mit eigenem Grund und eigener
  * Rundung (transparente Ecken). Es nimmt deshalb nur Größe und Abstände aus

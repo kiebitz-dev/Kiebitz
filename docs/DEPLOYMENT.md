@@ -345,7 +345,10 @@ entry except an installed build.
 
 App icons for **all** targets — desktop (`.ico`/`.icns`/`.png`), iOS, and the
 Android launcher (`gen/android/.../res/mipmap-*`) — are generated from a single
-source and committed. To regenerate after changing the artwork:
+source and committed. `scripts/set-app-icon.py [tile.png]` does everything below
+in one go (including the installer art); without an argument it uses
+`source-icon.png`. Events such as Halloween swap the icon with it, see
+`src/events/README.md`. The manual steps, for reference:
 
 ```sh
 npx tauri icon src-tauri/icons/source-icon.png
